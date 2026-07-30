@@ -1,0 +1,573 @@
+import { createHmac, randomBytes, scrypt, timingSafeEqual } from "node:crypto";
+import { EventEmitter } from "node:events";
+import { DatabaseSync } from "node:sqlite";
+import { promisify } from "node:util";
+import path from "node:path";
+
+const scryptAsync = promisify(scrypt);
+const TOKEN_LIFETIME_SECONDS = 60 * 60 * 24 * 7;
+
+export type UserRole = "admin" | "user";
+
+export type AuthenticatedUser = {
+  id: number;
+  email: string;
+  name: string;
+  role: UserRole;
+  active: boolean;
+};
+
+export type AuthSession = {
+  token: string;
+  user: AuthenticatedUser;
+};
+
+export type CreateUserResult =
+  | { ok: true; user: AuthenticatedUser }
+  | { ok: false; reason: "email_exists" | "name_exists" };
+
+export type UserMutationResult =
+  | { ok: true; user: AuthenticatedUser }
+  | {
+      ok: false;
+      reason:
+        | "not_found"
+        | "last_admin"
+        | "self_deactivate"
+        | "self_delete"
+        | "invalid_role"
+        | "name_exists";
+    };
+
+type StoredUserRow = {
+  id: number;
+  email: string;
+  name: string;
+  password_hash: string;
+  role: string;
+  active: number;
+};
+
+type TokenPayload = {
+  id: number;
+  email: string;
+  name: string;
+  role: UserRole;
+  exp: number;
+};
+
+function encode(value: object): string {
+  return Buffer.from(JSON.stringify(value)).toString("base64url");
+}
+
+function decode<T>(value: string): T {
+  return JSON.parse(Buffer.from(value, "base64url").toString("utf8")) as T;
+}
+
+function isUserRole(value: unknown): value is UserRole {
+  return value === "admin" || value === "user";
+}
+
+function normalizeEmailKey(value: string): string {
+  return value.normalize("NFKC").trim().toLowerCase();
+}
+
+function normalizeName(value: string): string {
+  return value.normalize("NFKC").trim().replace(/\s+/g, " ");
+}
+
+function normalizeNameKey(value: string): string {
+  return normalizeName(value).toLocaleLowerCase("pt-BR");
+}
+
+export class AuthService {
+  private readonly database: DatabaseSync;
+  private readonly events = new EventEmitter();
+  private readonly secret =
+    process.env.OBISYNC_TOKEN_SECRET ?? randomBytes(32).toString("hex");
+  private readonly ready: Promise<void>;
+
+  public constructor(databasePath: string) {
+    this.database = new DatabaseSync(databasePath);
+    this.database.exec("PRAGMA foreign_keys = ON");
+    this.database.exec("PRAGMA journal_mode = WAL");
+    this.ready = this.initialize();
+  }
+
+  private async initialize(): Promise<void> {
+    this.database.exec(`
+      CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT NOT NULL UNIQUE,
+        email_key TEXT NOT NULL UNIQUE,
+        name TEXT NOT NULL,
+        name_key TEXT NOT NULL UNIQUE,
+        password_hash TEXT NOT NULL
+      )
+    `);
+
+    const columns = this.database
+      .prepare("PRAGMA table_info(users)")
+      .all() as unknown as Array<{ name: string }>;
+    const names = new Set(columns.map((column) => column.name));
+
+    if (!names.has("email_key")) {
+      this.database.exec("ALTER TABLE users ADD COLUMN email_key TEXT");
+    }
+    if (!names.has("name_key")) {
+      this.database.exec("ALTER TABLE users ADD COLUMN name_key TEXT");
+    }
+    if (!names.has("role")) {
+      this.database.exec(
+        "ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user' CHECK(role IN ('admin', 'user'))",
+      );
+    }
+    if (!names.has("active")) {
+      this.database.exec(
+        "ALTER TABLE users ADD COLUMN active INTEGER NOT NULL DEFAULT 1 CHECK(active IN (0, 1))",
+      );
+    }
+
+    this.migrateIdentityKeys();
+    this.database.exec(
+      "CREATE UNIQUE INDEX IF NOT EXISTS ux_users_email_key ON users(email_key)",
+    );
+    this.database.exec(
+      "CREATE UNIQUE INDEX IF NOT EXISTS ux_users_name_key ON users(name_key)",
+    );
+    this.database.exec(
+      "CREATE INDEX IF NOT EXISTS idx_users_role_active ON users(role, active)",
+    );
+
+    await this.seedUsers();
+    this.ensureInitialAdministrator();
+  }
+
+  private migrateIdentityKeys(): void {
+    const rows = this.database
+      .prepare("SELECT id, email, name FROM users ORDER BY id")
+      .all() as unknown as Array<{ id: number; email: string; name: string }>;
+    const emailOwners = new Map<string, number>();
+    const nameOwners = new Map<string, number>();
+    const update = this.database.prepare(
+      "UPDATE users SET email = ?, email_key = ?, name = ?, name_key = ? WHERE id = ?",
+    );
+
+    this.runImmediateTransaction(() => {
+      for (const row of rows) {
+        const email = normalizeEmailKey(row.email);
+        const name = normalizeName(row.name);
+        const emailKey = normalizeEmailKey(email);
+        const nameKey = normalizeNameKey(name);
+        const emailOwner = emailOwners.get(emailKey);
+        const nameOwner = nameOwners.get(nameKey);
+
+        if (emailOwner !== undefined) {
+          throw new Error(
+            `Não foi possível aplicar a restrição de e-mail único: usuários ${emailOwner} e ${row.id} possuem o mesmo e-mail.`,
+          );
+        }
+        if (nameOwner !== undefined) {
+          throw new Error(
+            `Não foi possível aplicar a restrição de nome único: usuários ${nameOwner} e ${row.id} possuem o mesmo nome.`,
+          );
+        }
+
+        emailOwners.set(emailKey, row.id);
+        nameOwners.set(nameKey, row.id);
+        update.run(email, emailKey, name, nameKey, row.id);
+      }
+    });
+  }
+
+  private async seedUsers(): Promise<void> {
+    const users = [
+      { email: "thiago@gmail.com", name: "Thiago" },
+      { email: "brunoestudos6@gmail.com", name: "Bruno" },
+    ];
+    const insert = this.database.prepare(
+      `INSERT OR IGNORE INTO users
+       (email, email_key, name, name_key, password_hash, role, active)
+       VALUES (?, ?, ?, ?, ?, 'user', 1)`,
+    );
+
+    for (const user of users) {
+      const email = normalizeEmailKey(user.email);
+      const name = normalizeName(user.name);
+      insert.run(
+        email,
+        normalizeEmailKey(email),
+        name,
+        normalizeNameKey(name),
+        await this.hashPassword("123456"),
+      );
+    }
+  }
+
+  private ensureInitialAdministrator(): void {
+    const existing = this.database
+      .prepare(
+        "SELECT id FROM users WHERE role = 'admin' AND active = 1 LIMIT 1",
+      )
+      .get();
+    if (existing) return;
+
+    const first = this.database
+      .prepare(
+        "SELECT id, email FROM users WHERE active = 1 ORDER BY id LIMIT 1",
+      )
+      .get() as { id: number; email: string } | undefined;
+    if (!first) {
+      throw new Error(
+        "Não existe usuário ativo para promover a administrador.",
+      );
+    }
+
+    this.database
+      .prepare("UPDATE users SET role = 'admin' WHERE id = ?")
+      .run(first.id);
+    console.log(
+      `[Auth] Migração RBAC: usuário id=${first.id} promovido a administrador inicial.`,
+    );
+  }
+
+  private async hashPassword(password: string): Promise<string> {
+    const salt = randomBytes(16).toString("hex");
+    const hash = (await scryptAsync(password, salt, 64)) as Buffer;
+    return `${salt}:${hash.toString("hex")}`;
+  }
+
+  private async passwordMatches(
+    password: string,
+    storedHash: string,
+  ): Promise<boolean> {
+    const [salt, hash] = storedHash.split(":");
+    if (!salt || !hash) return false;
+    const candidate = (await scryptAsync(password, salt, 64)) as Buffer;
+    const expected = Buffer.from(hash, "hex");
+    return (
+      candidate.length === expected.length &&
+      timingSafeEqual(candidate, expected)
+    );
+  }
+
+  private sign(value: string): string {
+    return createHmac("sha256", this.secret).update(value).digest("base64url");
+  }
+
+  private issueToken(user: AuthenticatedUser): string {
+    const header = encode({ alg: "HS256", typ: "JWT" });
+    const payload = encode({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      exp: Math.floor(Date.now() / 1000) + TOKEN_LIFETIME_SECONDS,
+    });
+    const signed = `${header}.${payload}`;
+    return `${signed}.${this.sign(signed)}`;
+  }
+
+  private sessionFor(user: AuthenticatedUser): AuthSession {
+    return { token: this.issueToken(user), user };
+  }
+
+  private rowToUser(
+    row: Omit<StoredUserRow, "password_hash">,
+  ): AuthenticatedUser {
+    if (!isUserRole(row.role)) {
+      throw new Error(`Papel inválido armazenado para o usuário ${row.id}.`);
+    }
+    return {
+      id: row.id,
+      email: row.email,
+      name: row.name,
+      role: row.role,
+      active: row.active === 1,
+    };
+  }
+
+  private getUserRow(
+    userId: number,
+  ): Omit<StoredUserRow, "password_hash"> | null {
+    const row = this.database
+      .prepare("SELECT id, email, name, role, active FROM users WHERE id = ?")
+      .get(userId) as Omit<StoredUserRow, "password_hash"> | undefined;
+    return row ?? null;
+  }
+
+  private activeAdminCount(): number {
+    const row = this.database
+      .prepare(
+        "SELECT COUNT(*) AS count FROM users WHERE role = 'admin' AND active = 1",
+      )
+      .get() as { count: number };
+    return Number(row.count);
+  }
+
+  private runImmediateTransaction<T>(operation: () => T): T {
+    this.database.exec("BEGIN IMMEDIATE");
+    try {
+      const result = operation();
+      this.database.exec("COMMIT");
+      return result;
+    } catch (error) {
+      this.database.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
+  private emitAuthorizationChanged(userId: number): void {
+    this.events.emit("authorization-changed", userId);
+  }
+
+  public onAuthorizationChanged(
+    listener: (userId: number) => void,
+  ): () => void {
+    this.events.on("authorization-changed", listener);
+    return () => this.events.off("authorization-changed", listener);
+  }
+
+  public async login(
+    email: string,
+    password: string,
+  ): Promise<AuthSession | null> {
+    await this.ready;
+    const row = this.database
+      .prepare(
+        `SELECT id, email, name, password_hash, role, active
+         FROM users WHERE email_key = ? AND active = 1`,
+      )
+      .get(normalizeEmailKey(email)) as StoredUserRow | undefined;
+    if (!row || !(await this.passwordMatches(password, row.password_hash))) {
+      return null;
+    }
+
+    return this.sessionFor(this.rowToUser(row));
+  }
+
+  public async getUserById(
+    userId: number,
+    includeInactive = false,
+  ): Promise<AuthenticatedUser | null> {
+    await this.ready;
+    const row = this.getUserRow(userId);
+    if (!row || (!includeInactive && row.active !== 1)) return null;
+    return this.rowToUser(row);
+  }
+
+  public async listUsers(): Promise<AuthenticatedUser[]> {
+    await this.ready;
+    const rows = this.database
+      .prepare(
+        `SELECT id, email, name, role, active
+         FROM users
+         ORDER BY id ASC`,
+      )
+      .all() as unknown as Array<Omit<StoredUserRow, "password_hash">>;
+    return rows.map((row) => this.rowToUser(row));
+  }
+
+  public async createUser(
+    name: string,
+    email: string,
+    password: string,
+    role: UserRole = "user",
+  ): Promise<CreateUserResult> {
+    await this.ready;
+    const normalizedEmail = normalizeEmailKey(email);
+    const normalizedName = normalizeName(name);
+    const emailKey = normalizeEmailKey(normalizedEmail);
+    const nameKey = normalizeNameKey(normalizedName);
+    const passwordHash = await this.hashPassword(password);
+
+    const result = this.runImmediateTransaction<CreateUserResult>(() => {
+      const existingEmail = this.database
+        .prepare("SELECT id FROM users WHERE email_key = ?")
+        .get(emailKey);
+      if (existingEmail) return { ok: false, reason: "email_exists" };
+
+      const existingName = this.database
+        .prepare("SELECT id FROM users WHERE name_key = ?")
+        .get(nameKey);
+      if (existingName) return { ok: false, reason: "name_exists" };
+
+      this.database
+        .prepare(
+          `INSERT INTO users
+           (email, email_key, name, name_key, password_hash, role, active)
+           VALUES (?, ?, ?, ?, ?, ?, 1)`,
+        )
+        .run(
+          normalizedEmail,
+          emailKey,
+          normalizedName,
+          nameKey,
+          passwordHash,
+          role,
+        );
+
+      const row = this.database
+        .prepare(
+          "SELECT id, email, name, role, active FROM users WHERE email_key = ?",
+        )
+        .get(emailKey) as Omit<StoredUserRow, "password_hash"> | undefined;
+      if (!row) throw new Error("O usuário criado não pôde ser carregado.");
+      return { ok: true, user: this.rowToUser(row) };
+    });
+
+    return result;
+  }
+
+  public async updateUserName(
+    userId: number,
+    name: string,
+  ): Promise<UserMutationResult> {
+    await this.ready;
+    const normalizedName = normalizeName(name);
+    const nameKey = normalizeNameKey(normalizedName);
+    const result = this.runImmediateTransaction<UserMutationResult>(() => {
+      const row = this.getUserRow(userId);
+      if (!row) return { ok: false, reason: "not_found" };
+
+      const existing = this.database
+        .prepare("SELECT id FROM users WHERE name_key = ? AND id <> ?")
+        .get(nameKey, userId);
+      if (existing) return { ok: false, reason: "name_exists" };
+
+      this.database
+        .prepare("UPDATE users SET name = ?, name_key = ? WHERE id = ?")
+        .run(normalizedName, nameKey, userId);
+
+      const updated = this.getUserRow(userId);
+      if (!updated) return { ok: false, reason: "not_found" };
+      return { ok: true, user: this.rowToUser(updated) };
+    });
+
+    if (result.ok) this.emitAuthorizationChanged(userId);
+    return result;
+  }
+
+  public async updateUserRole(
+    userId: number,
+    role: UserRole,
+  ): Promise<UserMutationResult> {
+    await this.ready;
+    if (!isUserRole(role)) return { ok: false, reason: "invalid_role" };
+
+    const result = this.runImmediateTransaction<UserMutationResult>(() => {
+      const row = this.getUserRow(userId);
+      if (!row) return { ok: false, reason: "not_found" };
+
+      if (
+        row.role === "admin" &&
+        row.active === 1 &&
+        role === "user" &&
+        this.activeAdminCount() <= 1
+      ) {
+        return { ok: false, reason: "last_admin" };
+      }
+
+      this.database
+        .prepare("UPDATE users SET role = ? WHERE id = ?")
+        .run(role, userId);
+      const updated = this.getUserRow(userId);
+      if (!updated) return { ok: false, reason: "not_found" };
+      return { ok: true, user: this.rowToUser(updated) };
+    });
+
+    if (result.ok) this.emitAuthorizationChanged(userId);
+    return result;
+  }
+
+  public async updateUserStatus(
+    actorUserId: number,
+    userId: number,
+    active: boolean,
+  ): Promise<UserMutationResult> {
+    await this.ready;
+
+    const result = this.runImmediateTransaction<UserMutationResult>(() => {
+      const row = this.getUserRow(userId);
+      if (!row) return { ok: false, reason: "not_found" };
+
+      if (actorUserId === userId && !active) {
+        return { ok: false, reason: "self_deactivate" };
+      }
+
+      if (
+        row.role === "admin" &&
+        row.active === 1 &&
+        !active &&
+        this.activeAdminCount() <= 1
+      ) {
+        return { ok: false, reason: "last_admin" };
+      }
+
+      this.database
+        .prepare("UPDATE users SET active = ? WHERE id = ?")
+        .run(active ? 1 : 0, userId);
+      const updated = this.getUserRow(userId);
+      if (!updated) return { ok: false, reason: "not_found" };
+      return { ok: true, user: this.rowToUser(updated) };
+    });
+
+    if (result.ok) this.emitAuthorizationChanged(userId);
+    return result;
+  }
+
+  public async deleteUser(
+    actorUserId: number,
+    userId: number,
+  ): Promise<UserMutationResult> {
+    await this.ready;
+    if (actorUserId === userId) return { ok: false, reason: "self_delete" };
+
+    const result = this.runImmediateTransaction<UserMutationResult>(() => {
+      const row = this.getUserRow(userId);
+      if (!row) return { ok: false, reason: "not_found" };
+
+      if (
+        row.role === "admin" &&
+        row.active === 1 &&
+        this.activeAdminCount() <= 1
+      ) {
+        return { ok: false, reason: "last_admin" };
+      }
+
+      const user = this.rowToUser(row);
+      this.database.prepare("DELETE FROM users WHERE id = ?").run(userId);
+      return { ok: true, user };
+    });
+
+    if (result.ok) this.emitAuthorizationChanged(userId);
+    return result;
+  }
+
+  public async verifyToken(
+    token: string | null | undefined,
+  ): Promise<AuthenticatedUser | null> {
+    await this.ready;
+    if (!token) return null;
+    const [header, payload, signature] = token.split(".");
+    if (!header || !payload || !signature) return null;
+    const signed = `${header}.${payload}`;
+    const expected = this.sign(signed);
+    if (
+      signature.length !== expected.length ||
+      !timingSafeEqual(Buffer.from(signature), Buffer.from(expected))
+    ) {
+      return null;
+    }
+
+    try {
+      const value = decode<TokenPayload>(payload);
+      if (!value.id || value.exp < Math.floor(Date.now() / 1000)) return null;
+      return await this.getUserById(value.id);
+    } catch {
+      return null;
+    }
+  }
+}
+
+export const usersDatabasePath = path.join(import.meta.dirname, "users.sqlite");

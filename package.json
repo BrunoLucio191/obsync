@@ -1,0 +1,34 @@
+{
+  "name": "colab-obsid",
+  "private": true,
+  "type": "module",
+  "version": "1.0.0",
+  "workspaces": [
+    "backend",
+    "plugin/obsidian-sample-plugin"
+  ],
+  "scripts": {
+    "start:backend": "npm start --workspace=backend",
+    "dev:plugin": "npm run dev --workspace=obsidian-sample-plugin"
+  },
+  "author": "Dev",
+  "license": "ISC",
+  "dependencies": {
+    "@codemirror/state": "^6.5.0",
+    "archiver": "^8.0.0",
+    "chokidar": "^5.0.0",
+    "express": "^5.2.1",
+    "jszip": "^3.10.1",
+    "ws": "^8.21.1",
+    "y-websocket": "^3.0.0",
+    "yjs": "^13.6.31",
+    "zip-a-folder": "^6.1.3"
+  },
+  "devDependencies": {
+    "@types/archiver": "^8.0.0",
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.1.1",
+    "@types/ws": "^8.18.1",
+    "typescript": "^5.9.3"
+  }
+}
