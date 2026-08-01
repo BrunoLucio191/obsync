@@ -96,15 +96,28 @@ export class AuthService {
 
   private async initialize(): Promise<void> {
     this.database.exec(`
-      CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        email TEXT NOT NULL UNIQUE,
-        email_key TEXT NOT NULL UNIQUE,
-        name TEXT NOT NULL,
-        name_key TEXT NOT NULL UNIQUE,
-        password_hash TEXT NOT NULL
-      )
-    `);
+        CREATE TABLE IF NOT EXISTS users (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+          email TEXT NOT NULL UNIQUE,
+          email_key TEXT NOT NULL UNIQUE,
+
+          name TEXT NOT NULL,
+          name_key TEXT NOT NULL UNIQUE,
+
+          password_hash TEXT NOT NULL,
+
+          role TEXT NOT NULL DEFAULT 'user'
+            CHECK(role IN('admin','user'))
+            
+          active INTEGER NOT NULL DEFAULT 1
+            CHECK(active IN(0,1))
+        )
+
+
+        CREATE INDEX IF NOT EXIST idx_users_role_active
+          ON users(role,active)
+      `);
 
     const columns = this.database
       .prepare("PRAGMA table_info(users)")
@@ -548,11 +561,17 @@ export class AuthService {
     token: string | null | undefined,
   ): Promise<AuthenticatedUser | null> {
     await this.ready;
+
     if (!token) return null;
+
     const [header, payload, signature] = token.split(".");
+
     if (!header || !payload || !signature) return null;
+
     const signed = `${header}.${payload}`;
+
     const expected = this.sign(signed);
+
     if (
       signature.length !== expected.length ||
       !timingSafeEqual(Buffer.from(signature), Buffer.from(expected))

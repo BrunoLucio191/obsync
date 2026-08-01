@@ -13,16 +13,16 @@ import {
   type UserMutationResult,
   type UserRole,
   usersDatabasePath,
-} from "../authClass.ts";
-import { publishVaultChange } from "../../syncEvents.ts";
+} from "./authClass.ts";
+import { publishVaultChange } from "../syncEvents.ts";
 import {
   clearPathDeleted,
   deletePersistedStateUnderPath,
   isPathDeleted,
   markPathDeleted,
   renamePersistedStatePath,
-} from "../../yjsUtils.ts";
-import { FileManager } from "../fileManipulationClass.ts";
+} from "../yjsUtils.ts";
+import { FileManager } from "./fileManipulationClass.ts";
 
 function isUserRole(value: unknown): value is UserRole {
   return value === "admin" || value === "user";
@@ -99,11 +99,14 @@ export class ExpressServer {
       next: NextFunction,
     ): Promise<void> => {
       const token = req.header("authorization")?.replace(/^Bearer\s+/i, "");
+
       const authenticatedUser = await this.auth.verifyToken(token);
+
       if (!authenticatedUser) {
         res.status(401).json({ error: "Não autorizado." });
         return;
       }
+
       res.locals.authenticatedUser = authenticatedUser;
       next();
     };
@@ -114,6 +117,7 @@ export class ExpressServer {
       next: NextFunction,
     ): void => {
       const user = this.currentUser(res);
+
       if (user.role !== "admin") {
         this.auditDenied(user, req.method, req.path, this.requestPath(req));
         res
@@ -121,15 +125,12 @@ export class ExpressServer {
           .json({ error: "Apenas administradores podem executar esta ação." });
         return;
       }
+
       next();
     };
 
     this.app.get("/", (_req: Request, res: Response) => {
       res.json({ status: "ok", service: "obsync" });
-    });
-
-    this.app.get("/health", (_req: Request, res: Response) => {
-      res.json({ status: "ok" });
     });
 
     this.app.post(
