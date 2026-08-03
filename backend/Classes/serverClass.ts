@@ -13,7 +13,7 @@ import {
   type UserMutationResult,
   type UserRole,
   usersDatabasePath,
-} from "./authClass.ts";
+} from "./authClass/authClass.ts";
 import { publishVaultChange } from "../syncEvents.ts";
 import {
   clearPathDeleted,
@@ -442,7 +442,7 @@ export class ExpressServer {
         });
         res.sendStatus(200);
       } catch (error) {
-        console.error("❌ [Sync] Erro no Delete:", error);
+        console.error("[Sync] Erro no Delete:", error);
         res.status(500).send("Erro ao deletar");
       }
     });

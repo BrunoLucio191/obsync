@@ -3,89 +3,25 @@ import { EventEmitter } from "node:events";
 import { DatabaseSync } from "node:sqlite";
 import { promisify } from "node:util";
 import path from "node:path";
-
-const scryptAsync = promisify(scrypt);
-const TOKEN_LIFETIME_SECONDS = 60 * 60 * 24 * 7;
-
-export type UserRole = "admin" | "user";
-
-export type AuthenticatedUser = {
-  id: number;
-  email: string;
-  name: string;
-  role: UserRole;
-  active: boolean;
-};
-
-export type AuthSession = {
-  token: string;
-  user: AuthenticatedUser;
-};
-
-export type CreateUserResult =
-  | { ok: true; user: AuthenticatedUser }
-  | { ok: false; reason: "email_exists" | "name_exists" };
-
-export type UserMutationResult =
-  | { ok: true; user: AuthenticatedUser }
-  | {
-      ok: false;
-      reason:
-        | "not_found"
-        | "last_admin"
-        | "self_deactivate"
-        | "self_delete"
-        | "invalid_role"
-        | "name_exists";
-    };
-
-type StoredUserRow = {
-  id: number;
-  email: string;
-  name: string;
-  password_hash: string;
-  role: string;
-  active: number;
-};
-
-type TokenPayload = {
-  id: number;
-  email: string;
-  name: string;
-  role: UserRole;
-  exp: number;
-};
-
-function encode(value: object): string {
-  return Buffer.from(JSON.stringify(value)).toString("base64url");
-}
-
-function decode<T>(value: string): T {
-  return JSON.parse(Buffer.from(value, "base64url").toString("utf8")) as T;
-}
-
-function isUserRole(value: unknown): value is UserRole {
-  return value === "admin" || value === "user";
-}
-
-function normalizeEmailKey(value: string): string {
-  return value.normalize("NFKC").trim().toLowerCase();
-}
-
-function normalizeName(value: string): string {
-  return value.normalize("NFKC").trim().replace(/\s+/g, " ");
-}
-
-function normalizeNameKey(value: string): string {
-  return normalizeName(value).toLocaleLowerCase("pt-BR");
-}
+import { FileManager } from "../fileManipulationClass.ts";
+import type {
+  AuthenticatedUser,
+  AuthSession,
+  CreateUserResult,
+  StoredUserRow,
+  TokenPayload,
+  UserMutationResult,
+  UserRole,
+} from "./authClassTypes.ts";
 
 export class AuthService {
   private readonly database: DatabaseSync;
   private readonly events = new EventEmitter();
-  private readonly secret =
-    process.env.OBISYNC_TOKEN_SECRET ?? randomBytes(32).toString("hex");
+  private readonly secret = process.env.OBISYNC_TOKEN_SECRET!;
   private readonly ready: Promise<void>;
+  private fileManager = new FileManager();
+  private TOKEN_LIFETIME_SECONDS = 60 * 60 * 24 * 7;
+  private scryptAsync = promisify(scrypt);
 
   public constructor(databasePath: string) {
     this.database = new DatabaseSync(databasePath);
@@ -93,14 +29,13 @@ export class AuthService {
     this.database.exec("PRAGMA journal_mode = WAL");
     this.ready = this.initialize();
   }
-
+  //MARK: create db fns
   private async initialize(): Promise<void> {
     this.database.exec(`
         CREATE TABLE IF NOT EXISTS users (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
 
           email TEXT NOT NULL UNIQUE,
-          email_key TEXT NOT NULL UNIQUE,
 
           name TEXT NOT NULL,
           name_key TEXT NOT NULL UNIQUE,
@@ -108,72 +43,40 @@ export class AuthService {
           password_hash TEXT NOT NULL,
 
           role TEXT NOT NULL DEFAULT 'user'
-            CHECK(role IN('admin','user'))
+            CHECK(role IN('admin','user')),
             
           active INTEGER NOT NULL DEFAULT 1
             CHECK(active IN(0,1))
-        )
+        );
 
-
-        CREATE INDEX IF NOT EXIST idx_users_role_active
-          ON users(role,active)
+        CREATE INDEX IF NOT EXISTS idx_users_role_active
+          ON users(role,active);
       `);
 
-    const columns = this.database
-      .prepare("PRAGMA table_info(users)")
-      .all() as unknown as Array<{ name: string }>;
-    const names = new Set(columns.map((column) => column.name));
-
-    if (!names.has("email_key")) {
-      this.database.exec("ALTER TABLE users ADD COLUMN email_key TEXT");
-    }
-    if (!names.has("name_key")) {
-      this.database.exec("ALTER TABLE users ADD COLUMN name_key TEXT");
-    }
-    if (!names.has("role")) {
-      this.database.exec(
-        "ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user' CHECK(role IN ('admin', 'user'))",
-      );
-    }
-    if (!names.has("active")) {
-      this.database.exec(
-        "ALTER TABLE users ADD COLUMN active INTEGER NOT NULL DEFAULT 1 CHECK(active IN (0, 1))",
-      );
-    }
-
     this.migrateIdentityKeys();
-    this.database.exec(
-      "CREATE UNIQUE INDEX IF NOT EXISTS ux_users_email_key ON users(email_key)",
-    );
-    this.database.exec(
-      "CREATE UNIQUE INDEX IF NOT EXISTS ux_users_name_key ON users(name_key)",
-    );
-    this.database.exec(
-      "CREATE INDEX IF NOT EXISTS idx_users_role_active ON users(role, active)",
-    );
 
     await this.seedUsers();
     this.ensureInitialAdministrator();
   }
 
+  //produce keys for searching and verify uniques from e-mail and name
   private migrateIdentityKeys(): void {
     const rows = this.database
       .prepare("SELECT id, email, name FROM users ORDER BY id")
-      .all() as unknown as Array<{ id: number; email: string; name: string }>;
+      .all() as Array<{ id: number; email: string; name: string }>;
     const emailOwners = new Map<string, number>();
     const nameOwners = new Map<string, number>();
     const update = this.database.prepare(
-      "UPDATE users SET email = ?, email_key = ?, name = ?, name_key = ? WHERE id = ?",
+      "UPDATE users SET email = ?, name = ?, name_key = ? WHERE id = ?",
     );
 
     this.runImmediateTransaction(() => {
       for (const row of rows) {
-        const email = normalizeEmailKey(row.email);
-        const name = normalizeName(row.name);
-        const emailKey = normalizeEmailKey(email);
-        const nameKey = normalizeNameKey(name);
-        const emailOwner = emailOwners.get(emailKey);
-        const nameOwner = nameOwners.get(nameKey);
+        const email = this.fileManager.normalizeEmailKey(row.email);
+        const name = this.fileManager.normalizeName(row.name);
+        const nameKey = this.fileManager.normalizeNameKey(name);
+        const emailOwner = emailOwners.get(email);
+        const nameOwner = nameOwners.get(email);
 
         if (emailOwner !== undefined) {
           throw new Error(
@@ -186,37 +89,36 @@ export class AuthService {
           );
         }
 
-        emailOwners.set(emailKey, row.id);
+        emailOwners.set(email, row.id);
         nameOwners.set(nameKey, row.id);
-        update.run(email, emailKey, name, nameKey, row.id);
+        update.run(email, name, nameKey, row.id);
       }
     });
   }
-
+  //add inital users to the database
   private async seedUsers(): Promise<void> {
     const users = [
-      { email: "thiago@gmail.com", name: "Thiago" },
-      { email: "brunoestudos6@gmail.com", name: "Bruno" },
+      { email: "thiago@gmail.com", name: "Thiago", password: "123456" },
+      { email: "brunoestudos6@gmail.com", name: "Bruno", password: "123456" },
     ];
     const insert = this.database.prepare(
       `INSERT OR IGNORE INTO users
-       (email, email_key, name, name_key, password_hash, role, active)
-       VALUES (?, ?, ?, ?, ?, 'user', 1)`,
+       (email, name, name_key, password_hash, role, active)
+       VALUES (?, ?, ?, ?, 'user', 1)`,
     );
 
     for (const user of users) {
-      const email = normalizeEmailKey(user.email);
-      const name = normalizeName(user.name);
+      const email = this.fileManager.normalizeEmailKey(user.email);
+      const name = this.fileManager.normalizeName(user.name);
       insert.run(
         email,
-        normalizeEmailKey(email),
         name,
-        normalizeNameKey(name),
-        await this.hashPassword("123456"),
+        this.fileManager.normalizeNameKey(name),
+        await this.hashPassword(user.password),
       );
     }
   }
-
+  //prevent some edge cases for admintrator role
   private ensureInitialAdministrator(): void {
     const existing = this.database
       .prepare(
@@ -243,10 +145,18 @@ export class AuthService {
       `[Auth] Migração RBAC: usuário id=${first.id} promovido a administrador inicial.`,
     );
   }
-
+  //MARK: token/password fns
   private async hashPassword(password: string): Promise<string> {
     const salt = randomBytes(16).toString("hex");
-    const hash = (await scryptAsync(password, salt, 64)) as Buffer;
+
+    const passwordNormalized = password.normalize("NFC");
+
+    const hash = (await this.scryptAsync(
+      passwordNormalized,
+      salt,
+      64,
+    )) as Buffer;
+
     return `${salt}:${hash.toString("hex")}`;
   }
 
@@ -256,7 +166,9 @@ export class AuthService {
   ): Promise<boolean> {
     const [salt, hash] = storedHash.split(":");
     if (!salt || !hash) return false;
-    const candidate = (await scryptAsync(password, salt, 64)) as Buffer;
+
+    const candidate = (await this.scryptAsync(password, salt, 64)) as Buffer;
+
     const expected = Buffer.from(hash, "hex");
     return (
       candidate.length === expected.length &&
@@ -269,13 +181,13 @@ export class AuthService {
   }
 
   private issueToken(user: AuthenticatedUser): string {
-    const header = encode({ alg: "HS256", typ: "JWT" });
-    const payload = encode({
+    const header = this.fileManager.encode({ alg: "HS256", typ: "JWT" });
+    const payload = this.fileManager.encode({
       id: user.id,
       email: user.email,
       name: user.name,
       role: user.role,
-      exp: Math.floor(Date.now() / 1000) + TOKEN_LIFETIME_SECONDS,
+      exp: Math.floor(Date.now() / 1000) + this.TOKEN_LIFETIME_SECONDS,
     });
     const signed = `${header}.${payload}`;
     return `${signed}.${this.sign(signed)}`;
@@ -284,18 +196,18 @@ export class AuthService {
   private sessionFor(user: AuthenticatedUser): AuthSession {
     return { token: this.issueToken(user), user };
   }
-
+  //MARK: search db
   private rowToUser(
     row: Omit<StoredUserRow, "password_hash">,
   ): AuthenticatedUser {
-    if (!isUserRole(row.role)) {
+    if (!this.fileManager.isUserRole(row.role)) {
       throw new Error(`Papel inválido armazenado para o usuário ${row.id}.`);
     }
     return {
       id: row.id,
       email: row.email,
       name: row.name,
-      role: row.role,
+      role: row.role as UserRole,
       active: row.active === 1,
     };
   }
@@ -317,7 +229,7 @@ export class AuthService {
       .get() as { count: number };
     return Number(row.count);
   }
-
+  //MARK: helper fns
   private runImmediateTransaction<T>(operation: () => T): T {
     this.database.exec("BEGIN IMMEDIATE");
     try {
@@ -340,7 +252,7 @@ export class AuthService {
     this.events.on("authorization-changed", listener);
     return () => this.events.off("authorization-changed", listener);
   }
-
+  //MARK: user fns
   public async login(
     email: string,
     password: string,
@@ -349,9 +261,11 @@ export class AuthService {
     const row = this.database
       .prepare(
         `SELECT id, email, name, password_hash, role, active
-         FROM users WHERE email_key = ? AND active = 1`,
+         FROM users WHERE email = ? AND active = 1`,
       )
-      .get(normalizeEmailKey(email)) as StoredUserRow | undefined;
+      .get(this.fileManager.normalizeEmailKey(email)) as
+      | StoredUserRow
+      | undefined;
     if (!row || !(await this.passwordMatches(password, row.password_hash))) {
       return null;
     }
@@ -388,15 +302,15 @@ export class AuthService {
     role: UserRole = "user",
   ): Promise<CreateUserResult> {
     await this.ready;
-    const normalizedEmail = normalizeEmailKey(email);
-    const normalizedName = normalizeName(name);
-    const emailKey = normalizeEmailKey(normalizedEmail);
-    const nameKey = normalizeNameKey(normalizedName);
+    const normalizedEmail = this.fileManager.normalizeEmailKey(email);
+    const normalizedName = this.fileManager.normalizeName(name);
+    const emailKey = this.fileManager.normalizeEmailKey(normalizedEmail);
+    const nameKey = this.fileManager.normalizeNameKey(normalizedName);
     const passwordHash = await this.hashPassword(password);
 
     const result = this.runImmediateTransaction<CreateUserResult>(() => {
       const existingEmail = this.database
-        .prepare("SELECT id FROM users WHERE email_key = ?")
+        .prepare("SELECT id FROM users WHERE email = ?")
         .get(emailKey);
       if (existingEmail) return { ok: false, reason: "email_exists" };
 
@@ -408,21 +322,14 @@ export class AuthService {
       this.database
         .prepare(
           `INSERT INTO users
-           (email, email_key, name, name_key, password_hash, role, active)
-           VALUES (?, ?, ?, ?, ?, ?, 1)`,
+           (email, name, name_key, password_hash, role, active)
+           VALUES (?, ?, ?, ?, ?, 1)`,
         )
-        .run(
-          normalizedEmail,
-          emailKey,
-          normalizedName,
-          nameKey,
-          passwordHash,
-          role,
-        );
+        .run(normalizedEmail, normalizedName, nameKey, passwordHash, role);
 
       const row = this.database
         .prepare(
-          "SELECT id, email, name, role, active FROM users WHERE email_key = ?",
+          "SELECT id, email, name, role, active FROM users WHERE email = ?",
         )
         .get(emailKey) as Omit<StoredUserRow, "password_hash"> | undefined;
       if (!row) throw new Error("O usuário criado não pôde ser carregado.");
@@ -437,8 +344,8 @@ export class AuthService {
     name: string,
   ): Promise<UserMutationResult> {
     await this.ready;
-    const normalizedName = normalizeName(name);
-    const nameKey = normalizeNameKey(normalizedName);
+    const normalizedName = this.fileManager.normalizeName(name);
+    const nameKey = this.fileManager.normalizeNameKey(normalizedName);
     const result = this.runImmediateTransaction<UserMutationResult>(() => {
       const row = this.getUserRow(userId);
       if (!row) return { ok: false, reason: "not_found" };
@@ -466,7 +373,8 @@ export class AuthService {
     role: UserRole,
   ): Promise<UserMutationResult> {
     await this.ready;
-    if (!isUserRole(role)) return { ok: false, reason: "invalid_role" };
+    if (!this.fileManager.isUserRole(role))
+      return { ok: false, reason: "invalid_role" };
 
     const result = this.runImmediateTransaction<UserMutationResult>(() => {
       const row = this.getUserRow(userId);
@@ -485,7 +393,9 @@ export class AuthService {
         .prepare("UPDATE users SET role = ? WHERE id = ?")
         .run(role, userId);
       const updated = this.getUserRow(userId);
+
       if (!updated) return { ok: false, reason: "not_found" };
+
       return { ok: true, user: this.rowToUser(updated) };
     });
 
@@ -556,7 +466,7 @@ export class AuthService {
     if (result.ok) this.emitAuthorizationChanged(userId);
     return result;
   }
-
+  //MARK: verify token
   public async verifyToken(
     token: string | null | undefined,
   ): Promise<AuthenticatedUser | null> {
@@ -580,7 +490,7 @@ export class AuthService {
     }
 
     try {
-      const value = decode<TokenPayload>(payload);
+      const value = this.fileManager.decode<TokenPayload>(payload);
       if (!value.id || value.exp < Math.floor(Date.now() / 1000)) return null;
       return await this.getUserById(value.id);
     } catch {
