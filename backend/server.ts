@@ -1,7 +1,6 @@
 import "./env.ts";
 import { ExpressServer } from "./Classes/serverClass.ts";
 import { WebSHocket } from "./Classes/webSocketClass.ts";
-export { vaultExitPath, vaultPath } from "./paths.ts";
 
 const main = () => {
   const server = new ExpressServer();

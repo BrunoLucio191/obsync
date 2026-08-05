@@ -7,7 +7,8 @@ import express, {
 import { type Server } from "node:http";
 import { createServer } from "node:http";
 import fs from "node:fs/promises";
-import { AuthService, usersDatabasePath } from "./authClass/authClass.ts";
+import { AuthService } from "./authClass/authClass.ts";
+import { systemPaths } from "../paths.ts";
 import type {
   AuthenticatedUser,
   UserMutationResult,
@@ -75,7 +76,7 @@ export class ExpressServer {
   public readonly port: number;
   public readonly server: Server;
   public readonly filemanager = new FileManager();
-  public readonly auth = new AuthService(usersDatabasePath);
+  public readonly auth = new AuthService(systemPaths.usersDatabase);
 
   public constructor(port: number = Number(process.env.PORT ?? 3000)) {
     this.port = port;

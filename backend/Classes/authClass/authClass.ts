@@ -2,7 +2,6 @@ import { createHmac, randomBytes, scrypt, timingSafeEqual } from "node:crypto";
 import { EventEmitter } from "node:events";
 import { DatabaseSync } from "node:sqlite";
 import { promisify } from "node:util";
-import path from "node:path";
 import { FileManager } from "../fileManipulationClass.ts";
 import type {
   AuthenticatedUser,
@@ -53,48 +52,10 @@ export class AuthService {
           ON users(role,active);
       `);
 
-    this.migrateIdentityKeys();
-
     await this.seedUsers();
     this.ensureInitialAdministrator();
   }
 
-  //produce keys for searching and verify uniques from e-mail and name
-  private migrateIdentityKeys(): void {
-    const rows = this.database
-      .prepare("SELECT id, email, name FROM users ORDER BY id")
-      .all() as Array<{ id: number; email: string; name: string }>;
-    const emailOwners = new Map<string, number>();
-    const nameOwners = new Map<string, number>();
-    const update = this.database.prepare(
-      "UPDATE users SET email = ?, name = ?, name_key = ? WHERE id = ?",
-    );
-
-    this.runImmediateTransaction(() => {
-      for (const row of rows) {
-        const email = this.fileManager.normalizeEmailKey(row.email);
-        const name = this.fileManager.normalizeName(row.name);
-        const nameKey = this.fileManager.normalizeNameKey(name);
-        const emailOwner = emailOwners.get(email);
-        const nameOwner = nameOwners.get(email);
-
-        if (emailOwner !== undefined) {
-          throw new Error(
-            `Não foi possível aplicar a restrição de e-mail único: usuários ${emailOwner} e ${row.id} possuem o mesmo e-mail.`,
-          );
-        }
-        if (nameOwner !== undefined) {
-          throw new Error(
-            `Não foi possível aplicar a restrição de nome único: usuários ${nameOwner} e ${row.id} possuem o mesmo nome.`,
-          );
-        }
-
-        emailOwners.set(email, row.id);
-        nameOwners.set(nameKey, row.id);
-        update.run(email, name, nameKey, row.id);
-      }
-    });
-  }
   //add inital users to the database
   private async seedUsers(): Promise<void> {
     const users = [
@@ -499,5 +460,3 @@ export class AuthService {
     }
   }
 }
-
-export const usersDatabasePath = path.join(import.meta.dirname, "users.sqlite");

@@ -2,7 +2,7 @@ import fsPromises from "node:fs/promises";
 import { createWriteStream } from "node:fs";
 import path from "node:path";
 import { ZipArchive } from "archiver";
-import { vaultPath, vaultExitPath } from "../paths.ts";
+import { systemPaths } from "../paths.ts";
 import type { UserRole } from "./authClass/authClassTypes.ts";
 
 export class FileManager {
@@ -10,8 +10,8 @@ export class FileManager {
   public vaultExitPath!: string;
 
   constructor() {
-    this.vaultPath = vaultPath;
-    this.vaultExitPath = vaultExitPath;
+    this.vaultPath = systemPaths.vault;
+    this.vaultExitPath = systemPaths.vaultExit;
   }
 
   private resolveVaultPath(relativePath: string): string {
