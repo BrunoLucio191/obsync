@@ -3,7 +3,7 @@ import { createWriteStream } from "node:fs";
 import path from "node:path";
 import { ZipArchive } from "archiver";
 import { vaultPath, vaultExitPath } from "../paths.ts";
-import type { UserRole } from "./authClass/authClass.ts";
+import type { UserRole } from "./authClass/authClassTypes.ts";
 
 export class FileManager {
   public vaultPath!: string;

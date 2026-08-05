@@ -1,10 +1,8 @@
 import { type IncomingMessage, type Server } from "node:http";
 import { type Duplex } from "node:stream";
 import { WebSocket, WebSocketServer } from "ws";
-import {
-  type AuthenticatedUser,
-  type AuthService,
-} from "./authClass/authClass.ts";
+import { type AuthService } from "./authClass/authClass.ts";
+import { type AuthenticatedUser } from "./authClass/authClassTypes.ts";
 import { YjsPersistence } from "./classYjsPersistence.ts";
 import {
   MAX_WS_MESSAGE_BYTES,

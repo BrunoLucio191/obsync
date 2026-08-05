@@ -7,13 +7,12 @@ import express, {
 import { type Server } from "node:http";
 import { createServer } from "node:http";
 import fs from "node:fs/promises";
-import {
-  AuthService,
-  type AuthenticatedUser,
-  type UserMutationResult,
-  type UserRole,
-  usersDatabasePath,
-} from "./authClass/authClass.ts";
+import { AuthService, usersDatabasePath } from "./authClass/authClass.ts";
+import type {
+  AuthenticatedUser,
+  UserMutationResult,
+  UserRole,
+} from "./authClass/authClassTypes.ts";
 import { publishVaultChange } from "../syncEvents.ts";
 import {
   clearPathDeleted,
@@ -35,9 +34,7 @@ function mutationErrorStatus(result: UserMutationResult): number {
       return 404;
 
     case "last_admin":
-
     case "self_deactivate":
-
     case "self_delete":
       return 409;
 

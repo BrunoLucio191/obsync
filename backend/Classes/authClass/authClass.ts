@@ -203,6 +203,7 @@ export class AuthService {
     if (!this.fileManager.isUserRole(row.role)) {
       throw new Error(`Papel inválido armazenado para o usuário ${row.id}.`);
     }
+
     return {
       id: row.id,
       email: row.email,
@@ -291,7 +292,7 @@ export class AuthService {
          FROM users
          ORDER BY id ASC`,
       )
-      .all() as unknown as Array<Omit<StoredUserRow, "password_hash">>;
+      .all() as Array<Omit<StoredUserRow, "password_hash">>;
     return rows.map((row) => this.rowToUser(row));
   }
 
@@ -351,7 +352,7 @@ export class AuthService {
       if (!row) return { ok: false, reason: "not_found" };
 
       const existing = this.database
-        .prepare("SELECT id FROM users WHERE name_key = ? AND id <> ?")
+        .prepare("SELECT id FROM users WHERE name_key = ? AND id != ?")
         .get(nameKey, userId);
       if (existing) return { ok: false, reason: "name_exists" };
 
