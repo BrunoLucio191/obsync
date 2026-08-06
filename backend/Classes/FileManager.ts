@@ -3,7 +3,7 @@ import { createWriteStream } from "node:fs";
 import path from "node:path";
 import { ZipArchive } from "archiver";
 import { systemPaths } from "../paths.ts";
-import type { UserRole } from "./authClass/authClassTypes.ts";
+import type { UserRole } from "../auth/auth.types.ts";
 
 export class FileManager {
   public vaultPath!: string;
@@ -85,28 +85,5 @@ export class FileManager {
 
       archive.finalize();
     });
-  }
-  public encode(value: object): string {
-    return Buffer.from(JSON.stringify(value)).toString("base64url");
-  }
-
-  public decode<T>(value: string): T {
-    return JSON.parse(Buffer.from(value, "base64url").toString("utf8")) as T;
-  }
-
-  public isUserRole(value: unknown): value is UserRole {
-    return value === "admin" || value === "user";
-  }
-
-  public normalizeEmailKey(value: string): string {
-    return value.normalize("NFKC").trim().toLowerCase();
-  }
-
-  public normalizeName(value: string): string {
-    return value.normalize("NFKC").trim().replace(/\s+/g, " ");
-  }
-
-  public normalizeNameKey(value: string): string {
-    return this.normalizeName(value).toLocaleLowerCase("pt-BR");
   }
 }

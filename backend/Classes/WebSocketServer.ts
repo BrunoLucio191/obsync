@@ -1,32 +1,32 @@
 import { type IncomingMessage, type Server } from "node:http";
 import { type Duplex } from "node:stream";
 import { WebSocket, WebSocketServer } from "ws";
-import { type AuthService } from "./authClass/authClass.ts";
-import { type AuthenticatedUser } from "./authClass/authClassTypes.ts";
-import { YjsPersistence } from "./classYjsPersistence.ts";
+import { type AuthenticatedUser } from "../auth/auth.types.ts";
+import { YjsPersistence } from "./YjsPersistence.ts";
 import {
   MAX_WS_MESSAGE_BYTES,
   setupWSConnection,
   setPersistence,
 } from "../yjsUtils.ts";
 import { vaultEvents, type VaultChange } from "../syncEvents.ts";
-import { FileManager } from "./fileManipulationClass.ts";
+import { FileManager } from "./FileManager.ts";
+import { dbEvents } from "../users/DBEvents.ts";
+import type { TokenService } from "../auth/TokenService.ts";
+import { systemPaths } from "../paths.ts";
 
 const HEARTBEAT_INTERVAL_MS = 30_000;
 
 export class WebSHocket {
   public readonly wssSystem: WebSocketServer;
   public readonly wssYjs: WebSocketServer;
-  public readonly file = new FileManager();
-
-  private readonly auth: AuthService;
+  private readonly event;
+  private readonly tokenService: TokenService;
   private readonly authenticatedUsers = new Map<WebSocket, AuthenticatedUser>();
   private readonly aliveConnections = new WeakSet<WebSocket>();
   private readonly unsubscribeAuthorizationChanges: () => void;
   private heartbeatTimer: NodeJS.Timeout | null = null;
 
-  public constructor(server: Server, auth: AuthService) {
-    this.auth = auth;
+  public constructor(server: Server, tokenService: TokenService) {
     this.wssSystem = new WebSocketServer({
       noServer: true,
       maxPayload: MAX_WS_MESSAGE_BYTES,
@@ -37,8 +37,10 @@ export class WebSHocket {
       maxPayload: MAX_WS_MESSAGE_BYTES,
       perMessageDeflate: false,
     });
+    this.event = dbEvents();
+    this.tokenService = tokenService;
 
-    this.unsubscribeAuthorizationChanges = this.auth.onAuthorizationChanged(
+    this.unsubscribeAuthorizationChanges = this.event.onAuthorizationChanged(
       (userId) => this.closeUserConnections(userId),
     );
 
@@ -66,7 +68,9 @@ export class WebSHocket {
       return;
     }
 
-    const user = await this.auth.verifyToken(url.searchParams.get("token"));
+    const user = await this.tokenService.verifyToken(
+      url.searchParams.get("token"),
+    );
     if (!user) {
       socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
       socket.destroy();
@@ -85,7 +89,7 @@ export class WebSHocket {
   }
 
   public initializeWebSockets(): void {
-    const yjsPersistence = new YjsPersistence(this.file.vaultPath);
+    const yjsPersistence = new YjsPersistence(systemPaths.vault);
 
     setPersistence({
       bindState: (docName, ydoc) => yjsPersistence.bindState(docName, ydoc),

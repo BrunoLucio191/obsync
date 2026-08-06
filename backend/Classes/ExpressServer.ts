@@ -7,13 +7,12 @@ import express, {
 import { type Server } from "node:http";
 import { createServer } from "node:http";
 import fs from "node:fs/promises";
-import { AuthService } from "./authClass/authClass.ts";
 import { systemPaths } from "../paths.ts";
 import type {
   AuthenticatedUser,
   UserMutationResult,
   UserRole,
-} from "./authClass/authClassTypes.ts";
+} from "../auth/auth.types.ts";
 import { publishVaultChange } from "../syncEvents.ts";
 import {
   clearPathDeleted,
@@ -22,11 +21,10 @@ import {
   markPathDeleted,
   renamePersistedStatePath,
 } from "../yjsUtils.ts";
-import { FileManager } from "./fileManipulationClass.ts";
-
-function isUserRole(value: unknown): value is UserRole {
-  return value === "admin" || value === "user";
-}
+import { FileManager } from "./FileManager.ts";
+import { AuthService } from "../auth/authService.ts";
+import type { TokenService } from "../auth/TokenService.ts";
+import type { DBServices } from "../users/DBServices.ts";
 
 function mutationErrorStatus(result: UserMutationResult): number {
   if (result.ok) return 200;
@@ -71,22 +69,42 @@ function mutationErrorMessage(result: UserMutationResult): string {
   }
 }
 
-export class ExpressServer {
-  public readonly app: Express;
-  public readonly port: number;
-  public readonly server: Server;
-  public readonly filemanager = new FileManager();
-  public readonly auth = new AuthService(systemPaths.usersDatabase);
+type ExpreeServerConstructor = {
+  port: number;
+  fileManager: FileManager;
+  tokenService: TokenService;
+  dbService: DBServices;
+  authService: AuthService;
+};
 
-  public constructor(port: number = Number(process.env.PORT ?? 3000)) {
+export class ExpressServer {
+  private readonly app: Express;
+  private readonly port: number;
+  private readonly server: Server;
+  private readonly filemanager: FileManager;
+  private readonly dbService: DBServices;
+  private readonly token: TokenService;
+  private readonly auth: AuthService;
+
+  constructor({
+    port,
+    fileManager,
+    tokenService,
+    dbService,
+    authService,
+  }: ExpreeServerConstructor) {
     this.port = port;
     this.app = express();
     this.server = createServer(this.app);
     this.initializeMiddleware();
+    this.filemanager = fileManager;
+    this.token = tokenService;
+    this.dbService = dbService;
+    this.auth = authService;
     this.initializeRoutes();
   }
 
-  private initializeMiddleware(): void {
+  public initializeMiddleware(): void {
     this.app.use(express.json({ limit: "16mb" }));
   }
 
@@ -98,7 +116,7 @@ export class ExpressServer {
     ): Promise<void> => {
       const token = req.header("authorization")?.replace(/^Bearer\s+/i, "");
 
-      const authenticatedUser = await this.auth.verifyToken(token);
+      const authenticatedUser = await this.token.verifyToken(token);
 
       if (!authenticatedUser) {
         res.status(401).json({ error: "Não autorizado." });
@@ -182,7 +200,7 @@ export class ExpressServer {
         }
 
         const actor = this.currentUser(res);
-        const target = await this.auth.getUserById(userId, true);
+        const target = await this.dbService.getUserById(userId, true);
         if (!target) {
           res.status(404).json({ error: "Usuário não encontrado." });
           return;
@@ -194,7 +212,10 @@ export class ExpressServer {
           return;
         }
 
-        const result = await this.auth.updateUserName(userId, normalizedName);
+        const result = await this.dbService.updateUserName(
+          userId,
+          normalizedName,
+        );
         if (!result.ok) {
           res.status(mutationErrorStatus(result)).json({
             error: mutationErrorMessage(result),
@@ -210,7 +231,7 @@ export class ExpressServer {
       requireAuth,
       requireAdmin,
       async (_req: Request, res: Response): Promise<void> => {
-        res.json({ users: await this.auth.listUsers() });
+        res.json({ users: await this.dbService.listUsers() });
       },
     );
 
@@ -223,7 +244,9 @@ export class ExpressServer {
         const normalizedName = typeof name === "string" ? name.trim() : "";
         const normalizedEmail =
           typeof email === "string" ? email.trim().toLowerCase() : "";
-        const normalizedRole: UserRole = isUserRole(role) ? role : "user";
+        const normalizedRole: UserRole = this.dbService.isUserRole(role)
+          ? role
+          : "user";
 
         if (normalizedName.length < 2 || normalizedName.length > 64) {
           res
@@ -246,7 +269,7 @@ export class ExpressServer {
           return;
         }
 
-        const result = await this.auth.createUser(
+        const result = await this.dbService.createUser(
           normalizedName,
           normalizedEmail,
           password,
@@ -272,12 +295,12 @@ export class ExpressServer {
       async (req: Request, res: Response): Promise<void> => {
         const userId = this.parseUserId(req.params.id);
         const role = req.body?.role;
-        if (!userId || !isUserRole(role)) {
+        if (!userId || !this.dbService.isUserRole(role)) {
           res.status(400).json({ error: "Usuário ou papel inválido." });
           return;
         }
 
-        const result = await this.auth.updateUserRole(userId, role);
+        const result = await this.dbService.updateUserRole(userId, role);
         if (!result.ok) {
           res.status(mutationErrorStatus(result)).json({
             error: mutationErrorMessage(result),
@@ -301,7 +324,7 @@ export class ExpressServer {
         }
 
         const actor = this.currentUser(res);
-        const result = await this.auth.updateUserStatus(
+        const result = await this.dbService.updateUserStatus(
           actor.id,
           userId,
           active,
@@ -327,7 +350,7 @@ export class ExpressServer {
           return;
         }
 
-        const result = await this.auth.deleteUser(
+        const result = await this.dbService.deleteUser(
           this.currentUser(res).id,
           userId,
         );
@@ -544,7 +567,7 @@ export class ExpressServer {
     });
   }
 
-  public get getHttpServer(): Server {
+  get getHttpServer(): Server {
     return this.server;
   }
 }
