@@ -371,7 +371,7 @@ export class ExpressServer {
         try {
           console.log("📦 [ZIP] Iniciando compactação...");
           await this.filemanager.directoryZiped();
-          const zipPath = this.filemanager.vaultExitPath;
+          const zipPath = systemPaths.vaultExit;
 
           res.download(zipPath, "vault_sync.zip", async (error) => {
             if (error) {
@@ -493,7 +493,7 @@ export class ExpressServer {
         res.status(500).send("Erro ao modificar arquivo");
       }
     });
-
+    //TODO: fix bug when dealing with Tfolders
     this.app.put("/sync/rename", async (req: Request, res: Response) => {
       try {
         const { oldPath, newPath } = req.body;

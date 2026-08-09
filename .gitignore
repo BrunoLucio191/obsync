@@ -22,9 +22,6 @@ build/
 *.db-wal
 
 # Shared vault and user data
-backend/vault/
-backend/data/
-vault/
 
 # Yjs persistent state
 .obisync-yjs-state/

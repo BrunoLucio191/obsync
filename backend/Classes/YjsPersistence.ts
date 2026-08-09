@@ -27,16 +27,9 @@ export class YjsPersistence {
   private readonly stateRoot: string;
   private readonly documentStates = new WeakMap<Y.Doc, DocumentWriteState>();
 
-  public constructor(vaultPath: string, statePath?: string) {
+  public constructor(vaultPath: string, statePath: string) {
     this.vaultRoot = path.resolve(vaultPath);
-    this.stateRoot = path.resolve(
-      statePath ??
-        path.join(
-          path.dirname(this.vaultRoot),
-          ".obisync-yjs-state",
-          path.basename(this.vaultRoot),
-        ),
-    );
+    this.stateRoot = path.resolve(statePath);
   }
 
   public async bindState(docName: string, ydoc: Y.Doc): Promise<void> {

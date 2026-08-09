@@ -7,12 +7,17 @@ import type {
 import { decode, encode } from "./encoding.ts";
 import type { DBServices } from "../users/DBServices.ts";
 
+type TokenServiceConstructor = {
+  secret: string;
+  dbService: DBServices;
+};
+
 export class TokenService {
   private secret: string;
   private readonly TOKEN_LIFETIME_SECONDS = 60 * 60 * 24 * 7;
   private dbService: DBServices;
 
-  constructor(secret: string, dbService: DBServices) {
+  constructor({ secret, dbService }: TokenServiceConstructor) {
     this.secret = secret;
     this.dbService = dbService;
   }

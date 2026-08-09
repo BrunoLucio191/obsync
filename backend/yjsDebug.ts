@@ -9,6 +9,13 @@ export type YjsDebugConnectionContext = {
   readonly userRole?: "admin" | "user";
 };
 
+export function registerYjsDebugConnection(
+  connection: WebSocket,
+  context: YjsDebugConnectionContext,
+): void {
+  connectionContexts.set(connection, context);
+}
+
 const connectionContexts = new WeakMap<WebSocket, YjsDebugConnectionContext>();
 
 export function getYjsDebugConnection(

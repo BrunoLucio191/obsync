@@ -5,11 +5,11 @@
   "version": "1.0.0",
   "workspaces": [
     "backend",
-    "plugin/obsidian-sample-plugin"
+    "plugin/obSync"
   ],
   "scripts": {
     "start:backend": "npm start --workspace=backend",
-    "dev:plugin": "npm run dev --workspace=obsidian-sample-plugin"
+    "dev:plugin": "npm run dev --workspace=obSync"
   },
   "author": "Dev",
   "license": "ISC",

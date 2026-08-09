@@ -9,7 +9,6 @@ import {
   setPersistence,
 } from "../yjsUtils.ts";
 import { vaultEvents, type VaultChange } from "../syncEvents.ts";
-import { FileManager } from "./FileManager.ts";
 import { dbEvents } from "../users/DBEvents.ts";
 import type { TokenService } from "../auth/TokenService.ts";
 import { systemPaths } from "../paths.ts";
@@ -45,7 +44,11 @@ export class WebSHocket {
     );
 
     server.on("upgrade", (request, socket, head) => {
-      void this.handleUpgrade(request, socket, head);
+      try {
+        this.handleUpgrade(request, socket, head);
+      } catch (err) {
+        console.error(err);
+      }
     });
 
     server.once("close", () => {
@@ -89,7 +92,10 @@ export class WebSHocket {
   }
 
   public initializeWebSockets(): void {
-    const yjsPersistence = new YjsPersistence(systemPaths.vault);
+    const yjsPersistence = new YjsPersistence(
+      systemPaths.vault,
+      systemPaths.yjsState,
+    );
 
     setPersistence({
       bindState: (docName, ydoc) => yjsPersistence.bindState(docName, ydoc),

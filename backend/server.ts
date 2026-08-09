@@ -11,14 +11,15 @@ import { FileManager } from "./Classes/FileManager.ts";
 const main = () => {
   const userDB = new UserDB(systemPaths.usersDatabase);
   userDB.initialize();
+
   const fileManager = new FileManager();
 
   const dbService = new DBServices(userDB);
 
-  const tokenService = new TokenService(
-    process.env.OBISYNC_TOKEN_SECRET!,
+  const tokenService = new TokenService({
+    secret: process.env.OBISYNC_TOKEN_SECRET!,
     dbService,
-  );
+  });
 
   const authService = new AuthService(userDB, dbService, tokenService);
 

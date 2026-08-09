@@ -19,7 +19,6 @@ export class UserDB extends DatabaseSync {
   }
 
   private configDataBase(): void {
-    this.exec("PRAGMA foreign_keys = ON");
     this.exec("PRAGMA journal_mode = WAL");
   }
   private createSchema(): void {
@@ -68,20 +67,14 @@ export class UserDB extends DatabaseSync {
     }
   }
   private ensureInitialAdministrator(): void {
-    const existing = this.prepare(
-      "SELECT id FROM users WHERE role = 'admin' AND active = 1 LIMIT 1",
-    ).get();
-    if (existing) return;
-
     const first = this.prepare(
-      "SELECT id, email FROM users WHERE active = 1 ORDER BY id LIMIT 1",
+      "SELECT id FROM users WHERE active = 1 ORDER BY id LIMIT 1",
     ).get() as { id: number; email: string } | undefined;
     if (!first) {
       throw new Error(
         "Não existe usuário ativo para promover a administrador.",
       );
     }
-
     this.prepare("UPDATE users SET role = 'admin' WHERE id = ?").run(first.id);
     console.log(
       `[Auth] Migração RBAC: usuário id=${first.id} promovido a administrador inicial.`,

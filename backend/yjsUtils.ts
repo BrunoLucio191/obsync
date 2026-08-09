@@ -67,16 +67,6 @@ const invalidatedDocuments = new WeakSet<Y.Doc>();
 
 let persistence: YjsPersistenceAdapter | undefined;
 
-function describeConnection(connection: WebSocket): Record<string, unknown> {
-  const context = getYjsDebugConnection(connection);
-  return {
-    connectionId: context.connectionId,
-    userId: context.userId,
-    userName: context.userName,
-    readyState: connection.readyState,
-  };
-}
-
 function normalizeVaultPath(value: string): string {
   return value.replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
 }
@@ -532,6 +522,7 @@ function validateAndCommitAwarenessOwnership(
 
     if (currentOwner && currentOwner !== connection) {
       const currentOwnerContext = getYjsDebugConnection(currentOwner);
+      console.log(currentOwnerContext);
       const currentOwnerPresenceId = normalizePresenceIdentity(
         currentOwnerContext.userEmail,
       );
@@ -713,9 +704,6 @@ function scheduleDocumentCleanup(shared: SharedDocument): void {
     shared.doc.destroy();
   })()
     .catch((error: unknown) => {
-      // Em caso de falha de persistência, mantém o Y.Doc na RAM. É melhor
-      // reter a sala e aceitar uma nova conexão do que destruir estado ainda
-      // não gravado.
       console.error(
         `[Yjs] Não foi possível finalizar a sala ${shared.filePath}:`,
         error,
@@ -847,4 +835,7 @@ export async function setupWSConnection(
 
 export function setPersistence(config: YjsPersistenceAdapter): void {
   persistence = config;
+}
+function describeConnection(currentOwner: WebSocket): unknown {
+  throw new Error("Function not implemented.");
 }
