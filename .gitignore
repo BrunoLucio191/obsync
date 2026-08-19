@@ -24,10 +24,10 @@ build/
 # Shared vault and user data
 
 # Yjs persistent state
-.obisync-yjs-state/
-**/.obisync-yjs-state/
-yjs-state/
-**/yjs-state/
+#.obisync-yjs-state/
+#**/.obisync-yjs-state/
+#yjs-state/
+#**/yjs-state/
 
 # Logs
 *.log

@@ -373,7 +373,7 @@ export class ExpressServer {
           await this.filemanager.directoryZiped();
           const zipPath = systemPaths.vaultExit;
 
-          res.download(zipPath, "vault_sync.zip", async (error) => {
+          res.download(zipPath, "vault.zip", async (error) => {
             if (error) {
               console.error("❌ [ZIP] Erro no envio:", error.message);
               if (!res.headersSent) {

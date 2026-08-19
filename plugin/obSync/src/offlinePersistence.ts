@@ -1,21 +1,26 @@
 import * as Y from 'yjs';
 import { IndexeddbPersistence } from 'y-indexeddb';
 
-const DEFAULT_NAMESPACE = 'obisync-crdt-v2';
+export const LEGACY_OFFLINE_NAMESPACE = 'your-mon';
 
-export interface OfflinePersistenceOptions {
+export type OfflinePersistenceOptions = {
 	documentId: string;
 	ydoc: Y.Doc;
 	namespace?: string;
-}
+};
 
-export interface OfflinePersistenceHandle {
+export type OfflinePersistenceHandle = {
 	readonly databaseName: string;
 	readonly provider: IndexeddbPersistence;
 	readonly ready: Promise<void>;
 	destroy(): Promise<void>;
 	clear(): Promise<void>;
-}
+};
+
+export type OfflineStateOptions = {
+	documentId: string;
+	namespace?: string;
+};
 
 const activePersistence = new WeakMap<Y.Doc, OfflinePersistenceHandle>();
 
@@ -30,24 +35,13 @@ function buildDatabaseName(documentId: string, namespace: string): string {
 	if (!normalizedNamespace) {
 		throw new Error('namespace não pode ser vazio.');
 	}
-
 	return `${normalizedNamespace}:${encodeURIComponent(normalizedDocumentId)}`;
 }
 
-/**
- * Vincula um Y.Doc ao IndexedDB do Obsidian/Electron.
- *
- * As atualizações do documento passam a ser persistidas automaticamente e são
- * recuperadas na próxima abertura, mesmo que o Obsidian tenha sido fechado
- * enquanto o servidor WebSocket estava indisponível.
- *
- * Inicialize este provider antes de criar o binding do editor e aguarde
- * `handle.ready` antes de considerar o estado local completamente carregado.
- */
 export function initializeOfflinePersistence(
 	options: OfflinePersistenceOptions,
 ): OfflinePersistenceHandle {
-	const { documentId, ydoc, namespace = DEFAULT_NAMESPACE } = options;
+	const { documentId, ydoc, namespace = LEGACY_OFFLINE_NAMESPACE } = options;
 
 	if (typeof indexedDB === 'undefined') {
 		throw new Error('IndexedDB não está disponível neste ambiente.');
@@ -80,13 +74,28 @@ export function initializeOfflinePersistence(
 			await provider.clearData();
 		},
 	};
-
-	activePersistence.set(ydoc, handle);
-
 	ydoc.once('destroy', () => {
 		destroyed = true;
 		activePersistence.delete(ydoc);
 	});
 
 	return handle;
+}
+
+export async function readOfflineState(
+	options: OfflineStateOptions,
+): Promise<Uint8Array> {
+	const ydoc = new Y.Doc();
+	const persistence = initializeOfflinePersistence({
+		...options,
+		ydoc,
+	});
+
+	try {
+		await persistence.ready;
+		return Y.encodeStateAsUpdate(ydoc);
+	} finally {
+		await persistence.destroy();
+		ydoc.destroy();
+	}
 }

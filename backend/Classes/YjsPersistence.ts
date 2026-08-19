@@ -54,7 +54,7 @@ export class YjsPersistence {
       onUpdate: () => undefined,
     };
 
-    state.onUpdate = (update: Uint8Array, origin: unknown) => {
+    state.onUpdate = () => {
       state.revision += 1;
       state.dirty = true;
 

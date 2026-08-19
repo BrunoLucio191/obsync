@@ -21,9 +21,10 @@ export class FileManager {
     if (path.isAbsolute(relativePath)) {
       throw new Error("Caminhos absolutos não são permitidos.");
     }
-
     const vaultRoot = path.resolve(this.vaultPath);
+
     const fullPath = path.resolve(vaultRoot, relativePath);
+
     if (!fullPath.startsWith(`${vaultRoot}${path.sep}`)) {
       throw new Error("O caminho precisa estar dentro do vault.");
     }

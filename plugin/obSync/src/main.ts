@@ -6,13 +6,13 @@ import {
 } from './settings.ts';
 import { AuthenticatedUser, UserActionResult, UserRole } from './types.ts';
 import { Extension } from '@codemirror/state';
-import { closeCollabRoom, setupCollabRoom } from './collab.ts';
+import { closeCollabRoom, setupCollabRoom } from './collab/collab.ts';
 import { LoginModal } from './loginModal.ts';
 import type { VaultChange } from './main.types.ts';
 import { AuthSession } from './types.ts';
-import { API_BASE_URL } from './constants.ts';
 import { SyncVaultChanges } from './sync/SyncVaultChanges.ts';
 import { SyncInitialVault } from './sync/SyncInitialVault.ts';
+import { API_BASE_URL } from './constants.ts';
 
 export default class ObSync extends Plugin {
 	public config!: ObiSyncSettings;
@@ -640,7 +640,7 @@ export default class ObSync extends Plugin {
 		this.app.workspace.updateOptions();
 
 		if (!(await this.ensureAuthenticated())) {
-			new Notice('Você saiu do obisync.');
+			new Notice('Você saiu do obsync.');
 			return;
 		}
 
@@ -690,7 +690,6 @@ export default class ObSync extends Plugin {
 
 			const preparedRoom = await setupCollabRoom(
 				filePath,
-				initialView.editor.getValue(),
 				this.config.user,
 				this.config.token,
 				(name: string) => {
