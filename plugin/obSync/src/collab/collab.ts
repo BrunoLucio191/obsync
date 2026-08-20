@@ -16,10 +16,10 @@ import {
 	PRESENCE_LEAVE_GRACE_MS,
 	MAX_RECONNECT_BACKOFF_MS,
 	PERIODIC_STATE_VECTOR_SYNC_MS,
+	OFFLINE_NAMESPACE_VERSION,
 } from './collab.cons.ts';
-let activeRoom: ActiveRoom | null = null;
 
-const OFFLINE_NAMESPACE_VERSION = 'your-mon:v2';
+let activeRoom: ActiveRoom | null = null;
 
 function getOfflineNamespace(user: CollaborationUser): string {
 	if (user.role === 'admin') return `${OFFLINE_NAMESPACE_VERSION}:global`;
@@ -131,18 +131,11 @@ function addRemoteClient(
 	room.remoteClients.set(clientId, presence);
 	userClients.add(clientId);
 
-	// Uma reconexão dentro da janela de tolerância não é uma nova entrada real.
 	if (userWasAbsent && !wasReconnecting) {
 		onUserJoined(presence.name);
 	}
 }
 
-/**
- * O y-websocket executa novamente o Sync Step 1 em toda abertura de socket.
- * Para admins ele sincroniza o documento global persistido. Para usuários
- * comuns ele usa somente o documento de rede vazio/recebido do servidor; o
- * documento privado restaurado do IndexedDB nunca participa desse handshake.
- */
 function reconnectIfNecessary(room: ActiveRoom): void {
 	if (
 		activeRoom !== room ||
@@ -169,10 +162,7 @@ export async function setupCollabRoom(
 
 	const ydoc = new Y.Doc();
 	const ytext = ydoc.getText('codemirror');
-	// O documento privado de um usuário comum nunca é entregue ao provider.
-	// Isso impede que updates restaurados do IndexedDB sejam publicados durante
-	// o handshake ou uma reconexão. O documento de rede apenas recebe o estado
-	// global e o replica em uma única direção para o documento privado.
+	// private doc for user
 	const networkDoc = user.role === 'user' ? new Y.Doc() : ydoc;
 	const roomName = encodeURIComponent(fileName);
 	const persistence = initializeOfflinePersistence({
@@ -180,9 +170,8 @@ export async function setupCollabRoom(
 		ydoc,
 		namespace: getOfflineNamespace(user),
 	});
-	// O namespace antigo era compartilhado entre admin e usuário. Somente o
-	// usuário comum recebe esse histórico, mantendo suas edições locais sem
-	// permitir que uma futura sessão administrativa herde e publique o cache.
+
+	//make sure that the local changes stay private even when the user is promoted
 	const legacyState =
 		user.role === 'user'
 			? readOfflineState({

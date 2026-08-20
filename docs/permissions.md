@@ -1,21 +1,43 @@
-# Permissões
+# Authorization model
 
-| Ação | Admin | User |
+| Capability | `admin` | `user` |
 | --- | :---: | :---: |
-| Editar texto no editor | Sim | Sim |
-| Salvar histórico no IndexedDB local | Sim | Sim |
-| Receber mudanças globais | Sim | Sim |
-| Enviar update Yjs global | Sim | Não |
-| Criar, modificar, renomear ou apagar no servidor | Sim | Não |
-| Administrar contas | Sim | Não |
+| Edit the local note | Yes | Yes |
+| Persist local Yjs history | Yes | Yes |
+| Receive shared note updates | Yes | Yes |
+| Publish Yjs document updates | Yes | No |
+| Create, modify, rename, or delete shared files | Yes | No |
+| Manage user accounts and roles | Yes | No |
 
-## Defesa no cliente
+## Plugin enforcement
 
-O cliente usa documentos separados para impedir que o histórico privado seja enviado pelo WebSocket.
+`SyncVaultChanges` checks the current role before calling any `/sync` endpoint:
 
-## Defesa no servidor
+```ts
+public canPublishGlobalChanges(): boolean {
+	return this.config.user?.role === 'admin';
+}
+```
 
-O servidor também valida o papel da conta autenticada antes de aplicar um update Yjs:
+User sessions also keep the private editor document separate from the document passed to `WebsocketProvider`.
+
+## HTTP enforcement
+
+All shared-vault mutation routes require both authentication and the admin role:
+
+```ts
+this.app.use('/sync', requireAuth, requireAdmin);
+```
+
+## Yjs enforcement
+
+The WebSocket connection records write permission from the authenticated database user:
+
+```ts
+canWriteGlobal: authenticatedUser.userRole === 'admin';
+```
+
+Document updates from read-only connections are discarded before they reach the shared document:
 
 ```ts
 if (!connectionState.canWriteGlobal) {
@@ -23,11 +45,5 @@ if (!connectionState.canWriteGlobal) {
 }
 ```
 
-O valor é definido a partir do usuário autenticado:
-
-```ts
-canWriteGlobal: authenticatedUser.userRole === 'admin';
-```
-
-Essa validação no servidor é obrigatória: regras no cliente não são suficientes para segurança.
+Authorization decisions must use the backend's authenticated user record. Values sent by the client are not trusted for access control.
 

@@ -1,50 +1,40 @@
-# Decisões técnicas
+# Design decisions
 
-## Separar documento privado e documento de rede para users
+## Private and network documents are separate for user sessions
 
-### Problema
+The editor document is restored from IndexedDB when a note opens. Attaching that same document to a WebSocket provider would make its complete local history available during synchronization, including updates that must remain private.
 
-Um único `Y.Doc` servia para IndexedDB e WebSocket. Ao reabrir a nota, edições locais restauradas podiam ser interpretadas como alterações a sincronizar.
-
-### Decisão
-
-Usuários comuns usam:
+User sessions therefore maintain two documents:
 
 ```text
-ydoc privado: editor + IndexedDB
-networkDoc: WebSocket + estado recebido do servidor
+private ydoc   editor state and IndexedDB persistence
+networkDoc     shared state received through WebSocket
 ```
 
-### Consequência
+Server updates flow from `networkDoc` to the private document. Private updates do not flow in the opposite direction.
 
-Users mantêm edições locais entre reinicializações sem transmitir esse histórico ao servidor.
+Admin sessions use one document because their changes are publishable by definition.
 
-## Separar IndexedDB por papel e identidade
+## IndexedDB ownership is encoded in the namespace
 
-### Problema
+A note path alone does not identify who owns an offline history. Reusing one database across account roles allows a later admin session to restore private updates created by a user session.
 
-O banco offline era compartilhado por caminho de nota. Uma conta admin no mesmo perfil podia herdar o cache privado e publicá-lo.
-
-### Decisão
-
-Usar namespaces separados:
+The current naming scheme separates publishable and private histories:
 
 ```text
 your-mon:v2:global
 your-mon:v2:private:<email>
 ```
 
-### Consequência
+The legacy role-independent namespace is imported only into user-owned storage.
 
-O histórico privado de um usuário não é reutilizado por sessões administrativas nem por outro usuário comum.
+## Access control is enforced at the backend boundary
 
-## Autorizar no servidor
+Client-side behavior reduces accidental publication but cannot provide authorization. Both HTTP file mutations and Yjs document updates are checked against the authenticated backend user.
 
-### Decisão
+The `/system` channel is also receive-only. Clients receive shared-vault events through this channel but cannot use it to submit mutations.
 
-O servidor aceita updates globais Yjs apenas quando o token autenticado pertence a um admin.
+## Shared Markdown and Yjs state are stored together
 
-### Consequência
-
-Mesmo um cliente alterado manualmente não consegue gravar updates globais usando uma conta `user` válida.
+Markdown remains the canonical file format exposed by the shared vault. Persisted Yjs state retains the operation history required for correct CRDT synchronization after a restart. Deleting or renaming a shared path must update both representations.
 

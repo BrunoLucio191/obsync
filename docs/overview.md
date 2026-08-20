@@ -1,27 +1,27 @@
-# Visão geral
+# System overview
 
-O ObiSync sincroniza notas Markdown entre clientes do Obsidian. Ele combina uma API HTTP para arquivos, WebSocket para eventos em tempo real e Yjs para colaboração no editor.
-
-## Componentes
+ObiSync synchronizes Markdown notes between Obsidian clients through a Node.js backend. The plugin uses HTTP for authentication and vault operations, WebSocket connections for live events, and Yjs for collaborative text state.
 
 ```text
-Obsidian + plugin
-       |
-       | HTTP e WebSocket
-       v
-Backend Node.js
-       |
-       +--> vault global Markdown
-       +--> estados Yjs globais
-       +--> banco de usuários
+Obsidian client
+  |-- HTTP -------- authentication, users, initial vault download, file operations
+  |-- /system ----- server-to-client vault events
+  `-- /<note> ----- Yjs synchronization and awareness
+
+Node.js backend
+  |-- SQLite ------ users and roles
+  |-- Markdown ---- shared vault
+  `-- Yjs state --- persistent collaborative history
 ```
 
-## Regra central
+## Roles
 
-```text
-Admin: alterações podem virar conteúdo global.
-User: alterações permanecem locais neste dispositivo.
-```
+An `admin` account can modify the shared vault. A `user` account receives shared content but keeps its own edits on the local device.
 
-Um usuário comum ainda pode receber alterações do servidor. O que ele não pode fazer é publicar suas próprias alterações.
+This restriction is enforced twice:
+
+1. The plugin does not connect a user's private Yjs document to the network.
+2. The backend rejects write messages unless the authenticated account is an admin.
+
+Client-side separation prevents accidental publication. Server-side authorization prevents a modified or outdated client from bypassing the policy.
 

@@ -1,33 +1,38 @@
-# Arquitetura
+# Architecture
 
-## Plugin
+## Plugin modules
 
-| Arquivo | Responsabilidade |
+| Module | Responsibility |
 | --- | --- |
-| `plugin/obSync/src/main.ts` | Inicialização, login, eventos do Obsidian e entrada/saída de salas. |
-| `plugin/obSync/src/collab/collab.ts` | Salas Yjs, WebSocket, presença e isolamento entre admin/user. |
-| `plugin/obSync/src/offlinePersistence.ts` | Persistência do Yjs no IndexedDB. |
-| `plugin/obSync/src/sync/SyncVaultChanges.ts` | Publicação de mudanças estruturais do vault por admins. |
-| `plugin/obSync/src/sync/SyncInitialVault.ts` | Download inicial do vault do servidor. |
-| `plugin/obSync/src/settings.ts` | Tela de configurações e administração de contas. |
+| `plugin/obSync/src/main.ts` | Plugin lifecycle, authentication, Obsidian events, system channel, and room selection |
+| `plugin/obSync/src/collab/collab.ts` | Yjs documents, WebSocket provider, awareness, reconnection, and role-specific document ownership |
+| `plugin/obSync/src/offlinePersistence.ts` | IndexedDB database naming, loading, and lifecycle |
+| `plugin/obSync/src/sync/SyncInitialVault.ts` | Initial shared-vault download |
+| `plugin/obSync/src/sync/SyncVaultChanges.ts` | Admin-only file create, modify, delete, and rename requests |
+| `plugin/obSync/src/settings.ts` | Authentication settings and user administration UI |
 
-## Backend
+## Backend modules
 
-| Arquivo | Responsabilidade |
+| Module | Responsibility |
 | --- | --- |
-| `backend/server.ts` | Cria e inicia API, autenticação e WebSockets. |
-| `backend/Classes/ExpressServer.ts` | Rotas HTTP de autenticação, usuários e sincronização de arquivos. |
-| `backend/Classes/WebSocketServer.ts` | Autentica upgrades WebSocket e abre os canais. |
-| `backend/yjsUtils.ts` | Protocolo Yjs, salas, autorização de updates e presença. |
-| `backend/Classes/YjsPersistence.ts` | Salva o estado Yjs global em disco. |
-| `backend/Classes/FileManager.ts` | Lê e altera arquivos do vault global. |
+| `backend/server.ts` | Application composition and startup |
+| `backend/Classes/ExpressServer.ts` | HTTP routes and route-level authorization |
+| `backend/Classes/WebSocketServer.ts` | WebSocket upgrade authentication and channel routing |
+| `backend/yjsUtils.ts` | Yjs protocol handling, shared rooms, awareness, and update authorization |
+| `backend/Classes/YjsPersistence.ts` | Persistent Yjs state and Markdown snapshots |
+| `backend/Classes/FileManager.ts` | Shared-vault filesystem operations |
+| `backend/auth/TokenService.ts` | Token issuance and verification |
+| `backend/users/DBServices.ts` | User lookup and role management |
 
-## Canais
+## Communication channels
 
-```text
-HTTP /auth e /api     login, usuários e download inicial
-HTTP /sync            mudanças globais de arquivos; somente admin
-WebSocket /system     eventos de arquivos do servidor para clientes
-WebSocket /<nota>     colaboração Yjs da nota
-```
+| Channel | Direction | Purpose |
+| --- | --- | --- |
+| HTTP `/auth/*` | client ↔ server | Login and session validation |
+| HTTP `/api/*` | client ↔ server | User administration and initial vault download |
+| HTTP `/sync/*` | admin → server | Shared file operations |
+| WebSocket `/system` | server → client | Shared-vault change notifications |
+| WebSocket `/<encoded-note-path>` | client ↔ server | Yjs synchronization and awareness |
+
+The `/system` channel is receive-only from the client's perspective. The Yjs channel accepts awareness from authenticated clients, but document updates are accepted only from admins.
 

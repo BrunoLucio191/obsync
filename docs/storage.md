@@ -1,33 +1,35 @@
-# Persistência
+# Storage
 
-## Servidor
+## Backend storage
 
-| Dado | Local |
+| Data | Path |
 | --- | --- |
-| Usuários e papéis | `backend/data/users.sqlite` |
-| Vault global Markdown | `backend/data/vault/` |
-| Estado Yjs global | `backend/data/yjs-state/` |
+| Users and roles | `backend/data/users.sqlite` |
+| Shared Markdown vault | `backend/data/vault/` |
+| Persistent Yjs state | `backend/data/yjs-state/` |
 
-O estado Yjs global é persistido para que a colaboração continue após reiniciar o backend.
+The Markdown files provide the shared vault contents. Binary Yjs state preserves CRDT history across backend restarts.
 
-## Cliente
+SQLite sidecar files such as `users.sqlite-wal` and `users.sqlite-shm` are runtime data and should not be committed.
 
-O plugin usa IndexedDB. Cada nota possui um banco de dados de colaboração.
+## Client storage
 
-```text
-Admin: your-mon:v2:global:<caminho-da-nota>
-User:  your-mon:v2:private:<email>:<caminho-da-nota>
-```
-
-Separar a chave por papel e e-mail impede que uma sessão de administrador abra o cache privado de outro usuário e o publique no servidor.
-
-## Cache legado
-
-Versões antigas usavam uma chave compartilhada:
+The plugin stores Yjs updates in IndexedDB. Database names include the note path and an ownership namespace.
 
 ```text
-your-mon:<caminho-da-nota>
+Admin: your-mon:v2:global:<encoded-note-path>
+User:  your-mon:v2:private:<encoded-email>:<encoded-note-path>
 ```
 
-Para preservar edições locais existentes, o usuário comum importa esse estado para seu cache privado. Administradores não usam esse cache legado.
+The admin namespace contains publishable shared history. Each user namespace contains private history for one account. This prevents an admin session in the same Obsidian profile from restoring and publishing a user's private cache.
+
+## Legacy namespace
+
+Earlier builds used a role-independent database name:
+
+```text
+your-mon:<encoded-note-path>
+```
+
+User sessions import this legacy state into their private namespace to retain existing local edits. Admin sessions do not import it because the legacy database may contain private user history.
 
