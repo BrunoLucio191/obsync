@@ -23,6 +23,8 @@
 | `backend/Classes/FileManager.ts` | Shared-vault filesystem operations |
 | `backend/auth/TokenService.ts` | Token issuance and verification |
 | `backend/users/DBServices.ts` | User lookup and role management |
+| `backend/users/databaseLifecycle.ts` | Explicit database creation and runtime validation |
+| `backend/scripts/setupDatabase.ts` | Command-line entry point for schema creation and user seeding |
 
 ## Communication channels
 
@@ -35,4 +37,3 @@
 | WebSocket `/<encoded-note-path>` | client ↔ server | Yjs synchronization and awareness |
 
 The `/system` channel is receive-only from the client's perspective. The Yjs channel accepts awareness from authenticated clients, but document updates are accepted only from admins.
-

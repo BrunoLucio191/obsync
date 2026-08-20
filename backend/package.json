@@ -4,8 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node server.js",
+    "start": "node server.ts",
     "dev": "node --watch server.ts",
+    "db:setup": "node scripts/setupDatabase.ts",
     "check": "tsc --noEmit -p tsconfig.json"
   }
 }

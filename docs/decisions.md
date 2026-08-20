@@ -1,5 +1,15 @@
 # Design decisions
 
+## Database setup is separate from server startup
+
+Starting the backend must not create or seed persistent user data. Database provisioning is an explicit operation:
+
+```bash
+npm run db:setup
+```
+
+The server opens only an existing, initialized database. This makes missing deployment state visible immediately and prevents an accidental startup from creating default accounts in a new SQLite file.
+
 ## Private and network documents are separate for user sessions
 
 The editor document is restored from IndexedDB when a note opens. Attaching that same document to a WebSocket provider would make its complete local history available during synchronization, including updates that must remain private.
@@ -37,4 +47,3 @@ The `/system` channel is also receive-only. Clients receive shared-vault events 
 ## Shared Markdown and Yjs state are stored together
 
 Markdown remains the canonical file format exposed by the shared vault. Persisted Yjs state retains the operation history required for correct CRDT synchronization after a restart. Deleting or renaming a shared path must update both representations.
-

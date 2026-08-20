@@ -46,6 +46,21 @@ Install workspace dependencies from the repository root:
 npm install
 ```
 
+Create `backend/.env` with the backend settings:
+
+```dotenv
+OBISYNC_TOKEN_SECRET=replace-with-a-random-secret
+PORT=3000
+```
+
+Create the user database and apply the initial seed:
+
+```bash
+npm run db:setup
+```
+
+Database setup is explicit and runs only once. The command refuses to overwrite an existing `backend/data/users.sqlite` file. Backend startup also refuses to create a missing or invalid database.
+
 Start the backend in watch mode:
 
 ```bash
@@ -65,4 +80,3 @@ npm run dev --workspace=obSync
 ```
 
 The plugin build produces `plugin/obSync/main.js`. Copy `main.js`, `manifest.json`, and `styles.css` to the plugin directory used by the target Obsidian vault, then reload the plugin in Obsidian.
-

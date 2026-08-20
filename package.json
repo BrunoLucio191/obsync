@@ -9,6 +9,7 @@
   ],
   "scripts": {
     "start:backend": "npm start --workspace=backend",
+    "db:setup": "npm run db:setup --workspace=backend",
     "dev:plugin": "npm run dev --workspace=obSync"
   },
   "author": "Dev",

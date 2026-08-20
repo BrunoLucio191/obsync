@@ -1,16 +1,15 @@
 import "./env.ts";
 import { ExpressServer } from "./Classes/ExpressServer.ts";
 import { WebSHocket } from "./Classes/WebSocketServer.ts";
-import { UserDB } from "./users/UserDB.ts";
 import { DBServices } from "./users/DBServices.ts";
 import { TokenService } from "./auth/TokenService.ts";
 import { systemPaths } from "./paths.ts";
 import { AuthService } from "./auth/authService.ts";
 import { FileManager } from "./Classes/FileManager.ts";
+import { openUserDatabase } from "./users/databaseLifecycle.ts";
 
 const main = () => {
-  const userDB = new UserDB(systemPaths.usersDatabase);
-  userDB.initialize();
+  const userDB = openUserDatabase(systemPaths.usersDatabase);
 
   const fileManager = new FileManager();
 
@@ -36,4 +35,10 @@ const main = () => {
   setWebSocket.initializeWebSockets();
 };
 
-main();
+try {
+  main();
+} catch (error) {
+  const message = error instanceof Error ? error.message : String(error);
+  console.error(message);
+  process.exitCode = 1;
+}

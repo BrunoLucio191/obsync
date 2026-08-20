@@ -11,11 +11,31 @@ export class UserDB extends DatabaseSync {
     super(path);
   }
 
-  public async initialize(): Promise<void> {
+  public async setup(): Promise<void> {
     this.createSchema();
     this.configDataBase();
     await this.createInitialUsers();
     this.ensureInitialAdministrator();
+  }
+
+  public prepareForRuntime(): void {
+    const usersTable = this.prepare(
+      "SELECT 1 AS found FROM sqlite_master WHERE type = 'table' AND name = 'users'",
+    ).get() as { found: number } | undefined;
+
+    if (!usersTable) {
+      throw new Error("A tabela obrigatória 'users' não existe.");
+    }
+
+    const activeAdministrator = this.prepare(
+      "SELECT 1 AS found FROM users WHERE role = 'admin' AND active = 1 LIMIT 1",
+    ).get() as { found: number } | undefined;
+
+    if (!activeAdministrator) {
+      throw new Error("Não existe um administrador ativo no banco de dados.");
+    }
+
+    this.configDataBase();
   }
 
   private configDataBase(): void {
@@ -69,7 +89,7 @@ export class UserDB extends DatabaseSync {
   private ensureInitialAdministrator(): void {
     const first = this.prepare(
       "SELECT id FROM users WHERE active = 1 ORDER BY id LIMIT 1",
-    ).get() as { id: number; email: string } | undefined;
+    ).get() as { id: number } | undefined;
     if (!first) {
       throw new Error(
         "Não existe usuário ativo para promover a administrador.",
@@ -77,7 +97,7 @@ export class UserDB extends DatabaseSync {
     }
     this.prepare("UPDATE users SET role = 'admin' WHERE id = ?").run(first.id);
     console.log(
-      `[Auth] Migração RBAC: usuário id=${first.id} promovido a administrador inicial.`,
+      `[Database] Seed: usuário id=${first.id} definido como administrador inicial.`,
     );
   }
 }
