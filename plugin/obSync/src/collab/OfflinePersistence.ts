@@ -1,5 +1,5 @@
-import * as Y from 'yjs';
 import { IndexeddbPersistence } from 'y-indexeddb';
+import * as Y from 'yjs';
 
 export const LEGACY_OFFLINE_NAMESPACE = 'your-mon';
 

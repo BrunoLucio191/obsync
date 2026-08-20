@@ -1,5 +1,5 @@
 import { WebsocketProvider } from 'y-websocket';
-import { OfflinePersistenceHandle } from '../offlinePersistence.ts';
+import type { OfflinePersistenceHandle } from './OfflinePersistence.ts';
 import * as Y from 'yjs';
 import { Extension } from '@codemirror/state';
 

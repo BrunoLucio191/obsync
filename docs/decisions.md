@@ -1,5 +1,19 @@
 # Design decisions
 
+## The plugin entry point is a composition root
+
+The Obsidian `Plugin` subclass owns framework lifecycle hooks, but it does not
+own every application rule. It constructs focused services for authentication,
+collaboration, vault synchronization, remote events, and settings.
+
+Dependencies are passed through constructors. This keeps each class's inputs
+visible, prevents circular access to the complete plugin object, and makes new
+features easier to place in the correct domain folder.
+
+Pure, stateless Yjs protocol operations remain functions. Object-oriented
+boundaries are used for components that own state or lifecycle, not as a rule
+that every function must become a class.
+
 ## Database setup is separate from server startup
 
 Starting the backend must not create or seed persistent user data. Database provisioning is an explicit operation:

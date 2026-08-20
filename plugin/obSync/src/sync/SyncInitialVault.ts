@@ -1,83 +1,70 @@
 import { requestUrl, Notice } from 'obsidian';
-import ObSync from '../main.ts';
-import { API_BASE_URL } from '../constants.ts';
+import { API_BASE_URL } from '../config/ApiConfig.ts';
 import JSZip from 'jszip';
-export type syncRead = {
-	myFlag: boolean;
-	name: string;
-};
+import type { App } from 'obsidian';
+import type { AuthService } from '../auth/AuthService.ts';
+import type { PathMuteRegistry } from '../vault/PathMuteRegistry.ts';
 
-const payload: syncRead = {
+const payload = {
 	myFlag: true,
 	name: 'obsidian ready to sync',
 };
 
 export class SyncInitialVault {
-	private readonly obSync: ObSync;
-	constructor(obSync: ObSync) {
-		this.obSync = obSync;
-	}
-	public initialize() {
-		this.initialSync();
-	}
-	private initialSync() {
-		void (async () => {
-			try {
-				const response = await requestUrl({
-					url: `${API_BASE_URL}/api/syncfiles`,
-					method: 'POST',
-					headers: this.obSync.authHeaders(),
-					body: JSON.stringify(payload),
-				});
+	public constructor(
+		private readonly app: App,
+		private readonly auth: AuthService,
+		private readonly mutedPaths: PathMuteRegistry,
+	) {}
 
-				if (response.status !== 200) {
-					throw new Error(
-						`Servidor retornou erro: ${response.status}`,
+	public async sync(): Promise<void> {
+		try {
+			const response = await requestUrl({
+				url: `${API_BASE_URL}/api/syncfiles`,
+				method: 'POST',
+				headers: this.auth.headers(),
+				body: JSON.stringify(payload),
+			});
+
+			if (response.status !== 200) {
+				throw new Error(`Servidor retornou erro: ${response.status}`);
+			}
+			const zip = await JSZip.loadAsync(response.arrayBuffer);
+			const adapter = this.app.vault.adapter;
+
+			for (const relativePath of Object.keys(zip.files)) {
+				const entry = zip.files[relativePath];
+				if (!entry) continue;
+
+				if (entry.dir) {
+					if (!(await adapter.exists(relativePath))) {
+						this.mutedPaths.mute(relativePath);
+						await adapter.mkdir(relativePath);
+					}
+				} else {
+					const content = await entry.async('arraybuffer');
+					const parentPath = relativePath.substring(
+						0,
+						relativePath.lastIndexOf('/'),
 					);
-				}
-				const zip = await JSZip.loadAsync(response.arrayBuffer);
-				const adapter = this.obSync.app.vault.adapter;
 
-				for (const caminhoRelativo of Object.keys(zip.files)) {
-					const entradaZip = zip.files[caminhoRelativo];
-					if (!entradaZip) continue;
-
-					if (entradaZip.dir) {
-						if (!(await adapter.exists(caminhoRelativo))) {
-							this.obSync.mutePath(caminhoRelativo);
-							await adapter.mkdir(caminhoRelativo);
-						}
-					} else {
-						const conteudoBuffer =
-							await entradaZip.async('arraybuffer');
-						const pastaPai = caminhoRelativo.substring(
-							0,
-							caminhoRelativo.lastIndexOf('/'),
-						);
-
-						if (pastaPai && !(await adapter.exists(pastaPai))) {
-							this.obSync.mutePath(pastaPai);
-							await adapter.mkdir(pastaPai);
-						}
-						if (
-							this.obSync.canPublishGlobalChanges() ||
-							!(await adapter.exists(caminhoRelativo))
-						) {
-							this.obSync.mutePath(caminhoRelativo);
-							await adapter.writeBinary(
-								caminhoRelativo,
-								conteudoBuffer,
-							);
-						}
+					if (parentPath && !(await adapter.exists(parentPath))) {
+						this.mutedPaths.mute(parentPath);
+						await adapter.mkdir(parentPath);
+					}
+					if (
+						this.auth.isAdmin() ||
+						!(await adapter.exists(relativePath))
+					) {
+						this.mutedPaths.mute(relativePath);
+						await adapter.writeBinary(relativePath, content);
 					}
 				}
-				new Notice('Sincronização inicial concluída.');
-			} catch (error) {
-				console.error('Erro na sincronização inicial:', error);
-				new Notice(
-					'Não foi possível sincronizar os arquivos iniciais.',
-				);
 			}
-		})();
+			new Notice('Sincronização inicial concluída.');
+		} catch (error) {
+			console.error('Erro na sincronização inicial:', error);
+			new Notice('Não foi possível sincronizar os arquivos iniciais.');
+		}
 	}
 }

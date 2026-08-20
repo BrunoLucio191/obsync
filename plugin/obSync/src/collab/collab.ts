@@ -6,7 +6,7 @@ import {
 	initializeOfflinePersistence,
 	LEGACY_OFFLINE_NAMESPACE,
 	readOfflineState,
-} from '../offlinePersistence.ts';
+} from './OfflinePersistence.ts';
 import { CollaborationUser } from './collab.types.ts';
 import { RemotePresence } from './collab.types.ts';
 import { PresenceUser } from './collab.types.ts';

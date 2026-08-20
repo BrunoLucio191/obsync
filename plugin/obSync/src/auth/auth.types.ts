@@ -1,8 +1,3 @@
-export type File = {
-	file: string;
-	name: string;
-	path: string;
-};
 export type AuthSession = {
 	token: string;
 	user: AuthenticatedUser;

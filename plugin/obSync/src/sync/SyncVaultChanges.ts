@@ -1,33 +1,35 @@
-import ObSync from '../main.ts';
-import { TFile, TFolder, requestUrl } from 'obsidian';
-import { API_BASE_URL } from '../constants.ts';
+import { Plugin, TFile, TFolder, requestUrl } from 'obsidian';
+import { API_BASE_URL } from '../config/ApiConfig.ts';
+import type { AuthService } from '../auth/AuthService.ts';
+import type { CollaborationController } from '../collab/CollaborationController.ts';
+import { PathMuteRegistry } from '../vault/PathMuteRegistry.ts';
 
 export class SyncVaultChanges {
-	private obSync: ObSync;
-	constructor(obSync: ObSync) {
-		this.obSync = obSync;
-	}
-	public async initialize() {
-		await this.eventsRegister();
-	}
-	public async eventsRegister(): Promise<void> {
-		this.obSync.registerEvent(
-			this.obSync.app.vault.on('create', async (file) => {
+	public constructor(
+		private readonly plugin: Plugin,
+		private readonly auth: AuthService,
+		private readonly mutedPaths: PathMuteRegistry,
+		private readonly collaboration: CollaborationController,
+	) {}
+
+	public initialize(): void {
+		this.plugin.registerEvent(
+			this.plugin.app.vault.on('create', async (file) => {
 				if (
-					!this.obSync.canPublishGlobalChanges() ||
-					this.obSync.isMuted(file.path)
+					!this.auth.isAdmin() ||
+					this.mutedPaths.isMuted(file.path)
 				)
 					return;
 				const isFolder = file instanceof TFolder;
 				const content =
 					!isFolder && file instanceof TFile
-						? await this.obSync.app.vault.read(file)
+						? await this.plugin.app.vault.read(file)
 						: null;
 
 				await requestUrl({
 					url: `${API_BASE_URL}/sync/create`,
 					method: 'POST',
-					headers: this.obSync.authHeaders(),
+					headers: this.auth.headers(),
 					body: JSON.stringify({
 						path: file.path,
 						isFolder,
@@ -37,78 +39,73 @@ export class SyncVaultChanges {
 			}),
 		);
 
-		this.obSync.registerEvent(
-			this.obSync.app.vault.on('delete', async (file) => {
+		this.plugin.registerEvent(
+			this.plugin.app.vault.on('delete', async (file) => {
 				if (
-					!this.obSync.canPublishGlobalChanges() ||
-					this.obSync.isMuted(file.path)
+					!this.auth.isAdmin() ||
+					this.mutedPaths.isMuted(file.path)
 				)
 					return;
 
 				const isFolder = file instanceof TFolder;
-				this.obSync.disconnectCollabRoomIfAffected(file.path);
+				this.collaboration.disconnectIfAffected(file.path);
 
 				await requestUrl({
 					url: `${API_BASE_URL}/sync/delete`,
 					method: 'DELETE',
-					headers: this.obSync.authHeaders(),
+					headers: this.auth.headers(),
 					body: JSON.stringify({ path: file.path, isFolder }),
 				});
 			}),
 		);
 
-		this.obSync.registerEvent(
-			this.obSync.app.vault.on('modify', async (file) => {
+		this.plugin.registerEvent(
+			this.plugin.app.vault.on('modify', async (file) => {
 				if (
-					!this.obSync.canPublishGlobalChanges() ||
-					this.obSync.isMuted(file.path)
+					!this.auth.isAdmin() ||
+					this.mutedPaths.isMuted(file.path)
 				)
 					return;
-				const activeFile = this.obSync.app.workspace.getActiveFile();
+				const activeFile = this.plugin.app.workspace.getActiveFile();
 				// O Yjs cuida do arquivo ativo, então não disparamos o PUT para ele
 				if (activeFile && file.path === activeFile.path) return;
 
 				if (file instanceof TFile) {
-					const content = await this.obSync.app.vault.read(file);
+					const content = await this.plugin.app.vault.read(file);
 					await requestUrl({
 						url: `${API_BASE_URL}/sync/modify`,
 						method: 'PUT',
-						headers: this.obSync.authHeaders(),
+						headers: this.auth.headers(),
 						body: JSON.stringify({ path: file.path, content }),
 					});
 				}
 			}),
 		);
-		//TODO: fix bug for syncing folders with files inside, Tfolders are a bit more complex
-		this.obSync.registerEvent(
-			this.obSync.app.vault.on('rename', async (file, oldPath) => {
+		this.plugin.registerEvent(
+			this.plugin.app.vault.on('rename', async (file, oldPath) => {
 				if (
-					!this.obSync.canPublishGlobalChanges() ||
-					this.obSync.isMuted(file.path) ||
-					this.obSync.isMuted(oldPath)
+					!this.auth.isAdmin() ||
+					this.mutedPaths.isMuted(file.path) ||
+					this.mutedPaths.isMuted(oldPath)
 				) {
 					return;
 				}
 
-				if (file instanceof TFolder) {
-					this.obSync.isMuted(oldPath);
-					this.obSync.isMuted(file.path);
-				}
 				await requestUrl({
 					url: `${API_BASE_URL}/sync/rename`,
 					method: 'PUT',
-					headers: this.obSync.authHeaders(),
+					headers: this.auth.headers(),
 					body: JSON.stringify({ oldPath, newPath: file.path }),
 				});
 
 				if (
-					this.obSync.currentCollabPath &&
-					this.obSync.isSamePathOrChild(
+					this.collaboration.currentPath &&
+					PathMuteRegistry.contains(
 						oldPath,
-						this.obSync.currentCollabPath,
+						this.collaboration.currentPath,
 					)
 				) {
-					this.obSync.scheduleActiveCollabRoomSync();
+					this.collaboration.scheduleActiveRoomSync();
 				}
 			}),
 		);

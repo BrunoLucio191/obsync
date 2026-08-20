@@ -14,9 +14,7 @@
 `SyncVaultChanges` checks the current role before calling any `/sync` endpoint:
 
 ```ts
-public canPublishGlobalChanges(): boolean {
-	return this.config.user?.role === 'admin';
-}
+if (!this.auth.isAdmin() || this.mutedPaths.isMuted(file.path)) return;
 ```
 
 User sessions also keep the private editor document separate from the document passed to `WebsocketProvider`.
@@ -46,4 +44,3 @@ if (!connectionState.canWriteGlobal) {
 ```
 
 Authorization decisions must use the backend's authenticated user record. Values sent by the client are not trusted for access control.
-
