@@ -7,8 +7,10 @@ import { systemPaths } from "./paths.ts";
 import { AuthService } from "./auth/authService.ts";
 import { FileManager } from "./Classes/FileManager.ts";
 import { openUserDatabase } from "./users/databaseLifecycle.ts";
+import { loadServerConfig } from "./serverConfig.ts";
 
 const main = () => {
+  const config = loadServerConfig();
   const userDB = openUserDatabase(systemPaths.usersDatabase);
 
   const fileManager = new FileManager();
@@ -16,14 +18,17 @@ const main = () => {
   const dbService = new DBServices(userDB);
 
   const tokenService = new TokenService({
-    secret: process.env.OBISYNC_TOKEN_SECRET!,
+    secret: config.tokenSecret,
     dbService,
   });
 
   const authService = new AuthService(userDB, dbService, tokenService);
 
   const server = new ExpressServer({
-    port: Number(process.env.PORT) ?? 3000,
+    port: config.port,
+    host: config.host,
+    requireTls: config.requireTls,
+    trustProxy: config.trustProxy,
     fileManager,
     tokenService,
     dbService,
@@ -31,7 +36,12 @@ const main = () => {
   });
   server.serverStart();
 
-  const setWebSocket = new WebSHocket(server.getHttpServer, tokenService);
+  const setWebSocket = new WebSHocket(
+    server.getHttpServer,
+    tokenService,
+    config.requireTls,
+    config.trustProxy,
+  );
   setWebSocket.initializeWebSockets();
 };
 

@@ -32,6 +32,10 @@ At runtime, the backend validates that the database exists, contains the `users`
 
 ## Client storage
 
+Access and refresh tokens are stored with Obsidian `SecretStorage`, not in the
+plugin's `data.json`. The JSON configuration keeps only non-secret session
+metadata: the current user and access-token expiration time.
+
 The plugin stores Yjs updates in IndexedDB. Database names include the note path and an ownership namespace.
 
 ```text
@@ -41,12 +45,8 @@ User:  your-mon:v2:private:<encoded-email>:<encoded-note-path>
 
 The admin namespace contains publishable shared history. Each user namespace contains private history for one account. This prevents an admin session in the same Obsidian profile from restoring and publishing a user's private cache.
 
-## Legacy namespace
+## Related reference
 
-Earlier builds used a role-independent database name:
-
-```text
-your-mon:<encoded-note-path>
-```
-
-User sessions import this legacy state into their private namespace to retain existing local edits. Admin sessions do not import it because the legacy database may contain private user history.
+- [Plugin collaboration API](reference/plugin/collaboration.md#offline-persistence)
+- [YjsPersistence](reference/backend/services.md#yjspersistence)
+- [Database lifecycle](reference/backend/services.md#database-lifecycle)

@@ -77,7 +77,7 @@ export default class ObSync extends Plugin {
 	}
 
 	public async logout(): Promise<void> {
-		await this.auth.clearSession();
+		await this.auth.logout();
 		this.app.workspace.updateOptions();
 
 		if (!(await this.auth.ensureAuthenticated())) {
@@ -87,6 +87,10 @@ export default class ObSync extends Plugin {
 
 		this.systemChannel.connect();
 		this.collaboration.scheduleActiveRoomSync();
+	}
+
+	public isAuthenticated(): boolean {
+		return this.auth.isAuthenticated();
 	}
 
 	public listUsers(): Promise<UserActionResult<AuthenticatedUser[]>> {
@@ -213,11 +217,19 @@ export default class ObSync extends Plugin {
 	}
 
 	private async loadConfig(): Promise<void> {
+		const storedConfig = (await this.loadData()) as
+			| (Partial<ObiSyncConfig> & { token?: unknown })
+			| null;
+		const { token: legacyToken, ...safeConfig } = storedConfig ?? {};
 		this.config = Object.assign(
 			{},
 			DEFAULT_CONFIG,
-			(await this.loadData()) as Partial<ObiSyncConfig>,
+			safeConfig,
 		);
+
+		if (legacyToken !== undefined) {
+			await this.saveConfig();
+		}
 	}
 
 	private async saveConfig(): Promise<void> {

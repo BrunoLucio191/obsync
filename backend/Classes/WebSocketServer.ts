@@ -1,7 +1,6 @@
 import { type IncomingMessage, type Server } from "node:http";
 import { type Duplex } from "node:stream";
 import { WebSocket, WebSocketServer } from "ws";
-import { type AuthenticatedUser } from "../auth/auth.types.ts";
 import { YjsPersistence } from "./YjsPersistence.ts";
 import {
   MAX_WS_MESSAGE_BYTES,
@@ -10,22 +9,38 @@ import {
 } from "../yjsUtils.ts";
 import { vaultEvents, type VaultChange } from "../syncEvents.ts";
 import { dbEvents } from "../users/DBEvents.ts";
-import type { TokenService } from "../auth/TokenService.ts";
+import type {
+  TokenService,
+  WebSocketAuthorization,
+} from "../auth/TokenService.ts";
+import type { WebSocketChannel } from "../auth/auth.types.ts";
 import { systemPaths } from "../paths.ts";
 
 const HEARTBEAT_INTERVAL_MS = 30_000;
+const TICKET_PROTOCOL_PREFIX = "obisync-ticket.";
 
 export class WebSHocket {
   public readonly wssSystem: WebSocketServer;
   public readonly wssYjs: WebSocketServer;
   private readonly event;
   private readonly tokenService: TokenService;
-  private readonly authenticatedUsers = new Map<WebSocket, AuthenticatedUser>();
+  private readonly authenticatedConnections = new Map<
+    WebSocket,
+    WebSocketAuthorization
+  >();
   private readonly aliveConnections = new WeakSet<WebSocket>();
   private readonly unsubscribeAuthorizationChanges: () => void;
+  private readonly unsubscribeSessionRevocations: () => void;
+  private readonly requireTls: boolean;
+  private readonly trustProxy: boolean;
   private heartbeatTimer: NodeJS.Timeout | null = null;
 
-  public constructor(server: Server, tokenService: TokenService) {
+  public constructor(
+    server: Server,
+    tokenService: TokenService,
+    requireTls: boolean,
+    trustProxy: boolean,
+  ) {
     this.wssSystem = new WebSocketServer({
       noServer: true,
       maxPayload: MAX_WS_MESSAGE_BYTES,
@@ -38,9 +53,14 @@ export class WebSHocket {
     });
     this.event = dbEvents();
     this.tokenService = tokenService;
+    this.requireTls = requireTls;
+    this.trustProxy = trustProxy;
 
     this.unsubscribeAuthorizationChanges = this.event.onAuthorizationChanged(
       (userId) => this.closeUserConnections(userId),
+    );
+    this.unsubscribeSessionRevocations = tokenService.onSessionRevoked(
+      (sessionId) => this.closeSessionConnections(sessionId),
     );
 
     server.on("upgrade", (request, socket, head) => {
@@ -54,6 +74,7 @@ export class WebSHocket {
     server.once("close", () => {
       this.stopHeartbeat();
       this.unsubscribeAuthorizationChanges();
+      this.unsubscribeSessionRevocations();
     });
   }
 
@@ -62,6 +83,12 @@ export class WebSHocket {
     socket: Duplex,
     head: Buffer,
   ): Promise<void> {
+    if (this.requireTls && !this.isSecureRequest(request)) {
+      socket.write("HTTP/1.1 426 Upgrade Required\r\n\r\n");
+      socket.destroy();
+      return;
+    }
+
     let url: URL;
     try {
       url = new URL(request.url ?? "/", "http://localhost");
@@ -71,21 +98,31 @@ export class WebSHocket {
       return;
     }
 
-    const user = await this.tokenService.verifyToken(
-      url.searchParams.get("token"),
+    const channel: WebSocketChannel =
+      url.pathname === "/system" ? "system" : "yjs";
+    const ticket = this.readTicketProtocol(request);
+    const authorization = await this.tokenService.consumeWebSocketTicket(
+      ticket,
+      channel,
     );
-    if (!user) {
+    if (!authorization) {
       socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
       socket.destroy();
       return;
     }
 
-    const channel = url.pathname === "/system" ? "system" : "yjs";
     const targetServer = channel === "system" ? this.wssSystem : this.wssYjs;
 
     targetServer.handleUpgrade(request, socket, head, (webSocket) => {
-      this.authenticatedUsers.set(webSocket, user);
-      webSocket.once("close", () => this.authenticatedUsers.delete(webSocket));
+      this.authenticatedConnections.set(webSocket, authorization);
+      const expirationTimer = setTimeout(() => {
+        webSocket.close(4003, "Access token expired");
+      }, Math.max(0, authorization.expiresAt - Date.now()));
+      expirationTimer.unref();
+      webSocket.once("close", () => {
+        clearTimeout(expirationTimer);
+        this.authenticatedConnections.delete(webSocket);
+      });
 
       targetServer.emit("connection", webSocket, request);
     });
@@ -110,11 +147,12 @@ export class WebSHocket {
 
     this.wssYjs.on("connection", (webSocket, request) => {
       this.registerHeartbeat(webSocket);
-      const user = this.authenticatedUsers.get(webSocket);
-      if (!user) {
+      const authorization = this.authenticatedConnections.get(webSocket);
+      if (!authorization) {
         webSocket.close(1008, "Missing authenticated user");
         return;
       }
+      const { user } = authorization;
 
       void setupWSConnection(webSocket, request, {
         userId: user.id,
@@ -129,11 +167,12 @@ export class WebSHocket {
 
     this.wssSystem.on("connection", (webSocket) => {
       this.registerHeartbeat(webSocket);
-      const user = this.authenticatedUsers.get(webSocket);
-      if (!user) {
+      const authorization = this.authenticatedConnections.get(webSocket);
+      if (!authorization) {
         webSocket.close(1008, "Missing authenticated user");
         return;
       }
+      const { user } = authorization;
 
       webSocket.on("message", () => {
         console.warn("[Audit] Mensagem de mutação recusada no canal /system", {
@@ -145,8 +184,6 @@ export class WebSHocket {
         });
         webSocket.close(1008, "System channel is receive-only");
       });
-
-      webSocket.once("close", (code, reason) => {});
     });
 
     vaultEvents.on("change", (change: VaultChange) => {
@@ -160,14 +197,55 @@ export class WebSHocket {
   }
 
   private closeUserConnections(userId: number): void {
-    for (const [connection, user] of this.authenticatedUsers) {
-      if (user.id !== userId) continue;
-      if (connection.readyState === WebSocket.OPEN) {
-        connection.close(4003, "Authorization changed");
-      } else if (connection.readyState === WebSocket.CONNECTING) {
-        connection.terminate();
+    for (const [connection, authorization] of this.authenticatedConnections) {
+      if (authorization.user.id !== userId) continue;
+      this.closeAuthorizationChangedConnection(connection);
+    }
+  }
+
+  private closeSessionConnections(sessionId: string): void {
+    for (const [connection, authorization] of this.authenticatedConnections) {
+      if (authorization.sessionId !== sessionId) continue;
+      this.closeAuthorizationChangedConnection(connection);
+    }
+  }
+
+  private closeAuthorizationChangedConnection(connection: WebSocket): void {
+    if (connection.readyState === WebSocket.OPEN) {
+      connection.close(4003, "Authorization changed");
+    } else if (connection.readyState === WebSocket.CONNECTING) {
+      connection.terminate();
+    }
+  }
+
+  private readTicketProtocol(request: IncomingMessage): string | null {
+    const header = request.headers["sec-websocket-protocol"];
+    const values = Array.isArray(header) ? header : [header];
+
+    for (const value of values) {
+      if (!value) continue;
+      for (const protocol of value.split(",")) {
+        const normalized = protocol.trim();
+        if (!normalized.startsWith(TICKET_PROTOCOL_PREFIX)) continue;
+
+        const ticket = normalized.slice(TICKET_PROTOCOL_PREFIX.length);
+        if (/^[A-Za-z0-9_-]{43}$/.test(ticket)) return ticket;
       }
     }
+
+    return null;
+  }
+
+  private isSecureRequest(request: IncomingMessage): boolean {
+    const encrypted = (request.socket as { encrypted?: boolean }).encrypted;
+    if (encrypted) return true;
+    if (!this.trustProxy) return false;
+
+    const forwardedProtocol = request.headers["x-forwarded-proto"];
+    const value = Array.isArray(forwardedProtocol)
+      ? forwardedProtocol[0]
+      : forwardedProtocol;
+    return value?.split(",")[0]?.trim().toLowerCase() === "https";
   }
 
   private registerHeartbeat(webSocket: WebSocket): void {

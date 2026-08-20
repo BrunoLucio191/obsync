@@ -12,7 +12,9 @@ import type {
   AuthenticatedUser,
   UserMutationResult,
   UserRole,
+  WebSocketChannel,
 } from "../auth/auth.types.ts";
+import { LoginRateLimiter } from "../auth/LoginRateLimiter.ts";
 import { publishVaultChange } from "../syncEvents.ts";
 import {
   clearPathDeleted,
@@ -71,6 +73,9 @@ function mutationErrorMessage(result: UserMutationResult): string {
 
 type ExpreeServerConstructor = {
   port: number;
+  host: string;
+  requireTls: boolean;
+  trustProxy: boolean;
   fileManager: FileManager;
   tokenService: TokenService;
   dbService: DBServices;
@@ -80,32 +85,60 @@ type ExpreeServerConstructor = {
 export class ExpressServer {
   private readonly app: Express;
   private readonly port: number;
+  private readonly host: string;
+  private readonly requireTls: boolean;
   private readonly server: Server;
   private readonly filemanager: FileManager;
   private readonly dbService: DBServices;
   private readonly token: TokenService;
   private readonly auth: AuthService;
+  private readonly accountLoginRateLimiter = new LoginRateLimiter({
+    maxFailedAttempts: 5,
+  });
+  private readonly ipLoginRateLimiter = new LoginRateLimiter({
+    maxFailedAttempts: 25,
+  });
 
   constructor({
     port,
+    host,
+    requireTls,
+    trustProxy,
     fileManager,
     tokenService,
     dbService,
     authService,
   }: ExpreeServerConstructor) {
     this.port = port;
+    this.host = host;
+    this.requireTls = requireTls;
     this.app = express();
+    this.app.set("trust proxy", trustProxy);
     this.server = createServer(this.app);
-    this.initializeMiddleware();
     this.filemanager = fileManager;
     this.token = tokenService;
     this.dbService = dbService;
     this.auth = authService;
+    this.initializeMiddleware();
     this.initializeRoutes();
   }
 
   public initializeMiddleware(): void {
+    this.app.use((req, res, next) => {
+      if (this.requireTls && !req.secure) {
+        res
+          .status(426)
+          .json({ error: "Esta instalação exige conexão HTTPS." });
+        return;
+      }
+      next();
+    });
     this.app.use(express.json({ limit: "16mb" }));
+    this.app.use("/auth", (_req, res, next) => {
+      res.setHeader("Cache-Control", "no-store");
+      res.setHeader("Pragma", "no-cache");
+      next();
+    });
   }
 
   private initializeRoutes(): void {
@@ -124,6 +157,7 @@ export class ExpressServer {
       }
 
       res.locals.authenticatedUser = authenticatedUser;
+      res.locals.accessToken = token;
       next();
     };
 
@@ -159,23 +193,108 @@ export class ExpressServer {
 
           return;
         }
+        if (email.length > 254 || password.length > 128) {
+          res.status(400).json({ error: "Credenciais inválidas." });
+          return;
+        }
+
+        const { accountKey, ipKey } = this.loginRateLimitKeys(req, email);
+        const accountLimit = this.accountLoginRateLimiter.check(accountKey);
+        const ipLimit = this.ipLoginRateLimiter.check(ipKey);
+        if (!accountLimit.allowed || !ipLimit.allowed) {
+          res.setHeader(
+            "Retry-After",
+            Math.max(
+              accountLimit.retryAfterSeconds,
+              ipLimit.retryAfterSeconds,
+            ),
+          );
+          res.status(429).json({
+            error: "Muitas tentativas de login. Tente novamente mais tarde.",
+          });
+          return;
+        }
 
         const session = await this.auth.login(email, password);
 
         if (!session) {
+          const updatedAccountLimit =
+            this.accountLoginRateLimiter.recordFailure(accountKey);
+          const updatedIpLimit = this.ipLoginRateLimiter.recordFailure(ipKey);
+          if (!updatedAccountLimit.allowed || !updatedIpLimit.allowed) {
+            res.setHeader(
+              "Retry-After",
+              Math.max(
+                updatedAccountLimit.retryAfterSeconds,
+                updatedIpLimit.retryAfterSeconds,
+              ),
+            );
+            res.status(429).json({
+              error: "Muitas tentativas de login. Tente novamente mais tarde.",
+            });
+            return;
+          }
           res.status(401).json({ error: "E-mail ou senha inválidos." });
 
           return;
         }
+        this.accountLoginRateLimiter.reset(accountKey);
         res.json(session);
       },
     );
+
+    this.app.post(
+      "/auth/refresh",
+      async (req: Request, res: Response): Promise<void> => {
+        const refreshToken = req.body?.refreshToken;
+        const session = await this.token.refreshSession(
+          typeof refreshToken === "string" ? refreshToken : null,
+        );
+        if (!session) {
+          res.status(401).json({ error: "Sessão inválida ou expirada." });
+          return;
+        }
+
+        res.json(session);
+      },
+    );
+
+    this.app.post("/auth/logout", (req: Request, res: Response): void => {
+      const refreshToken = req.body?.refreshToken;
+      this.token.revokeSession(
+        typeof refreshToken === "string" ? refreshToken : null,
+      );
+      res.sendStatus(204);
+    });
 
     this.app.get(
       "/auth/me",
       requireAuth,
       (_req: Request, res: Response): void => {
         res.json({ user: this.currentUser(res) });
+      },
+    );
+
+    this.app.post(
+      "/auth/ws-ticket",
+      requireAuth,
+      async (req: Request, res: Response): Promise<void> => {
+        const channel = req.body?.channel;
+        if (!this.isWebSocketChannel(channel)) {
+          res.status(400).json({ error: "Canal WebSocket inválido." });
+          return;
+        }
+
+        const ticket = await this.token.issueWebSocketTicket(
+          res.locals.accessToken as string,
+          channel,
+        );
+        if (!ticket) {
+          res.status(401).json({ error: "Sessão inválida ou expirada." });
+          return;
+        }
+
+        res.json(ticket);
       },
     );
 
@@ -527,6 +646,22 @@ export class ExpressServer {
     return res.locals.authenticatedUser as AuthenticatedUser;
   }
 
+  private isWebSocketChannel(value: unknown): value is WebSocketChannel {
+    return value === "system" || value === "yjs";
+  }
+
+  private loginRateLimitKeys(
+    req: Request,
+    email: string,
+  ): { accountKey: string; ipKey: string } {
+    const normalizedEmail = email.normalize("NFKC").trim().toLowerCase();
+    const address = req.ip ?? req.socket.remoteAddress ?? "unknown";
+    return {
+      accountKey: `account:${normalizedEmail}`,
+      ipKey: `ip:${address}`,
+    };
+  }
+
   private parseUserId(value: string | string[] | undefined): number | null {
     if (Array.isArray(value)) return null;
     const userId = Number(value);
@@ -562,8 +697,14 @@ export class ExpressServer {
         error,
       );
     });
-    this.server.listen(port, "0.0.0.0", () => {
-      console.log(`Server running on http://0.0.0.0:${port}`);
+    this.server.listen(port, this.host, () => {
+      if (this.requireTls) {
+        console.log(
+          `Server running behind a trusted TLS proxy on ${this.host}:${port}`,
+        );
+        return;
+      }
+      console.log(`Server running on http://${this.host}:${port}`);
     });
   }
 

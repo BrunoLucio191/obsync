@@ -1,6 +1,15 @@
 export type AuthSession = {
 	token: string;
+	refreshToken: string;
+	expiresIn: number;
 	user: AuthenticatedUser;
+};
+
+export type WebSocketChannel = 'system' | 'yjs';
+
+export type WebSocketTicket = {
+	ticket: string;
+	expiresIn: number;
 };
 
 export type UserRole = 'admin' | 'user';

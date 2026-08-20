@@ -7,6 +7,7 @@ import type {
 
 export interface SettingsController {
 	readonly config: ObiSyncConfig;
+	isAuthenticated(): boolean;
 	openLogin(): Promise<boolean>;
 	logout(): Promise<void>;
 	listUsers(): Promise<UserActionResult<AuthenticatedUser[]>>;

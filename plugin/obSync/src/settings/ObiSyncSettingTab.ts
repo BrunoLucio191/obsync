@@ -40,7 +40,7 @@ export class ObiSyncSettingTab extends PluginSettingTab {
 					container.addClass('obisync-settings-root');
 
 					const currentUser = this.plugin.config.user;
-					if (!currentUser || !this.plugin.config.token) {
+					if (!currentUser || !this.plugin.isAuthenticated()) {
 						this.renderDisconnectedState(container);
 					} else {
 						this.account.render(container, currentUser);

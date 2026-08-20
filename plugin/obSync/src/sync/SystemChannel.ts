@@ -1,10 +1,17 @@
-import { API_BASE_URL } from '../config/ApiConfig.ts';
+import {
+	WEB_SOCKET_BASE_URL,
+	webSocketTicketProtocol,
+} from '../config/ApiConfig.ts';
 import type { AuthService } from '../auth/AuthService.ts';
 import type { RemoteVaultChangeService } from '../vault/RemoteVaultChangeService.ts';
 import type { VaultChange } from '../vault/VaultChange.ts';
 
+const RECONNECT_DELAY_MS = 1_000;
+
 export class SystemChannel {
 	private socket: WebSocket | null = null;
+	private reconnectTimer: number | null = null;
+	private generation = 0;
 
 	public constructor(
 		private readonly auth: AuthService,
@@ -12,11 +19,27 @@ export class SystemChannel {
 	) {}
 
 	public connect(): void {
-		this.disconnect();
+		this.closeCurrentConnection();
+		const generation = ++this.generation;
+		void this.openWithTicket(generation);
+	}
 
-		const url = new URL(`${API_BASE_URL.replace(/^http/, 'ws')}/system`);
-		url.searchParams.set('token', this.auth.token);
-		const socket = new WebSocket(url.toString());
+	public disconnect(): void {
+		this.generation += 1;
+		this.closeCurrentConnection();
+	}
+
+	private async openWithTicket(generation: number): Promise<void> {
+		const ticket = await this.auth.createWebSocketTicket('system');
+		if (generation !== this.generation) return;
+		if (!ticket) {
+			this.scheduleReconnect(generation);
+			return;
+		}
+
+		const socket = new WebSocket(`${WEB_SOCKET_BASE_URL}/system`, [
+			webSocketTicketProtocol(ticket),
+		]);
 		this.socket = socket;
 
 		socket.onmessage = (event) => {
@@ -31,15 +54,40 @@ export class SystemChannel {
 		};
 
 		socket.onclose = (event) => {
-			if (this.socket !== socket) return;
+			if (this.socket !== socket || generation !== this.generation) return;
 			this.socket = null;
-			if (event.code === 4003 && this.auth.token) {
-				this.auth.scheduleSessionRefresh();
+			if (event.code === 4003) {
+				void this.auth.refreshSession().finally(() => {
+					this.scheduleReconnect(generation);
+				});
+				return;
 			}
+			this.scheduleReconnect(generation);
 		};
 	}
 
-	public disconnect(): void {
+	private scheduleReconnect(generation: number): void {
+		if (
+			generation !== this.generation ||
+			!this.auth.isAuthenticated() ||
+			this.reconnectTimer !== null
+		) {
+			return;
+		}
+
+		this.reconnectTimer = window.setTimeout(() => {
+			this.reconnectTimer = null;
+			if (generation === this.generation) {
+				void this.openWithTicket(generation);
+			}
+		}, RECONNECT_DELAY_MS);
+	}
+
+	private closeCurrentConnection(): void {
+		if (this.reconnectTimer !== null) {
+			window.clearTimeout(this.reconnectTimer);
+			this.reconnectTimer = null;
+		}
 		const socket = this.socket;
 		this.socket = null;
 		if (socket) socket.close();

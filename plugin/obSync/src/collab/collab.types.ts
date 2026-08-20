@@ -40,6 +40,10 @@ export type ActiveRoom = {
 	onAwarenessChange: (change: AwarenessChange) => void;
 	onBrowserOnline: () => void;
 	onVisibilityChange: () => void;
+	onConnectionClose: () => void;
+	requestWebSocketTicket: () => Promise<string | null>;
+	ticketReconnectTimer: number | null;
+	ticketRequestInFlight: boolean;
 	closing: boolean;
 	persistenceReady: boolean;
 	networkEnabled: boolean;

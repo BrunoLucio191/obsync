@@ -19,6 +19,9 @@ export class SyncInitialVault {
 
 	public async sync(): Promise<void> {
 		try {
+			if (!(await this.auth.prepareAuthenticatedRequest())) {
+				throw new Error('Sessão inválida ou expirada.');
+			}
 			const response = await requestUrl({
 				url: `${API_BASE_URL}/api/syncfiles`,
 				method: 'POST',

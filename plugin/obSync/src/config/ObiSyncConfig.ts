@@ -1,11 +1,11 @@
 import type { AuthenticatedUser } from '../auth/auth.types.ts';
 
 export type ObiSyncConfig = {
-	token: string;
+	accessTokenExpiresAt: number;
 	user: AuthenticatedUser | null;
 };
 
 export const DEFAULT_CONFIG: ObiSyncConfig = {
-	token: '',
+	accessTokenExpiresAt: 0,
 	user: null,
 };

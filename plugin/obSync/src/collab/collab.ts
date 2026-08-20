@@ -18,6 +18,10 @@ import {
 	PERIODIC_STATE_VECTOR_SYNC_MS,
 	OFFLINE_NAMESPACE_VERSION,
 } from './collab.cons.ts';
+import {
+	WEB_SOCKET_BASE_URL,
+	webSocketTicketProtocol,
+} from '../config/ApiConfig.ts';
 
 let activeRoom: ActiveRoom | null = null;
 
@@ -136,25 +140,59 @@ function addRemoteClient(
 	}
 }
 
-function reconnectIfNecessary(room: ActiveRoom): void {
+async function reconnectWithFreshTicket(room: ActiveRoom): Promise<void> {
 	if (
 		activeRoom !== room ||
 		room.closing ||
 		!room.persistenceReady ||
 		!room.networkEnabled ||
 		room.provider.wsconnected ||
-		room.provider.wsconnecting
+		room.provider.wsconnecting ||
+		room.ticketRequestInFlight
 	) {
 		return;
 	}
 
-	room.provider.connect();
+	room.ticketRequestInFlight = true;
+	try {
+		const ticket = await room.requestWebSocketTicket();
+		if (
+			!ticket ||
+			activeRoom !== room ||
+			room.closing ||
+			!room.networkEnabled
+		) {
+			if (!ticket) scheduleTicketReconnect(room);
+			return;
+		}
+
+		room.provider.protocols = [webSocketTicketProtocol(ticket)];
+		room.provider.connect();
+	} finally {
+		room.ticketRequestInFlight = false;
+	}
+}
+
+function scheduleTicketReconnect(room: ActiveRoom): void {
+	if (
+		activeRoom !== room ||
+		room.closing ||
+		!room.networkEnabled ||
+		room.ticketReconnectTimer !== null
+	) {
+		return;
+	}
+
+	room.ticketReconnectTimer = window.setTimeout(() => {
+		room.ticketReconnectTimer = null;
+		void reconnectWithFreshTicket(room);
+	}, 1_000);
 }
 
 export async function setupCollabRoom(
 	fileName: string,
 	user: CollaborationUser,
-	token: string,
+	requestWebSocketTicket: () => Promise<string | null>,
 	onUserJoined: (name: string) => void,
 	onUserLeft: (name: string) => void,
 ): Promise<PreparedCollabRoom | null> {
@@ -181,12 +219,12 @@ export async function setupCollabRoom(
 			: null;
 
 	const provider = new WebsocketProvider(
-		'ws://localhost:3000',
+		WEB_SOCKET_BASE_URL,
 		roomName,
 		networkDoc,
 		{
 			connect: false,
-			params: { token },
+			protocols: [],
 			maxBackoffTime: MAX_RECONNECT_BACKOFF_MS,
 			resyncInterval: PERIODIC_STATE_VECTOR_SYNC_MS,
 			disableBc: true,
@@ -214,6 +252,10 @@ export async function setupCollabRoom(
 		onAwarenessChange: () => undefined,
 		onBrowserOnline: () => undefined,
 		onVisibilityChange: () => undefined,
+		onConnectionClose: () => undefined,
+		requestWebSocketTicket,
+		ticketReconnectTimer: null,
+		ticketRequestInFlight: false,
 		closing: false,
 		persistenceReady: false,
 		networkEnabled: false,
@@ -238,15 +280,23 @@ export async function setupCollabRoom(
 		}
 	};
 
-	room.onBrowserOnline = () => reconnectIfNecessary(room);
+	room.onBrowserOnline = () => void reconnectWithFreshTicket(room);
 	room.onVisibilityChange = () => {
 		if (document.visibilityState === 'visible') {
-			reconnectIfNecessary(room);
+			void reconnectWithFreshTicket(room);
 		}
+	};
+	room.onConnectionClose = () => {
+		if (activeRoom !== room || room.closing || !room.networkEnabled) return;
+		room.provider.shouldConnect = false;
+		window.setTimeout(() => {
+			void reconnectWithFreshTicket(room);
+		}, 0);
 	};
 
 	activeRoom = room;
 	provider.awareness.on('change', room.onAwarenessChange);
+	provider.on('connection-close', room.onConnectionClose);
 	provider.awareness.setLocalStateField('user', getPresenceUser(user));
 	window.addEventListener('online', room.onBrowserOnline);
 	document.addEventListener('visibilitychange', room.onVisibilityChange);
@@ -272,7 +322,7 @@ export async function setupCollabRoom(
 		connect(): void {
 			if (activeRoom !== room || room.closing) return;
 			room.networkEnabled = true;
-			reconnectIfNecessary(room);
+			void reconnectWithFreshTicket(room);
 		},
 	};
 }
@@ -284,6 +334,10 @@ export function closeCollabRoom(): void {
 	activeRoom = null;
 	room.closing = true;
 	room.networkEnabled = false;
+	if (room.ticketReconnectTimer !== null) {
+		window.clearTimeout(room.ticketReconnectTimer);
+		room.ticketReconnectTimer = null;
+	}
 	window.removeEventListener('online', room.onBrowserOnline);
 	document.removeEventListener('visibilitychange', room.onVisibilityChange);
 
@@ -297,6 +351,7 @@ export function closeCollabRoom(): void {
 
 	room.provider.awareness.setLocalState(null);
 	room.provider.awareness.off('change', room.onAwarenessChange);
+	room.provider.off('connection-close', room.onConnectionClose);
 	room.provider.destroy();
 	if (room.onNetworkUpdate) {
 		room.networkDoc.off('update', room.onNetworkUpdate);

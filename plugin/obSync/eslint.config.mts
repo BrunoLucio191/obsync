@@ -18,6 +18,7 @@ export default defineConfig(
 		languageOptions: {
 			globals: {
 				...globals.browser,
+				__OBISYNC_API_BASE_URL__: 'readonly',
 			},
 			parserOptions: {
 				projectService: {

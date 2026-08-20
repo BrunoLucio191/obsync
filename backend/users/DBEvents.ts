@@ -1,7 +1,8 @@
 import EventEmitter from "node:events";
 
-export function dbEvents(userId: number | undefined = undefined) {
-  const events = new EventEmitter();
+const events = new EventEmitter();
+
+export function dbEvents() {
 
   return {
     onAuthorizationChanged(listener: (userId: number) => void): () => void {

@@ -44,3 +44,9 @@ if (!connectionState.canWriteGlobal) {
 ```
 
 Authorization decisions must use the backend's authenticated user record. Values sent by the client are not trusted for access control.
+
+## Related reference
+
+- [Plugin authentication API](reference/plugin/authentication.md)
+- [Backend authentication services](reference/backend/authentication.md)
+- [HTTP authorization](reference/backend/http.md#authorization)

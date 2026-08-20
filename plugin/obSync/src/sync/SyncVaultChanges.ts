@@ -15,11 +15,7 @@ export class SyncVaultChanges {
 	public initialize(): void {
 		this.plugin.registerEvent(
 			this.plugin.app.vault.on('create', async (file) => {
-				if (
-					!this.auth.isAdmin() ||
-					this.mutedPaths.isMuted(file.path)
-				)
-					return;
+				if (!(await this.canPublish(file.path))) return;
 				const isFolder = file instanceof TFolder;
 				const content =
 					!isFolder && file instanceof TFile
@@ -41,11 +37,7 @@ export class SyncVaultChanges {
 
 		this.plugin.registerEvent(
 			this.plugin.app.vault.on('delete', async (file) => {
-				if (
-					!this.auth.isAdmin() ||
-					this.mutedPaths.isMuted(file.path)
-				)
-					return;
+				if (!(await this.canPublish(file.path))) return;
 
 				const isFolder = file instanceof TFolder;
 				this.collaboration.disconnectIfAffected(file.path);
@@ -61,11 +53,7 @@ export class SyncVaultChanges {
 
 		this.plugin.registerEvent(
 			this.plugin.app.vault.on('modify', async (file) => {
-				if (
-					!this.auth.isAdmin() ||
-					this.mutedPaths.isMuted(file.path)
-				)
-					return;
+				if (!(await this.canPublish(file.path))) return;
 				const activeFile = this.plugin.app.workspace.getActiveFile();
 				// O Yjs cuida do arquivo ativo, então não disparamos o PUT para ele
 				if (activeFile && file.path === activeFile.path) return;
@@ -83,13 +71,7 @@ export class SyncVaultChanges {
 		);
 		this.plugin.registerEvent(
 			this.plugin.app.vault.on('rename', async (file, oldPath) => {
-				if (
-					!this.auth.isAdmin() ||
-					this.mutedPaths.isMuted(file.path) ||
-					this.mutedPaths.isMuted(oldPath)
-				) {
-					return;
-				}
+				if (!(await this.canPublish(file.path, oldPath))) return;
 
 				await requestUrl({
 					url: `${API_BASE_URL}/sync/rename`,
@@ -109,5 +91,17 @@ export class SyncVaultChanges {
 				}
 			}),
 		);
+	}
+
+	private async canPublish(...paths: string[]): Promise<boolean> {
+		if (
+			!this.auth.isAdmin() ||
+			paths.some((path) => this.mutedPaths.isMuted(path)) ||
+			!(await this.auth.prepareAuthenticatedRequest())
+		) {
+			return false;
+		}
+
+		return this.auth.isAdmin();
 	}
 }

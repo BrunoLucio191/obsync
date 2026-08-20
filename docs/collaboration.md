@@ -39,16 +39,20 @@ For a `user`, the WebSocket provider receives `networkDoc`, not the editor's pri
 
 ```ts
 const provider = new WebsocketProvider(
-	'ws://localhost:3000',
+	WEB_SOCKET_BASE_URL,
 	roomName,
 	networkDoc,
 	{
 		connect: false,
-		params: { token },
+		protocols: [],
 		disableBc: true,
 	},
 );
 ```
+
+Immediately before each connection, the provider obtains a one-use ticket and
+places it in `protocols`. The access token is never attached to the WebSocket
+URL.
 
 Updates received by `networkDoc` are copied into the private document:
 
@@ -78,3 +82,9 @@ When the room closes, the plugin removes awareness and update listeners, destroy
 ## Awareness
 
 Awareness data contains transient presence information such as the account name and cursor identity. It is not part of the persisted note state. The backend validates awareness ownership so one connection cannot impersonate another authenticated account.
+
+## Related reference
+
+- [Plugin collaboration API](reference/plugin/collaboration.md)
+- [Collaboration objects](reference/plugin/types.md#collaboration)
+- [WebSocket protocol](reference/backend/websocket.md)

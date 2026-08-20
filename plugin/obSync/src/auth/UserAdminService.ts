@@ -16,7 +16,7 @@ export class UserAdminService {
 	public constructor(private readonly auth: AuthService) {}
 
 	public async listUsers(): Promise<UserActionResult<AuthenticatedUser[]>> {
-		if (!this.hasSession()) {
+		if (!this.hasSession() || !(await this.auth.prepareAuthenticatedRequest())) {
 			return { ok: false, error: 'Entre no ObiSync para ver os usuários.' };
 		}
 
@@ -61,7 +61,7 @@ export class UserAdminService {
 		password: string;
 		role: UserRole;
 	}): Promise<UserActionResult<AuthenticatedUser>> {
-		if (!this.hasSession()) {
+		if (!this.hasSession() || !(await this.auth.prepareAuthenticatedRequest())) {
 			return { ok: false, error: 'Entre no ObiSync para criar usuários.' };
 		}
 
@@ -151,7 +151,11 @@ export class UserAdminService {
 		body: Record<string, unknown> | undefined,
 		fallback: string,
 	): Promise<UserActionResult<AuthenticatedUser>> {
-		if (!this.auth.isAdmin()) {
+		if (
+			!this.auth.isAdmin() ||
+			!(await this.auth.prepareAuthenticatedRequest()) ||
+			!this.auth.isAdmin()
+		) {
 			return {
 				ok: false,
 				error: 'Apenas administradores podem executar esta ação.',
@@ -191,7 +195,7 @@ export class UserAdminService {
 	}
 
 	private hasSession(): boolean {
-		return Boolean(this.auth.token && this.auth.user);
+		return this.auth.isAuthenticated();
 	}
 
 	private apiError(response: ApiResponse, fallback: string): string {

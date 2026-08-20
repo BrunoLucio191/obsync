@@ -7,6 +7,7 @@
     "start": "node server.ts",
     "dev": "node --watch server.ts",
     "db:setup": "node scripts/setupDatabase.ts",
-    "check": "tsc --noEmit -p tsconfig.json"
+    "check": "tsc --noEmit -p tsconfig.json",
+    "test": "node --test auth/*.test.ts Classes/*.test.ts users/*.test.ts serverConfig.test.ts"
   }
 }

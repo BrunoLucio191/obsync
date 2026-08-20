@@ -1,5 +1,9 @@
 # Architecture
 
+This page maps responsibilities and dependency direction. For individual
+constructors, methods, parameters, and return values, use the
+[API reference](reference/README.md).
+
 ## Plugin structure
 
 The plugin follows the same composition-oriented structure as the backend.
@@ -97,10 +101,16 @@ object boundary.
 
 | Channel | Direction | Purpose |
 | --- | --- | --- |
-| HTTP `/auth/*` | client ↔ server | Login and session validation |
-| HTTP `/api/*` | client ↔ server | User administration and initial vault download |
-| HTTP `/sync/*` | admin → server | Shared file operations |
-| WebSocket `/system` | server → client | Shared-vault change notifications |
-| WebSocket `/<encoded-note-path>` | client ↔ server | Yjs synchronization and awareness |
+| HTTPS `/auth/login` | client → server | Rate-limited login and access/refresh token issuance |
+| HTTPS `/auth/refresh` | client ↔ server | Refresh-token rotation and short access-token renewal |
+| HTTPS `/auth/logout` | client → server | Session revocation |
+| HTTPS `/auth/ws-ticket` | client ← server | One-use, channel-scoped WebSocket ticket |
+| HTTPS `/api/*` | client ↔ server | User administration and initial vault download |
+| HTTPS `/sync/*` | admin → server | Shared file operations |
+| WSS `/system` | server → client | Shared-vault change notifications |
+| WSS `/<encoded-note-path>` | client ↔ server | Yjs synchronization and awareness |
 
-The `/system` channel is receive-only from the client's perspective. The Yjs channel accepts awareness from authenticated clients, but document updates are accepted only from admins.
+The `/system` channel is receive-only from the client's perspective. WebSocket
+handshakes use one-use tickets in `Sec-WebSocket-Protocol`, never bearer tokens
+in URLs. The Yjs channel accepts awareness from authenticated clients, but
+document updates are accepted only from admins.

@@ -634,7 +634,7 @@ function processIncomingMessage(
 
     case MESSAGE_AUTH:
       throw new Error(
-        "Mensagens de autenticação dentro do protocolo Yjs não são aceitas; use o token do upgrade HTTP.",
+        "Mensagens de autenticação dentro do protocolo Yjs não são aceitas; use o ticket do handshake WebSocket.",
       );
 
     default:

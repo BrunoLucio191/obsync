@@ -10,7 +10,16 @@ export type AuthenticatedUser = {
 
 export type AuthSession = {
   token: string;
+  refreshToken: string;
+  expiresIn: number;
   user: AuthenticatedUser;
+};
+
+export type WebSocketChannel = "system" | "yjs";
+
+export type WebSocketTicket = {
+  ticket: string;
+  expiresIn: number;
 };
 
 export type CreateUserResult =
@@ -40,9 +49,12 @@ export type StoredUserRow = {
 };
 
 export type TokenPayload = {
-  id: number;
-  email: string;
-  name: string;
-  role: UserRole;
+  iss: "obisync";
+  aud: "obisync-api";
+  sub: string;
+  sid: string;
+  jti: string;
+  iat: number;
+  nbf: number;
   exp: number;
 };

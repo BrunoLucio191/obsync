@@ -1,12 +1,12 @@
 # System overview
 
-ObiSync synchronizes Markdown notes between Obsidian clients through a Node.js backend. The plugin uses HTTP for authentication and vault operations, WebSocket connections for live events, and Yjs for collaborative text state.
+ObiSync synchronizes Markdown notes between Obsidian clients through a Node.js backend. The plugin uses HTTPS for authentication and vault operations, secure WebSocket connections for live events, and Yjs for collaborative text state. Loopback-only development may use HTTP and WebSocket without TLS.
 
 ```text
 Obsidian client
-  |-- HTTP -------- authentication, users, initial vault download, file operations
-  |-- /system ----- server-to-client vault events
-  `-- /<note> ----- Yjs synchronization and awareness
+  |-- HTTPS ------- authentication, users, initial vault download, file operations
+  |-- WSS /system - server-to-client vault events
+  `-- WSS /<note> - Yjs synchronization and awareness
 
 Node.js backend
   |-- SQLite ------ users and roles
@@ -25,3 +25,8 @@ This restriction is enforced twice:
 
 Client-side separation prevents accidental publication. Server-side authorization prevents a modified or outdated client from bypassing the policy.
 
+## Continue reading
+
+- [Architecture](architecture.md) for module ownership and dependency direction
+- [Plugin API](reference/plugin/README.md) for client classes and methods
+- [Backend API](reference/backend/README.md) for services and protocol contracts

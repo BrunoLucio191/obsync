@@ -82,7 +82,7 @@ export class CollaborationController {
 			const preparedRoom = await setupCollabRoom(
 				filePath,
 				user,
-				this.auth.token,
+				() => this.auth.createWebSocketTicket('yjs'),
 				(name) => {
 					if (this.activePath === filePath) {
 						new Notice(`${name} entrou nesta nota.`);

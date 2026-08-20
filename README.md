@@ -31,12 +31,12 @@ docs/            architecture and operational documentation
 - [Documentation index](docs/README.md)
 - [System overview](docs/overview.md)
 - [Architecture](docs/architecture.md)
-- [Collaboration model](docs/collaboration.md)
-- [Authorization model](docs/permissions.md)
-- [Storage](docs/storage.md)
-- [Glossary](docs/glossary.md)
-- [Design decisions](docs/decisions.md)
-- [Troubleshooting](docs/debugging.md)
+- [API reference](docs/reference/README.md)
+  - [Plugin classes and methods](docs/reference/plugin/README.md)
+  - [Backend services](docs/reference/backend/README.md)
+  - [HTTP API](docs/reference/backend/http.md)
+  - [WebSocket API](docs/reference/backend/websocket.md)
+- [Concepts and operational guides](docs/README.md#concepts)
 
 ## Development
 
@@ -49,8 +49,17 @@ npm install
 Create `backend/.env` with the backend settings:
 
 ```dotenv
-OBISYNC_TOKEN_SECRET=replace-with-a-random-secret
+OBISYNC_TOKEN_SECRET=<output from openssl rand -base64 48>
 PORT=3000
+OBISYNC_HOST=127.0.0.1
+OBISYNC_REQUIRE_TLS=false
+OBISYNC_TRUST_PROXY=false
+```
+
+Generate the signing secret with:
+
+```bash
+openssl rand -base64 48
 ```
 
 Create the user database and apply the initial seed:
@@ -71,6 +80,13 @@ Build the plugin:
 
 ```bash
 npm run build --workspace=obSync
+```
+
+Remote builds must provide an HTTPS backend URL:
+
+```bash
+OBISYNC_API_BASE_URL=https://sync.example.com \
+  npm run build --workspace=obSync
 ```
 
 Run the plugin compiler in watch mode:
