@@ -1,10 +1,12 @@
 import { IndexeddbPersistence } from 'y-indexeddb';
 import * as Y from 'yjs';
 
+export const DEFAULT_OFFLINE_NAMESPACE = 'your-mon';
+
 export type OfflinePersistenceOptions = {
 	documentId: string;
 	ydoc: Y.Doc;
-	namespace: string;
+	namespace?: string;
 };
 
 export type OfflinePersistenceHandle = {
@@ -34,7 +36,11 @@ function buildDatabaseName(documentId: string, namespace: string): string {
 export function initializeOfflinePersistence(
 	options: OfflinePersistenceOptions,
 ): OfflinePersistenceHandle {
-	const { documentId, ydoc, namespace } = options;
+	const {
+		documentId,
+		ydoc,
+		namespace = DEFAULT_OFFLINE_NAMESPACE,
+	} = options;
 
 	if (typeof indexedDB === 'undefined') {
 		throw new Error('IndexedDB não está disponível neste ambiente.');

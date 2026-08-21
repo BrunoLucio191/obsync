@@ -130,6 +130,9 @@ Creates or reuses the IndexedDB provider for a `Y.Doc`. The returned handle
 contains the database name, the provider, a `ready` promise, and `destroy()` and
 `clear()` lifecycle methods.
 
+When `namespace` is omitted, `initializeOfflinePersistence()` falls back to
+`your-mon`. Collaboration rooms pass an explicit ownership namespace instead.
+
 Namespaces identify ownership. Admin history uses a global namespace; user
 history uses an account-specific private namespace.
 
