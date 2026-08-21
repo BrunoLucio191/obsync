@@ -9,8 +9,13 @@ Yjs room bound to that note.
 Source: [`plugin/obSync/src/collab/CollaborationController.ts`](../../../plugin/obSync/src/collab/CollaborationController.ts)
 
 ```ts
-new CollaborationController(app: App, auth: AuthService)
+new CollaborationController(app: App, auth: CollaborationAuth)
 ```
+
+`CollaborationAuth` is the structural dependency required by this controller:
+the current user, the read-only role check, and Yjs ticket creation. Keeping
+this boundary explicit prevents the collaboration layer from depending on the
+complete authentication implementation.
 
 ### Public properties
 

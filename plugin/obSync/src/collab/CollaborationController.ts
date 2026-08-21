@@ -1,8 +1,14 @@
 import type { Extension } from '@codemirror/state';
 import { App, MarkdownView, Notice } from 'obsidian';
-import type { AuthService } from '../auth/AuthService.ts';
+import type { AuthenticatedUser } from '../auth/auth.types.ts';
 import { PathMuteRegistry } from '../vault/PathMuteRegistry.ts';
 import { closeCollabRoom, setupCollabRoom } from './collab.ts';
+
+export interface CollaborationAuth {
+	readonly user: AuthenticatedUser | null;
+	isReadOnlyUser(): boolean;
+	createWebSocketTicket(channel: 'yjs'): Promise<string | null>;
+}
 
 export class CollaborationController {
 	public readonly editorExtensions: Extension[] = [];
@@ -13,7 +19,7 @@ export class CollaborationController {
 
 	public constructor(
 		private readonly app: App,
-		private readonly auth: AuthService,
+		private readonly auth: CollaborationAuth,
 	) {}
 
 	public get currentPath(): string | null {
@@ -82,7 +88,7 @@ export class CollaborationController {
 			const preparedRoom = await setupCollabRoom(
 				filePath,
 				user,
-				() => this.auth.createWebSocketTicket('yjs'),
+				this.requestYjsWebSocketTicket,
 				(name) => {
 					if (this.activePath === filePath) {
 						new Notice(`${name} entrou nesta nota.`);
@@ -135,6 +141,9 @@ export class CollaborationController {
 		}
 		this.disconnect();
 	}
+
+	private readonly requestYjsWebSocketTicket = (): Promise<string | null> =>
+		this.auth.createWebSocketTicket('yjs');
 
 	private syncWithActiveFile(): void {
 		const activeFile = this.app.workspace.getActiveFile();

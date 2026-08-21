@@ -26,9 +26,9 @@ plugin/obSync/src/
 │   └── collab.*                    low-level Yjs and awareness protocol
 ├── config/
 │   ├── ApiConfig.ts                backend endpoint configuration
-│   └── ObiSyncConfig.ts            persisted plugin configuration
+│   └── ObSyncConfig.ts            persisted plugin configuration
 ├── settings/
-│   ├── ObiSyncSettingTab.ts        settings composition
+│   ├── ObSyncSettingTab.ts        settings composition
 │   ├── AccountSettingsSection.ts   current-account UI
 │   ├── UserManagementSection.ts    user-management composition
 │   └── users/                      create, list, cache, and name editor
@@ -57,7 +57,7 @@ plugin/obSync/src/
 | `plugin/obSync/src/sync/SyncVaultChanges.ts` | Admin-only file create, modify, delete, and rename requests |
 | `plugin/obSync/src/vault/RemoteVaultChangeService.ts` | Applies server events to the local vault without creating publish loops |
 | `plugin/obSync/src/vault/PathMuteRegistry.ts` | Temporarily marks remote paths so Obsidian events are not sent back to the server |
-| `plugin/obSync/src/settings/ObiSyncSettingTab.ts` | Composes account and user-management settings sections |
+| `plugin/obSync/src/settings/ObSyncSettingTab.ts` | Composes account and user-management settings sections |
 | `plugin/obSync/src/settings/users/*` | Separates the user directory, creation form, list actions, and debounced name updates |
 
 ## Dependency direction
@@ -69,7 +69,7 @@ ObSync (composition root)
   ├── SystemChannel ── RemoteVaultChangeService
   ├── SyncInitialVault
   ├── SyncVaultChanges
-  └── ObiSyncSettingTab ── SettingsController interface
+  └── ObSyncSettingTab ── SettingsController interface
 ```
 
 Services receive their dependencies through constructors. They do not receive

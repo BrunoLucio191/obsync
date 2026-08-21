@@ -1,6 +1,6 @@
-# ObiSync
+# ObSync
 
-ObiSync is an Obsidian plugin and Node.js service for collaborative Markdown editing. It supports two account roles with different publishing rights:
+ObSync is an Obsidian plugin and Node.js service for collaborative Markdown editing. It supports two account roles with different publishing rights:
 
 - `admin` accounts can publish changes to the shared vault.
 - `user` accounts can edit locally and receive shared changes, but cannot publish their private edits.
@@ -49,11 +49,11 @@ npm install
 Create `backend/.env` with the backend settings:
 
 ```dotenv
-OBISYNC_TOKEN_SECRET=<output from openssl rand -base64 48>
+OBSYNC_TOKEN_SECRET=<output from openssl rand -base64 48>
 PORT=3000
-OBISYNC_HOST=127.0.0.1
-OBISYNC_REQUIRE_TLS=false
-OBISYNC_TRUST_PROXY=false
+OBSYNC_HOST=127.0.0.1
+OBSYNC_REQUIRE_TLS=false
+OBSYNC_TRUST_PROXY=false
 ```
 
 Generate the signing secret with:
@@ -79,20 +79,20 @@ npm run dev --workspace=backend
 Build the plugin:
 
 ```bash
-npm run build --workspace=obSync
+npm run build --workspace=plugin/obSync
 ```
 
 Remote builds must provide an HTTPS backend URL:
 
 ```bash
-OBISYNC_API_BASE_URL=https://sync.example.com \
-  npm run build --workspace=obSync
+OBSYNC_API_BASE_URL=https://sync.example.com \
+  npm run build --workspace=plugin/obSync
 ```
 
 Run the plugin compiler in watch mode:
 
 ```bash
-npm run dev --workspace=obSync
+npm run dev --workspace=plugin/obSync
 ```
 
 The plugin build produces `plugin/obSync/main.js`. Copy `main.js`, `manifest.json`, and `styles.css` to the plugin directory used by the target Obsidian vault, then reload the plugin in Obsidian.

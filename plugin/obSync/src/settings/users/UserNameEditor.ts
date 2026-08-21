@@ -1,4 +1,4 @@
-import { Notice, type SettingGroup } from 'obsidian';
+import { Notice, type Setting } from 'obsidian';
 import type { AuthenticatedUser } from '../../auth/auth.types.ts';
 import type { SettingsController } from '../SettingsController.ts';
 import type { UserDirectory } from './UserDirectory.ts';
@@ -13,29 +13,27 @@ export class UserNameEditor {
 	) {}
 
 	public render(
-		group: SettingGroup,
+		setting: Setting,
 		user: AuthenticatedUser,
 		label: string,
 		description: string,
 	): void {
-		group.addSetting((setting) => {
-			setting.setName(label).setDesc(description);
-			const statusEl = setting.descEl.createDiv({
-				cls: 'obisync-setting-save-status',
-				text: 'Salvo.',
-			});
-			setting.addText((text) => {
-				text.setValue(user.name)
-					.setPlaceholder('Nome de exibição')
-					.onChange((value) => {
-						this.scheduleSave(
-							user,
-							value,
-							statusEl,
-							text.inputEl,
-						);
-					});
-			});
+		setting.setName(label).setDesc(description);
+		const statusEl = setting.descEl.createDiv({
+			cls: 'obsync-setting-save-status',
+			text: 'Salvo.',
+		});
+		setting.addText((text) => {
+			text.setValue(user.name)
+				.setPlaceholder('Nome de exibição')
+				.onChange((value) => {
+					this.scheduleSave(
+						user,
+						value,
+						statusEl,
+						text.inputEl,
+					);
+				});
 		});
 	}
 

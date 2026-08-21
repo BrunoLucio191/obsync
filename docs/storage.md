@@ -39,8 +39,8 @@ metadata: the current user and access-token expiration time.
 The plugin stores Yjs updates in IndexedDB. Database names include the note path and an ownership namespace.
 
 ```text
-Admin: your-mon:v2:global:<encoded-note-path>
-User:  your-mon:v2:private:<encoded-email>:<encoded-note-path>
+Admin: obsync:v3:global:<encoded-note-path>
+User:  obsync:v3:private:<encoded-email>:<encoded-note-path>
 ```
 
 The admin namespace contains publishable shared history. Each user namespace contains private history for one account. This prevents an admin session in the same Obsidian profile from restoring and publishing a user's private cache.

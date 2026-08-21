@@ -1,6 +1,6 @@
 # System overview
 
-ObiSync synchronizes Markdown notes between Obsidian clients through a Node.js backend. The plugin uses HTTPS for authentication and vault operations, secure WebSocket connections for live events, and Yjs for collaborative text state. Loopback-only development may use HTTP and WebSocket without TLS.
+ObSync synchronizes Markdown notes between Obsidian clients through a Node.js backend. The plugin uses HTTPS for authentication and vault operations, secure WebSocket connections for live events, and Yjs for collaborative text state. Loopback-only development may use HTTP and WebSocket without TLS.
 
 ```text
 Obsidian client

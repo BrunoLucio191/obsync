@@ -1,4 +1,4 @@
-import type { ObiSyncConfig } from '../config/ObiSyncConfig.ts';
+import type { ObSyncConfig } from '../config/ObSyncConfig.ts';
 import type {
 	AuthenticatedUser,
 	UserActionResult,
@@ -6,7 +6,7 @@ import type {
 } from '../auth/auth.types.ts';
 
 export interface SettingsController {
-	readonly config: ObiSyncConfig;
+	readonly config: ObSyncConfig;
 	isAuthenticated(): boolean;
 	openLogin(): Promise<boolean>;
 	logout(): Promise<void>;

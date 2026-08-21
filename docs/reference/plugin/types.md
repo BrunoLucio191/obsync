@@ -62,10 +62,10 @@ type WebSocketTicket = {
 
 ## Plugin configuration
 
-Source: [`plugin/obSync/src/config/ObiSyncConfig.ts`](../../../plugin/obSync/src/config/ObiSyncConfig.ts)
+Source: [`plugin/obSync/src/config/ObSyncConfig.ts`](../../../plugin/obSync/src/config/ObSyncConfig.ts)
 
 ```ts
-type ObiSyncConfig = {
+type ObSyncConfig = {
 	accessTokenExpiresAt: number;
 	user: AuthenticatedUser | null;
 };

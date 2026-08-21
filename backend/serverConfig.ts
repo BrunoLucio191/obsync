@@ -9,23 +9,23 @@ export type ServerConfig = {
 export function loadServerConfig(
   environment: NodeJS.ProcessEnv = process.env,
 ): ServerConfig {
-  const host = environment.OBISYNC_HOST?.trim() || "127.0.0.1";
+  const host = environment.OBSYNC_HOST?.trim() || "127.0.0.1";
   const port = parsePort(environment.PORT);
-  const trustProxy = parseBoolean(environment.OBISYNC_TRUST_PROXY, false);
+  const trustProxy = parseBoolean(environment.OBSYNC_TRUST_PROXY, false);
   const requireTls = parseBoolean(
-    environment.OBISYNC_REQUIRE_TLS,
+    environment.OBSYNC_REQUIRE_TLS,
     !isLoopbackHost(host),
   );
-  const tokenSecret = environment.OBISYNC_TOKEN_SECRET?.trim() ?? "";
+  const tokenSecret = environment.OBSYNC_TOKEN_SECRET?.trim() ?? "";
 
   if (!isLoopbackHost(host) && !requireTls) {
     throw new Error(
-      "OBISYNC_REQUIRE_TLS deve ser true quando OBISYNC_HOST não é loopback.",
+      "OBSYNC_REQUIRE_TLS deve ser true quando OBSYNC_HOST não é loopback.",
     );
   }
   if (requireTls && !trustProxy) {
     throw new Error(
-      "Esta versão termina TLS em um proxy reverso. Defina OBISYNC_TRUST_PROXY=true e mantenha a porta do backend protegida da rede pública.",
+      "Esta versão termina TLS em um proxy reverso. Defina OBSYNC_TRUST_PROXY=true e mantenha a porta do backend protegida da rede pública.",
     );
   }
 

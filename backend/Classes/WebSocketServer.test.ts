@@ -40,7 +40,7 @@ test("accepts one-use WebSocket tickets and rejects bearer query tokens", async 
       "system",
     );
     assert.ok(issued);
-    const protocol = `obisync-ticket.${issued.ticket}`;
+    const protocol = `obsync-ticket.${issued.ticket}`;
     const accepted = new WebSocket(url, [protocol]);
     const acceptedClose = new Promise<void>((resolve) =>
       accepted.once("close", () => resolve()),

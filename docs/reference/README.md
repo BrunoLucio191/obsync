@@ -1,6 +1,6 @@
 # API reference
 
-The reference documents ObiSync's internal application API. It is intended for
+The reference documents ObSync's internal application API. It is intended for
 contributors and is not a versioned SDK contract. A method marked public is
 callable by another project module; authorization rules still belong to the
 backend.

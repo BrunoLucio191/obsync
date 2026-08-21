@@ -1,6 +1,6 @@
-# ObiSync Obsidian plugin
+# ObSync Obsidian plugin
 
-This workspace contains the Obsidian client for ObiSync. The plugin connects the editor to the ObiSync backend, manages authentication and presence, and applies role-specific synchronization rules.
+This workspace contains the Obsidian client for ObSync. The plugin connects the editor to the ObSync backend, manages authentication and presence, and applies role-specific synchronization rules.
 
 Project documentation is maintained in the repository root:
 
@@ -17,20 +17,20 @@ From the repository root:
 
 ```bash
 npm install
-npm run dev --workspace=obSync
+npm run dev --workspace=plugin/obSync
 ```
 
 Create a production bundle with:
 
 ```bash
-npm run build --workspace=obSync
+npm run build --workspace=plugin/obSync
 ```
 
 For a remote backend, provide its public HTTPS URL at build time:
 
 ```bash
-OBISYNC_API_BASE_URL=https://sync.example.com \
-  npm run build --workspace=obSync
+OBSYNC_API_BASE_URL=https://sync.example.com \
+  npm run build --workspace=plugin/obSync
 ```
 
 Non-loopback HTTP endpoints are rejected. The corresponding WebSocket endpoint
@@ -48,4 +48,4 @@ manifest.json
 styles.css
 ```
 
-Enable ObiSync in Obsidian's community plugin settings or reload the plugin after replacing an existing build.
+Enable ObSync in Obsidian's community plugin settings or reload the plugin after replacing an existing build.

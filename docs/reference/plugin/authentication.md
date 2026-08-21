@@ -21,7 +21,7 @@ new AuthService({
 | Dependency | Type | Purpose |
 | --- | --- | --- |
 | `app` | `App` | Accesses Obsidian `SecretStorage` and opens the login modal |
-| `getConfig` | `() => ObiSyncConfig` | Reads current non-secret session metadata |
+| `getConfig` | `() => ObSyncConfig` | Reads current non-secret session metadata |
 | `saveConfig` | `() => Promise<void>` | Persists user profile and access-token expiration |
 | `onSessionChanged` | callback | Notifies the composition root when identity or role changes |
 
@@ -82,7 +82,7 @@ headers(): Record<string, string>
 ```
 
 Builds JSON request headers with the bearer access token and the per-plugin
-`X-ObiSync-Client` identifier.
+`X-ObSync-Client` identifier.
 
 ### `createWebSocketTicket()`
 

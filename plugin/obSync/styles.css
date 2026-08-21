@@ -16,111 +16,24 @@ If your plugin does not need CSS, delete this file.
 	padding: 1px 4px !important;
 }
 
-/* Painel de gerenciamento de usuários nas configurações. */
-.obisync-settings-users-panel {
-	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-m);
-	background: var(--background-secondary);
-	box-sizing: border-box;
-	padding: var(--size-4-4);
-	margin-top: var(--size-4-3);
-	margin-bottom: var(--size-4-6);
-}
-
-.obisync-settings-users-panel > .setting-item {
-	margin: 0;
-	padding: 0 0 var(--size-4-4);
-}
-
-.obisync-settings-user-count {
-	color: var(--text-muted);
-	font-size: var(--font-ui-smaller);
-	padding: 0 0 var(--size-4-3);
-}
-
-.obisync-settings-user-list {
-	--obisync-user-list-padding: var(--size-4-3);
-	--obisync-user-list-gap: var(--size-4-3);
-	--obisync-user-row-min-height: 76px;
-
-	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-s);
-	background: var(--background-primary);
-	box-sizing: border-box;
-	display: flex;
-	flex-direction: column;
-	padding: var(--obisync-user-list-padding);
-	overflow-x: hidden;
-	overflow-y: visible;
-	overflow-anchor: none;
-	contain: layout paint;
-}
-
-.obisync-settings-user-list.is-scroll-limited {
-	/* Reserva a mesma faixa nos dois lados quando a scrollbar aparece. */
-	scrollbar-gutter: stable both-edges;
-	/* 9 linhas de 76 px + 8 intervalos de 12 px + 24 px de padding. */
-	max-height: min(70vh, 804px);
-	overflow-y: auto;
-}
-
-.obisync-settings-user-row .setting-item-control {
+/* Permite que os controles de uma conta se reorganizem em telas estreitas. */
+.obsync-settings-user-row .setting-item-control {
 	align-items: center;
 	column-gap: var(--size-4-3);
-	flex-wrap: nowrap;
+	flex-wrap: wrap;
 }
 
-.obisync-settings-user-row .checkbox-container,
-.obisync-settings-,
-user-row select,
-.obisync-settings-user-row button {
+.obsync-settings-user-row .checkbox-container,
+.obsync-settings-user-row select,
+.obsync-settings-user-row button {
 	flex: 0 0 auto;
 }
 
-.obisync-settings-user-list-message {
-	color: var(--text-muted);
-	margin: 0;
-	padding: var(--size-4-4);
-	text-align: center;
-}
-
-.obisync-setting-save-status {
+.obsync-setting-save-status {
 	margin-top: 2px;
 	font-size: var(--font-ui-smaller);
 }
 
-@media (max-width: 720px) {
-	.obisync-settings-user-list.is-scroll-limited {
-		max-height: 65vh;
-	}
-
-	.obisync-settings-user-row {
-		min-height: auto;
-	}
-}
-
-.obisync-settings-user-status {
+.obsync-settings-user-status {
 	color: var(--text-muted);
-}
-
-/* Dá mais respiro às seções e controles das configurações do ObiSync. */
-.obisync-settings-root > .setting-item:not(.setting-item-heading) {
-	margin-block: var(--size-4-2);
-	padding-block: var(--size-4-4);
-}
-
-.obisync-settings-root > .setting-item-heading {
-	margin-top: var(--size-4-1);
-	padding-top: var(--size-4-2);
-	padding-bottom: var(--size-4-3);
-}
-
-.obisync-settings-root > .setting-item-heading:first-child {
-	margin-top: 0;
-}
-
-.obisync-settings-root > p {
-	margin-top: var(--size-4-2);
-	margin-bottom: var(--size-4-5);
-	line-height: 1;
 }

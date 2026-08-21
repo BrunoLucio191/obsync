@@ -17,7 +17,7 @@ import type { WebSocketChannel } from "../auth/auth.types.ts";
 import { systemPaths } from "../paths.ts";
 
 const HEARTBEAT_INTERVAL_MS = 30_000;
-const TICKET_PROTOCOL_PREFIX = "obisync-ticket.";
+const TICKET_PROTOCOL_PREFIX = "obsync-ticket.";
 
 export class WebSHocket {
   public readonly wssSystem: WebSocketServer;

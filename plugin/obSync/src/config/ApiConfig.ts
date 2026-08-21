@@ -1,4 +1,4 @@
-const configuredUrl = new URL(__OBISYNC_API_BASE_URL__);
+const configuredUrl = new URL(__OBSYNC_API_BASE_URL__);
 const isLoopback =
 	configuredUrl.hostname === '127.0.0.1' ||
 	configuredUrl.hostname === '::1' ||
@@ -7,7 +7,7 @@ const isLoopback =
 
 if (configuredUrl.protocol !== 'https:' && !isLoopback) {
 	throw new Error(
-		'OBISYNC_API_BASE_URL precisa usar HTTPS fora do ambiente local.',
+		'OBSYNC_API_BASE_URL precisa usar HTTPS fora do ambiente local.',
 	);
 }
 
@@ -17,5 +17,5 @@ export const API_BASE_URL = configuredUrl.toString().replace(/\/$/, '');
 export const WEB_SOCKET_BASE_URL = API_BASE_URL.replace(/^http/, 'ws');
 
 export function webSocketTicketProtocol(ticket: string): string {
-	return `obisync-ticket.${ticket}`;
+	return `obsync-ticket.${ticket}`;
 }

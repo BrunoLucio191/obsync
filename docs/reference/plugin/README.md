@@ -10,7 +10,7 @@ ObSync
 ├── SystemChannel ── RemoteVaultChangeService
 ├── SyncInitialVault
 ├── SyncVaultChanges
-└── ObiSyncSettingTab ── SettingsController
+└── ObSyncSettingTab ── SettingsController
 ```
 
 ## Classes and modules

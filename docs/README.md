@@ -1,4 +1,4 @@
-# ObiSync developer documentation
+# ObSync developer documentation
 
 This documentation is organized as a developer portal. Concept pages explain
 why the system behaves as it does. Reference pages describe the classes,

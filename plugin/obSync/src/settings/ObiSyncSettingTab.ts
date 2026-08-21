@@ -9,21 +9,20 @@ import { AccountSettingsSection } from './AccountSettingsSection.ts';
 import type { SettingsController } from './SettingsController.ts';
 import { UserManagementSection } from './UserManagementSection.ts';
 
-type ObiSyncSettingsPlugin = Plugin & SettingsController;
-
 export class ObiSyncSettingTab extends PluginSettingTab {
 	private readonly users: UserManagementSection;
 	private readonly account: AccountSettingsSection;
 
 	public constructor(
 		app: App,
-		private readonly plugin: ObiSyncSettingsPlugin,
+		plugin: Plugin,
+		private readonly controller: SettingsController,
 	) {
 		super(app, plugin);
 		const refresh = (): void => this.update();
-		this.users = new UserManagementSection(plugin, refresh);
+		this.users = new UserManagementSection(controller, refresh);
 		this.account = new AccountSettingsSection(
-			plugin,
+			controller,
 			this.users,
 			refresh,
 		);
@@ -35,12 +34,15 @@ export class ObiSyncSettingTab extends PluginSettingTab {
 				name: 'ObiSync',
 				searchable: false,
 				render: (setting) => {
-					const container = setting.settingEl;
-					container.empty();
-					container.addClass('obisync-settings-root');
+					const host = setting.settingEl;
+					host.empty();
+					host.addClass('obisync-settings-host');
+					const container = host.createDiv({
+						cls: 'obisync-settings-root',
+					});
 
-					const currentUser = this.plugin.config.user;
-					if (!currentUser || !this.plugin.isAuthenticated()) {
+					const currentUser = this.controller.config.user;
+					if (!currentUser || !this.controller.isAuthenticated()) {
 						this.renderDisconnectedState(container);
 					} else {
 						this.account.render(container, currentUser);
@@ -72,7 +74,8 @@ export class ObiSyncSettingTab extends PluginSettingTab {
 					.onClick(async () => {
 						button.setDisabled(true);
 						try {
-							if (await this.plugin.openLogin()) this.update();
+							if (await this.controller.openLogin())
+								this.update();
 						} finally {
 							if (button.buttonEl.isConnected) {
 								button.setDisabled(false);

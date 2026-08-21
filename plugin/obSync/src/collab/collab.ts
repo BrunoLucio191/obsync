@@ -4,8 +4,6 @@ import * as Y from 'yjs';
 import { ActiveRoom } from './collab.types.ts';
 import {
 	initializeOfflinePersistence,
-	LEGACY_OFFLINE_NAMESPACE,
-	readOfflineState,
 } from './OfflinePersistence.ts';
 import { CollaborationUser } from './collab.types.ts';
 import { RemotePresence } from './collab.types.ts';
@@ -209,15 +207,6 @@ export async function setupCollabRoom(
 		namespace: getOfflineNamespace(user),
 	});
 
-	//make sure that the local changes stay private even when the user is promoted
-	const legacyState =
-		user.role === 'user'
-			? readOfflineState({
-					documentId: fileName,
-					namespace: LEGACY_OFFLINE_NAMESPACE,
-				})
-			: null;
-
 	const provider = new WebsocketProvider(
 		WEB_SOCKET_BASE_URL,
 		roomName,
@@ -303,9 +292,6 @@ export async function setupCollabRoom(
 
 	try {
 		await persistence.ready;
-		if (legacyState) {
-			Y.applyUpdate(ydoc, await legacyState);
-		}
 	} catch (error) {
 		if (activeRoom === room) closeCollabRoom();
 		throw error;

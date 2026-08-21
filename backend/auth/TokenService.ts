@@ -16,8 +16,8 @@ import type { DBServices } from "../users/DBServices.ts";
 const ACCESS_TOKEN_LIFETIME_SECONDS = 15 * 60;
 const REFRESH_TOKEN_LIFETIME_MS = 30 * 24 * 60 * 60 * 1_000;
 const WEB_SOCKET_TICKET_LIFETIME_SECONDS = 30;
-const TOKEN_ISSUER = "obisync";
-const TOKEN_AUDIENCE = "obisync-api";
+const TOKEN_ISSUER = "obsync";
+const TOKEN_AUDIENCE = "obsync-api";
 
 type TokenServiceConstructor = {
   secret: string;
@@ -53,7 +53,7 @@ export class TokenService {
   public constructor({ secret, dbService }: TokenServiceConstructor) {
     if (!secret || Buffer.byteLength(secret, "utf8") < 32) {
       throw new Error(
-        "OBISYNC_TOKEN_SECRET deve conter pelo menos 32 bytes aleatórios.",
+        "OBSYNC_TOKEN_SECRET deve conter pelo menos 32 bytes aleatórios.",
       );
     }
 

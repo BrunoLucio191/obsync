@@ -1,12 +1,10 @@
 import { IndexeddbPersistence } from 'y-indexeddb';
 import * as Y from 'yjs';
 
-export const LEGACY_OFFLINE_NAMESPACE = 'your-mon';
-
 export type OfflinePersistenceOptions = {
 	documentId: string;
 	ydoc: Y.Doc;
-	namespace?: string;
+	namespace: string;
 };
 
 export type OfflinePersistenceHandle = {
@@ -15,11 +13,6 @@ export type OfflinePersistenceHandle = {
 	readonly ready: Promise<void>;
 	destroy(): Promise<void>;
 	clear(): Promise<void>;
-};
-
-export type OfflineStateOptions = {
-	documentId: string;
-	namespace?: string;
 };
 
 const activePersistence = new WeakMap<Y.Doc, OfflinePersistenceHandle>();
@@ -41,7 +34,7 @@ function buildDatabaseName(documentId: string, namespace: string): string {
 export function initializeOfflinePersistence(
 	options: OfflinePersistenceOptions,
 ): OfflinePersistenceHandle {
-	const { documentId, ydoc, namespace = LEGACY_OFFLINE_NAMESPACE } = options;
+	const { documentId, ydoc, namespace } = options;
 
 	if (typeof indexedDB === 'undefined') {
 		throw new Error('IndexedDB não está disponível neste ambiente.');
@@ -80,22 +73,4 @@ export function initializeOfflinePersistence(
 	});
 
 	return handle;
-}
-
-export async function readOfflineState(
-	options: OfflineStateOptions,
-): Promise<Uint8Array> {
-	const ydoc = new Y.Doc();
-	const persistence = initializeOfflinePersistence({
-		...options,
-		ydoc,
-	});
-
-	try {
-		await persistence.ready;
-		return Y.encodeStateAsUpdate(ydoc);
-	} finally {
-		await persistence.destroy();
-		ydoc.destroy();
-	}
 }

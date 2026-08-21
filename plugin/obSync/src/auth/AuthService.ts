@@ -1,6 +1,6 @@
 import { App, Notice, requestUrl } from 'obsidian';
 import { API_BASE_URL } from '../config/ApiConfig.ts';
-import type { ObiSyncConfig } from '../config/ObiSyncConfig.ts';
+import type { ObSyncConfig } from '../config/ObSyncConfig.ts';
 import { LoginModal } from './LoginModal.ts';
 import type {
 	AuthenticatedUser,
@@ -9,13 +9,13 @@ import type {
 	WebSocketTicket,
 } from './auth.types.ts';
 
-const ACCESS_TOKEN_SECRET_ID = 'obisync-access-token';
-const REFRESH_TOKEN_SECRET_ID = 'obisync-refresh-token';
+const ACCESS_TOKEN_SECRET_ID = 'obsync-access-token';
+const REFRESH_TOKEN_SECRET_ID = 'obsync-refresh-token';
 const REFRESH_EARLY_MS = 60_000;
 
 type AuthServiceDependencies = {
 	app: App;
-	getConfig: () => ObiSyncConfig;
+	getConfig: () => ObSyncConfig;
 	saveConfig: () => Promise<void>;
 	onSessionChanged: (
 		previousUser: AuthenticatedUser | null,
@@ -25,7 +25,7 @@ type AuthServiceDependencies = {
 
 export class AuthService {
 	private readonly app: App;
-	private readonly getConfig: () => ObiSyncConfig;
+	private readonly getConfig: () => ObSyncConfig;
 	private readonly saveConfig: () => Promise<void>;
 	private readonly onSessionChanged: AuthServiceDependencies['onSessionChanged'];
 	private accessToken: string;
@@ -67,7 +67,7 @@ export class AuthService {
 		return {
 			'Content-Type': 'application/json',
 			Authorization: `Bearer ${this.accessToken}`,
-			'X-ObiSync-Client': this.clientId,
+			'X-ObSync-Client': this.clientId,
 		};
 	}
 
@@ -128,7 +128,7 @@ export class AuthService {
 			if (response.status !== 200) {
 				if (response.status === 401) {
 					await this.clearLocalSession();
-					new Notice('Sua sessão do obisync foi encerrada.');
+					new Notice('Sua sessão do ObSync foi encerrada.');
 				}
 				return;
 			}
@@ -137,7 +137,7 @@ export class AuthService {
 			if (payload.user) await this.updateCurrentUser(payload.user);
 		} catch (error) {
 			console.error(
-				'Não foi possível atualizar a sessão do ObiSync:',
+				'Não foi possível atualizar a sessão do ObSync:',
 				error,
 			);
 		}

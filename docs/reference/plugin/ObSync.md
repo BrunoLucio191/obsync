@@ -15,7 +15,7 @@ export default class ObSync extends Plugin
 ### `config`
 
 ```ts
-config: ObiSyncConfig
+config: ObSyncConfig
 ```
 
 Contains non-secret session metadata. Tokens are owned by `AuthService` and

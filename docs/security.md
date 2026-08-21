@@ -47,9 +47,9 @@ For a remote deployment, terminate TLS in a reverse proxy and use the following
 backend configuration:
 
 ```dotenv
-OBISYNC_HOST=127.0.0.1
-OBISYNC_REQUIRE_TLS=true
-OBISYNC_TRUST_PROXY=true
+OBSYNC_HOST=127.0.0.1
+OBSYNC_REQUIRE_TLS=true
+OBSYNC_TRUST_PROXY=true
 ```
 
 Keep port `3000` inaccessible from the public network. The reverse proxy must
@@ -58,8 +58,8 @@ forward `X-Forwarded-Proto: https`, including WebSocket upgrade requests.
 Build the plugin with the public HTTPS endpoint:
 
 ```bash
-OBISYNC_API_BASE_URL=https://sync.example.com \
-  npm run build --workspace=obSync
+OBSYNC_API_BASE_URL=https://sync.example.com \
+  npm run build --workspace=plugin/obSync
 ```
 
 The plugin refuses a non-loopback endpoint that does not use HTTPS. Its
@@ -76,7 +76,7 @@ not erase other failures made by that IP.
 
 ## Signing secret
 
-`OBISYNC_TOKEN_SECRET` must contain at least 32 random bytes. Generate one
+`OBSYNC_TOKEN_SECRET` must contain at least 32 random bytes. Generate one
 instead of writing a memorable value:
 
 ```bash

@@ -18,7 +18,7 @@ export default defineConfig(
 		languageOptions: {
 			globals: {
 				...globals.browser,
-				__OBISYNC_API_BASE_URL__: 'readonly',
+				__OBSYNC_API_BASE_URL__: 'readonly',
 			},
 			parserOptions: {
 				projectService: {
@@ -30,4 +30,14 @@ export default defineConfig(
 		},
 	},
 	...obsidianmd.configs.recommended,
+	{
+		rules: {
+			'obsidianmd/ui/sentence-case': [
+				'warn',
+				{
+					brands: ['ObSync'],
+				},
+			],
+		},
+	},
 );

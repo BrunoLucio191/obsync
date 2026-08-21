@@ -157,7 +157,7 @@ event.
 Moves the Markdown path and its persisted Yjs state, then publishes a rename
 event.
 
-The plugin sends `X-ObiSync-Client` on authenticated requests. Its value is
+The plugin sends `X-ObSync-Client` on authenticated requests. Its value is
 copied to `originClientId` so the originating client can ignore the broadcast.
 
 ## Status summary

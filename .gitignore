@@ -22,12 +22,10 @@ build/
 *.db-wal
 
 # Shared vault and user data
+/backend/data/vault/
 
 # Yjs persistent state
-#.obisync-yjs-state/
-#**/.obisync-yjs-state/
-#yjs-state/
-#**/yjs-state/
+/backend/data/yjs-state/
 
 # Logs
 *.log
@@ -55,3 +53,4 @@ temp/
 .obsidian/
 
 to-do.md
+/quiz.md

@@ -1,6 +1,6 @@
 # WebSocket API
 
-ObiSync exposes two WebSocket channels through the same HTTP server. Remote
+ObSync exposes two WebSocket channels through the same HTTP server. Remote
 deployments use WSS; loopback development may use WS.
 
 ## Authentication handshake
@@ -10,7 +10,7 @@ from `POST /auth/ws-ticket`, then includes it as a WebSocket subprotocol:
 
 ```ts
 const socket = new WebSocket(url, [
-	`obisync-ticket.${ticket}`,
+	`obsync-ticket.${ticket}`,
 ]);
 ```
 
@@ -74,7 +74,7 @@ restoration has completed.
 
 ## Close codes
 
-| Code | Meaning in ObiSync |
+| Code | Meaning in ObSync |
 | --- | --- |
 | `1008` | Policy violation, missing authorization, or client mutation on `/system` |
 | `1009` | WebSocket message exceeded the configured size |

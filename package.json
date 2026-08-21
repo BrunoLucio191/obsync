@@ -1,5 +1,5 @@
 {
-  "name": "colab-obsid",
+  "name": "obsync",
   "private": true,
   "type": "module",
   "version": "1.0.0",
@@ -10,7 +10,7 @@
   "scripts": {
     "start:backend": "npm start --workspace=backend",
     "db:setup": "npm run db:setup --workspace=backend",
-    "dev:plugin": "npm run dev --workspace=obSync"
+    "dev:plugin": "npm run dev --workspace=plugin/obSync"
   },
   "author": "Dev",
   "license": "ISC",

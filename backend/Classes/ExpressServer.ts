@@ -548,7 +548,7 @@ export class ExpressServer {
           path,
           isFolder: Boolean(isFolder),
           content: typeof content === "string" ? content : "",
-          originClientId: req.header("x-obisync-client") ?? undefined,
+          originClientId: req.header("x-obsync-client") ?? undefined,
         });
         res.sendStatus(200);
       } catch (error) {
@@ -578,7 +578,7 @@ export class ExpressServer {
           type: "delete",
           path,
           isFolder: Boolean(isFolder),
-          originClientId: req.header("x-obisync-client") ?? undefined,
+          originClientId: req.header("x-obsync-client") ?? undefined,
         });
         res.sendStatus(200);
       } catch (error) {
@@ -604,7 +604,7 @@ export class ExpressServer {
           type: "modify",
           path,
           content,
-          originClientId: req.header("x-obisync-client") ?? undefined,
+          originClientId: req.header("x-obsync-client") ?? undefined,
         });
         res.sendStatus(200);
       } catch (error) {
@@ -632,7 +632,7 @@ export class ExpressServer {
           type: "rename",
           oldPath,
           newPath,
-          originClientId: req.header("x-obisync-client") ?? undefined,
+          originClientId: req.header("x-obsync-client") ?? undefined,
         });
         res.sendStatus(200);
       } catch (error) {

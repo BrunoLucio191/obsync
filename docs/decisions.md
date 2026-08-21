@@ -71,8 +71,8 @@ A note path alone does not identify who owns an offline history. Reusing one dat
 The current naming scheme separates publishable and private histories:
 
 ```text
-your-mon:v2:global
-your-mon:v2:private:<email>
+obsync:v3:global
+obsync:v3:private:<email>
 ```
 
 ## Access control is enforced at the backend boundary

@@ -49,8 +49,8 @@ export type StoredUserRow = {
 };
 
 export type TokenPayload = {
-  iss: "obisync";
-  aud: "obisync-api";
+  iss: "obsync";
+  aud: "obsync-api";
   sub: string;
   sid: string;
   jti: string;

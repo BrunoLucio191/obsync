@@ -4,9 +4,9 @@ import { UserAdminService } from './auth/UserAdminService.ts';
 import { CollaborationController } from './collab/CollaborationController.ts';
 import {
 	DEFAULT_CONFIG,
-	type ObiSyncConfig,
-} from './config/ObiSyncConfig.ts';
-import { ObiSyncSettingTab } from './settings/ObiSyncSettingTab.ts';
+	type ObSyncConfig,
+} from './config/ObSyncConfig.ts';
+import { ObSyncSettingTab } from './settings/ObSyncSettingTab.ts';
 import { SyncInitialVault } from './sync/SyncInitialVault.ts';
 import { SystemChannel } from './sync/SystemChannel.ts';
 import { SyncVaultChanges } from './sync/SyncVaultChanges.ts';
@@ -19,7 +19,7 @@ import { PathMuteRegistry } from './vault/PathMuteRegistry.ts';
 import { RemoteVaultChangeService } from './vault/RemoteVaultChangeService.ts';
 
 export default class ObSync extends Plugin {
-	public config!: ObiSyncConfig;
+	public config!: ObSyncConfig;
 	private auth!: AuthService;
 	private userAdmin!: UserAdminService;
 	private collaboration!: CollaborationController;
@@ -28,14 +28,14 @@ export default class ObSync extends Plugin {
 	private systemChannel!: SystemChannel;
 	private initialVaultSync!: SyncInitialVault;
 	private vaultChangeSync!: SyncVaultChanges;
-	private settingTab: ObiSyncSettingTab | null = null;
+	private settingTab: ObSyncSettingTab | null = null;
 	private synchronizationStarted = false;
 
 	public async onload(): Promise<void> {
 		await this.loadConfig();
 		this.composeServices();
 
-		this.settingTab = new ObiSyncSettingTab(this.app, this);
+		this.settingTab = new ObSyncSettingTab(this.app, this, this);
 		this.addSettingTab(this.settingTab);
 		this.app.workspace.onLayoutReady(() => {
 			void this.initializeSynchronization();
@@ -81,7 +81,7 @@ export default class ObSync extends Plugin {
 		this.app.workspace.updateOptions();
 
 		if (!(await this.auth.ensureAuthenticated())) {
-			new Notice('Você saiu do obsync.');
+			new Notice('Você saiu do ObSync.');
 			return;
 		}
 
@@ -218,7 +218,7 @@ export default class ObSync extends Plugin {
 
 	private async loadConfig(): Promise<void> {
 		const storedConfig = (await this.loadData()) as
-			| (Partial<ObiSyncConfig> & { token?: unknown })
+			| (Partial<ObSyncConfig> & { token?: unknown })
 			| null;
 		const { token: legacyToken, ...safeConfig } = storedConfig ?? {};
 		this.config = Object.assign(

@@ -17,7 +17,7 @@ export class LoginModal extends Modal {
 	}
 
 	onOpen(): void {
-		this.setTitle('Entrar no obisync');
+		this.setTitle('Entrar no ObSync');
 		this.contentEl.createEl('p', {
 			text: 'Informe o e-mail de qualquer conta cadastrada no servidor.',
 		});

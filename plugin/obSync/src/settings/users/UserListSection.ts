@@ -1,4 +1,9 @@
-import { Notice, Setting, SettingGroup } from 'obsidian';
+import {
+	Notice,
+	type Setting,
+	type SettingDefinition,
+	type SettingDefinitionGroup,
+} from 'obsidian';
 import type {
 	AuthenticatedUser,
 	UserRole,
@@ -8,212 +13,157 @@ import type { UserDirectory } from './UserDirectory.ts';
 import type { UserNameEditor } from './UserNameEditor.ts';
 
 export class UserListSection {
-	private searchQuery = '';
 	private loadGeneration = 0;
+	private loading = false;
+	private loaded = false;
+	private loadError: string | null = null;
 
 	public constructor(
 		private readonly controller: SettingsController,
 		private readonly directory: UserDirectory,
 		private readonly nameEditor: UserNameEditor,
+		private readonly refresh: () => void,
 	) {}
 
-	public render(container: HTMLElement): void {
-		const group = new SettingGroup(container).setHeading(
-			'Administração de usuários',
-		);
+	public definition(): SettingDefinitionGroup {
+		const items: SettingDefinition[] = [
+			{
+				name: 'Administração de usuários',
+				desc: 'Somente administradores podem listar contas, criar usuários e alterar nomes, papéis ou status.',
+				searchable: false,
+			},
+			{
+				name: 'Contas cadastradas',
+				desc: this.listStatusDescription(),
+				searchable: false,
+				render: (setting) => {
+					setting
+						.setName('Contas cadastradas')
+						.setDesc(this.listStatusDescription());
+					if (this.loadError) {
+						setting.addButton((button) =>
+							button
+								.setButtonText('Tentar novamente')
+								.onClick(() => {
+									this.loadError = null;
+									this.ensureLoaded();
+									this.refresh();
+								}),
+						);
+					} else {
+						this.ensureLoaded();
+					}
+				},
+			},
+		];
 
-		group.addSetting((setting) => {
-			setting
-				.setName('Administração de usuários')
-				.setDesc(
-					'Somente administradores podem listar contas, criar usuários e alterar nomes, papéis ou status.',
+		if (this.loaded) {
+			const currentUser = this.controller.config.user;
+			const activeAdminCount = this.directory.activeAdminCount();
+			for (const user of this.directory.all()) {
+				items.push(
+					this.userDefinition(user, currentUser, activeAdminCount),
 				);
-		});
-		group.addSetting((setting) => {
-			setting
-				.setName('Contas cadastradas')
-				.setDesc(
-					'Nome, papel e status são enviados imediatamente ao backend. A lista mantém uma ordem fixa e mostra até nove usuários por vez.',
-				);
-		});
-		group.addSetting((setting) => {
-			setting
-				.setName('Buscar usuários')
-				.setDesc('Pesquise pelo nome de exibição ou e-mail.')
-				.addSearch((search) =>
-					search
-						.setPlaceholder('Nome ou e-mail')
-						.setValue(this.searchQuery)
-						.onChange((value) => {
-							this.searchQuery = value;
-							this.renderRows(viewport, resultCountEl, false);
-						}),
-				);
+			}
+		}
 
-			const resultCountEl = group.listEl.createDiv({
-				cls: 'obisync-settings-user-count',
-			});
-			const viewport = group.listEl.createDiv({
-				cls: 'obisync-settings-user-list',
-			});
-			void this.load(viewport, resultCountEl);
-		});
+		return {
+			type: 'group',
+			heading: 'Administração de usuários',
+			search: {
+				placeholder: 'Nome ou e-mail',
+				match: (definition, query) =>
+					this.matchesSearch(definition, query),
+			},
+			items,
+		};
 	}
 
 	public destroy(): void {
 		this.loadGeneration += 1;
+		this.loading = false;
+		this.loaded = false;
+		this.loadError = null;
 	}
 
-	private async load(
-		container: HTMLElement,
-		resultCountEl: HTMLElement,
-	): Promise<void> {
+	private ensureLoaded(): void {
+		if (this.loading || this.loaded || this.loadError) return;
+		void this.load();
+	}
+
+	private async load(): Promise<void> {
 		const generation = ++this.loadGeneration;
-		container.empty();
-		container.createEl('p', {
-			cls: 'obisync-settings-user-list-message',
-			text: 'Carregando usuários...',
-		});
-		resultCountEl.setText('');
+		this.loading = true;
+		this.loadError = null;
 
 		const result = await this.controller.listUsers();
-		if (
-			generation !== this.loadGeneration ||
-			!container.isConnected ||
-			!resultCountEl.isConnected
-		) {
-			return;
-		}
+		if (generation !== this.loadGeneration) return;
 
+		this.loading = false;
 		if (!result.ok) {
-			container.empty();
-			container.createEl('p', {
-				cls: 'obisync-settings-user-list-message',
-				text: result.error,
-			});
+			this.loadError = result.error;
+			this.refresh();
 			return;
 		}
 
 		this.directory.replaceAll(result.value);
-		this.debug('users-loaded', {
-			order: this.directory.all().map((user) => ({
-				id: user.id,
-				email: user.email,
-				active: user.active,
-				role: user.role,
-			})),
-		});
-		this.renderRows(container, resultCountEl, false);
+		this.loaded = true;
+		this.refresh();
 	}
 
-	private renderRows(
-		container: HTMLElement,
-		resultCountEl: HTMLElement,
-		preserveScroll: boolean,
-	): void {
-		if (!container.isConnected || !resultCountEl.isConnected) return;
+	private listStatusDescription(): string {
+		if (this.loadError) return this.loadError;
+		if (!this.loaded) return 'Carregando usuários...';
 
-		const previousScrollTop = preserveScroll ? container.scrollTop : 0;
-		const users = this.directory.search(this.searchQuery);
-		const hasQuery = this.searchQuery.trim().length > 0;
-
-		resultCountEl.setText(
-			hasQuery
-				? `${users.length} de ${this.directory.size} usuários encontrados`
-				: `${this.directory.size} usuários cadastrados`,
-		);
-
-		container.empty();
-		container.toggleClass('is-scroll-limited', users.length > 9);
-
-		if (users.length === 0) {
-			container.createEl('p', {
-				cls: 'obisync-settings-user-list-message',
-				text: 'Nenhum usuário corresponde à busca.',
-			});
-			container.scrollTop = 0;
-			return;
-		}
-
-		const currentUser = this.controller.config.user;
-		const activeAdminCount = this.directory.activeAdminCount();
-		for (const user of users) {
-			this.renderRow(
-				container,
-				resultCountEl,
-				user,
-				currentUser,
-				activeAdminCount,
-			);
-		}
-
-		container.scrollTop = Math.min(
-			previousScrollTop,
-			Math.max(0, container.scrollHeight - container.clientHeight),
-		);
-		this.debug('users-rendered', {
-			query: this.searchQuery,
-			visibleIds: users.map((user) => user.id),
-			scrollTop: container.scrollTop,
-		});
+		return `${this.directory.size} usuários cadastrados. Use a busca acima para filtrar por nome ou e-mail.`;
 	}
 
-	private renderRow(
-		container: HTMLElement,
-		resultCountEl: HTMLElement,
+	private userDefinition(
 		user: AuthenticatedUser,
 		currentUser: AuthenticatedUser | null,
 		activeAdminCount: number,
-	): void {
+	): SettingDefinition {
 		const isCurrent = user.id === currentUser?.id;
+		return {
+			name: `${user.email}${isCurrent ? ' (você)' : ''}`,
+			aliases: [user.email, user.name],
+			render: (setting) =>
+				this.renderUser(setting, user, isCurrent, activeAdminCount),
+		};
+	}
+
+	private renderUser(
+		setting: Setting,
+		user: AuthenticatedUser,
+		isCurrent: boolean,
+		activeAdminCount: number,
+	): void {
 		const protectsLastAdmin =
 			user.active && user.role === 'admin' && activeAdminCount === 1;
-		const setting = new Setting(container).setName(
-			`${user.email}${isCurrent ? ' (você)' : ''}`,
-		);
-		setting.settingEl.addClass('obisync-settings-user-row');
+		setting
+			.setName(`${user.email}${isCurrent ? ' (você)' : ''}`)
+			.setClass('obsync-settings-user-row');
 		const statusEl = setting.descEl.createDiv({
-			cls: 'obisync-settings-user-status',
+			cls: 'obsync-settings-user-status',
 		});
 		this.updateDescription(statusEl, user, isCurrent);
 
 		if (!isCurrent && user.role === 'user') {
-			this.addNameControl(setting, container, resultCountEl, user);
+			this.addNameControl(setting, user);
 		}
 		if (!isCurrent) {
-			this.addStatusControl(
-				setting,
-				container,
-				resultCountEl,
-				statusEl,
-				user,
-				protectsLastAdmin,
-			);
-			this.addRoleControl(
-				setting,
-				container,
-				resultCountEl,
-				user,
-				protectsLastAdmin,
-			);
-			this.addDeleteControl(
-				setting,
-				container,
-				resultCountEl,
-				user,
-				protectsLastAdmin,
-			);
+			this.addStatusControl(setting, user, protectsLastAdmin);
+			this.addRoleControl(setting, user, protectsLastAdmin);
+			this.addDeleteControl(setting, user, protectsLastAdmin);
 		}
 	}
 
 	private addNameControl(
 		setting: Setting,
-		container: HTMLElement,
-		resultCountEl: HTMLElement,
 		user: AuthenticatedUser,
 	): void {
 		const nameStatus = setting.descEl.createDiv({
-			cls: 'obisync-setting-save-status',
+			cls: 'obsync-setting-save-status',
 			text: 'Nome salvo.',
 		});
 		setting.addText((text) => {
@@ -225,7 +175,7 @@ export class UserListSection {
 						value,
 						nameStatus,
 						text.inputEl,
-						() => this.renderRows(container, resultCountEl, true),
+						this.refresh,
 					);
 				});
 		});
@@ -233,9 +183,6 @@ export class UserListSection {
 
 	private addStatusControl(
 		setting: Setting,
-		container: HTMLElement,
-		resultCountEl: HTMLElement,
-		statusEl: HTMLElement,
 		user: AuthenticatedUser,
 		protectsLastAdmin: boolean,
 	): void {
@@ -250,7 +197,6 @@ export class UserListSection {
 						user.id,
 						active,
 					);
-
 					if (!mutation.ok) {
 						toggle.setValue(previousActive);
 						toggle.setDisabled(protectsLastAdmin);
@@ -262,24 +208,13 @@ export class UserListSection {
 					new Notice(
 						active ? 'Usuário ativado.' : 'Usuário desativado.',
 					);
-
-					if (mutation.value.role === 'admin') {
-						this.renderRows(container, resultCountEl, true);
-						return;
-					}
-
-					user.active = mutation.value.active;
-					toggle.setValue(mutation.value.active);
-					toggle.setDisabled(false);
-					this.updateDescription(statusEl, user, false);
+					this.refresh();
 				});
 		});
 	}
 
 	private addRoleControl(
 		setting: Setting,
-		container: HTMLElement,
-		resultCountEl: HTMLElement,
 		user: AuthenticatedUser,
 		protectsLastAdmin: boolean,
 	): void {
@@ -296,7 +231,6 @@ export class UserListSection {
 						user.id,
 						value as UserRole,
 					);
-
 					if (!mutation.ok) {
 						dropdown.setValue(previousRole);
 						dropdown.setDisabled(protectsLastAdmin);
@@ -308,15 +242,13 @@ export class UserListSection {
 					new Notice(
 						'Papel atualizado. As permissões já foram aplicadas.',
 					);
-					this.renderRows(container, resultCountEl, true);
+					this.refresh();
 				});
 		});
 	}
 
 	private addDeleteControl(
 		setting: Setting,
-		container: HTMLElement,
-		resultCountEl: HTMLElement,
 		user: AuthenticatedUser,
 		protectsLastAdmin: boolean,
 	): void {
@@ -336,7 +268,7 @@ export class UserListSection {
 
 					this.directory.remove(user.id);
 					new Notice(`Usuário ${user.email} excluído.`);
-					this.renderRows(container, resultCountEl, true);
+					this.refresh();
 				}),
 		);
 	}
@@ -354,13 +286,19 @@ export class UserListSection {
 		);
 	}
 
-	private debug(event: string, data: Record<string, unknown>): void {
-		if (window.localStorage.getItem('obisync:settings-debug') !== '1') {
-			return;
-		}
-		console.debug(`[ObiSync settings] ${event}`, {
-			at: new Date().toISOString(),
-			...data,
-		});
+	private matchesSearch(
+		definition: SettingDefinition,
+		query: string,
+	): boolean {
+		const normalizedQuery = query.normalize('NFKC').trim().toLowerCase();
+		if (!normalizedQuery) return true;
+
+		const description =
+			typeof definition.desc === 'string' ? definition.desc : '';
+		return [definition.name, description, ...(definition.aliases ?? [])]
+			.join(' ')
+			.normalize('NFKC')
+			.toLowerCase()
+			.includes(normalizedQuery);
 	}
 }

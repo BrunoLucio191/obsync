@@ -7,9 +7,9 @@ intentionally revokes them. Sign in again from the plugin settings.
 
 ## Backend reports that HTTPS is required
 
-For local development, keep `OBISYNC_HOST=127.0.0.1` and
-`OBISYNC_REQUIRE_TLS=false`. For a remote installation, configure a TLS reverse
-proxy, enable `OBISYNC_REQUIRE_TLS` and `OBISYNC_TRUST_PROXY`, and make sure the
+For local development, keep `OBSYNC_HOST=127.0.0.1` and
+`OBSYNC_REQUIRE_TLS=false`. For a remote installation, configure a TLS reverse
+proxy, enable `OBSYNC_REQUIRE_TLS` and `OBSYNC_TRUST_PROXY`, and make sure the
 proxy sends `X-Forwarded-Proto: https` for both HTTP and WebSocket requests.
 
 ## User database is missing
@@ -27,7 +27,7 @@ The command does not overwrite an existing database. If an existing database is 
 Build the plugin from the repository root:
 
 ```bash
-npm run build --workspace=obSync
+npm run build --workspace=plugin/obSync
 ```
 
 Confirm that the resulting `plugin/obSync/main.js` is the file installed in the target vault. Obsidian must reload the plugin after the bundle is replaced.

@@ -17,7 +17,7 @@ export class UserAdminService {
 
 	public async listUsers(): Promise<UserActionResult<AuthenticatedUser[]>> {
 		if (!this.hasSession() || !(await this.auth.prepareAuthenticatedRequest())) {
-			return { ok: false, error: 'Entre no ObiSync para ver os usuários.' };
+			return { ok: false, error: 'Entre no ObSync para ver os usuários.' };
 		}
 
 		try {
@@ -62,7 +62,7 @@ export class UserAdminService {
 		role: UserRole;
 	}): Promise<UserActionResult<AuthenticatedUser>> {
 		if (!this.hasSession() || !(await this.auth.prepareAuthenticatedRequest())) {
-			return { ok: false, error: 'Entre no ObiSync para criar usuários.' };
+			return { ok: false, error: 'Entre no ObSync para criar usuários.' };
 		}
 
 		try {

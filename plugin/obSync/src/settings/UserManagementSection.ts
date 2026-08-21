@@ -1,4 +1,4 @@
-import type { SettingGroup } from 'obsidian';
+import type { Setting, SettingDefinitionItem } from 'obsidian';
 import type { AuthenticatedUser } from '../auth/auth.types.ts';
 import type { SettingsController } from './SettingsController.ts';
 import { CreateUserSection } from './users/CreateUserSection.ts';
@@ -22,6 +22,7 @@ export class UserManagementSection {
 			controller,
 			this.directory,
 			this.nameEditor,
+			refresh,
 		);
 		this.createForm = new CreateUserSection(
 			controller,
@@ -30,18 +31,20 @@ export class UserManagementSection {
 		);
 	}
 
-	public render(container: HTMLElement): void {
-		this.list.render(container);
-		this.createForm.render(container);
+	public definitions(): SettingDefinitionItem[] {
+		return [this.list.definition(), this.createForm.definition()];
 	}
 
 	public renderEditableName(
-		group: SettingGroup,
+		setting: Setting,
 		user: AuthenticatedUser,
-		label: string,
-		description: string,
 	): void {
-		this.nameEditor.render(group, user, label, description);
+		this.nameEditor.render(
+			setting,
+			user,
+			'Seu nome de exibição',
+			'Como administrador, você pode alterar seu próprio nome. A mudança é enviada automaticamente.',
+		);
 	}
 
 	public destroy(): void {
