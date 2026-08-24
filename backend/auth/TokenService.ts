@@ -1,8 +1,4 @@
-import {
-  createHmac,
-  randomBytes,
-  timingSafeEqual,
-} from "node:crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import type {
   AuthenticatedUser,
   AuthSession,
@@ -63,6 +59,7 @@ export class TokenService {
 
   public sessionFor(user: AuthenticatedUser): AuthSession {
     this.removeExpiredState();
+
     const sessionId = this.randomValue();
     const refreshToken = this.createRefreshToken(sessionId);
     this.sessions.set(sessionId, {
@@ -141,8 +138,7 @@ export class TokenService {
     this.webSocketTickets.set(this.hashOpaqueToken(ticket), {
       ...authorization,
       channel,
-      ticketExpiresAt:
-        Date.now() + WEB_SOCKET_TICKET_LIFETIME_SECONDS * 1_000,
+      ticketExpiresAt: Date.now() + WEB_SOCKET_TICKET_LIFETIME_SECONDS * 1_000,
     });
 
     return { ticket, expiresIn: WEB_SOCKET_TICKET_LIFETIME_SECONDS };
@@ -200,10 +196,7 @@ export class TokenService {
     };
   }
 
-  private issueAccessToken(
-    user: AuthenticatedUser,
-    sessionId: string,
-  ): string {
+  private issueAccessToken(user: AuthenticatedUser, sessionId: string): string {
     const now = Math.floor(Date.now() / 1_000);
     const header = encode({ alg: "HS256", typ: "JWT" });
     const payload = encode({
@@ -224,12 +217,17 @@ export class TokenService {
     token: string | null | undefined,
   ): Promise<AccessAuthorization | null> {
     if (!token) return null;
+
     const parts = token.split(".");
+
     if (parts.length !== 3) return null;
+
     const [header, payload, signature] = parts;
+
     if (!header || !payload || !signature) return null;
 
     const signed = `${header}.${payload}`;
+
     if (!this.safeEqual(signature, this.sign(signed))) return null;
 
     try {
@@ -257,6 +255,7 @@ export class TokenService {
       }
 
       const session = this.sessions.get(value.sid);
+
       if (
         !session ||
         session.userId !== userId ||
@@ -266,6 +265,7 @@ export class TokenService {
       }
 
       const user = await this.dbService.getUserById(userId);
+
       if (!user) {
         this.revokeSessionId(value.sid);
         return null;
@@ -294,6 +294,7 @@ export class TokenService {
 
   private removeExpiredState(): void {
     const now = Date.now();
+
     for (const [sessionId, session] of this.sessions) {
       if (session.refreshExpiresAt <= now) this.revokeSessionId(sessionId);
     }

@@ -35,8 +35,6 @@ function mutationErrorStatus(result: UserMutationResult): number {
       return 404;
 
     case "last_admin":
-    case "self_deactivate":
-    case "self_delete":
       return 409;
 
     case "invalid_role":
@@ -56,12 +54,6 @@ function mutationErrorMessage(result: UserMutationResult): string {
 
     case "last_admin":
       return "A operação deixaria a plataforma sem um administrador ativo.";
-
-    case "self_deactivate":
-      return "Você não pode desativar a própria conta. Peça a outro administrador.";
-
-    case "self_delete":
-      return "Você não pode excluir a própria conta pela sessão atual.";
 
     case "invalid_role":
       return "Papel de usuário inválido.";
@@ -124,19 +116,18 @@ export class ExpressServer {
   }
 
   public initializeMiddleware(): void {
-    this.app.use((req, res, next) => {
+    this.app.use((req: Request, res: Response, next: NextFunction) => {
       if (this.requireTls && !req.secure) {
-        res
-          .status(426)
-          .json({ error: "Esta instalação exige conexão HTTPS." });
+        res.status(426).json({ error: "Esta instalação exige conexão HTTPS." });
         return;
       }
       next();
     });
+
     this.app.use(express.json({ limit: "16mb" }));
+
     this.app.use("/auth", (_req, res, next) => {
       res.setHeader("Cache-Control", "no-store");
-      res.setHeader("Pragma", "no-cache");
       next();
     });
   }
@@ -147,7 +138,7 @@ export class ExpressServer {
       res: Response,
       next: NextFunction,
     ): Promise<void> => {
-      const token = req.header("authorization")?.replace(/^Bearer\s+/i, "");
+      const token = req.header("Authorization")?.replace(/^Bearer\s+/i, "");
 
       const authenticatedUser = await this.token.verifyToken(token);
 
@@ -179,7 +170,7 @@ export class ExpressServer {
       next();
     };
 
-    this.app.get("/", (_req: Request, res: Response) => {
+    this.app.get("/serverHealth", (_req: Request, res: Response) => {
       res.json({ status: "ok", service: "obsync" });
     });
 
@@ -188,11 +179,16 @@ export class ExpressServer {
       async (req: Request, res: Response): Promise<void> => {
         const { email, password } = req.body ?? {};
 
+        if (!email.includes("@")) {
+          res.status(400).json({ error: "E-mail não é válido" });
+        }
+
         if (typeof email !== "string" || typeof password !== "string") {
           res.status(400).json({ error: "E-mail e senha são obrigatórios." });
 
           return;
         }
+
         if (email.length > 254 || password.length > 128) {
           res.status(400).json({ error: "Credenciais inválidas." });
           return;
@@ -201,13 +197,11 @@ export class ExpressServer {
         const { accountKey, ipKey } = this.loginRateLimitKeys(req, email);
         const accountLimit = this.accountLoginRateLimiter.check(accountKey);
         const ipLimit = this.ipLoginRateLimiter.check(ipKey);
+
         if (!accountLimit.allowed || !ipLimit.allowed) {
           res.setHeader(
             "Retry-After",
-            Math.max(
-              accountLimit.retryAfterSeconds,
-              ipLimit.retryAfterSeconds,
-            ),
+            Math.max(accountLimit.retryAfterSeconds, ipLimit.retryAfterSeconds),
           );
           res.status(429).json({
             error: "Muitas tentativas de login. Tente novamente mais tarde.",
