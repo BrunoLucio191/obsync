@@ -45,6 +45,7 @@ export class TokenService {
     this.removeExpiredState();
     const sessionId = this.randomValue();
     const refreshToken = this.createRefreshToken(sessionId);
+
     this.sessions.set(sessionId, {
       userId: user.id,
       refreshTokenHash: this.hashOpaqueToken(refreshToken),

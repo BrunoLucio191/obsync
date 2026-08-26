@@ -43,6 +43,7 @@ export class DBServices {
       .get() as { count: number };
     return Number(row.count);
   }
+
   public runImmediateTransaction<T>(operation: () => T): T {
     this.userDB.exec("BEGIN IMMEDIATE");
     try {

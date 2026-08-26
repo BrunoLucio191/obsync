@@ -436,12 +436,7 @@ export class ExpressServer {
           return;
         }
 
-        const actor = this.currentUser(res);
-        const result = await this.dbService.updateUserStatus(
-          actor.id,
-          userId,
-          active,
-        );
+        const result = await this.dbService.updateUserStatus(userId, active);
         if (!result.ok) {
           res.status(mutationErrorStatus(result)).json({
             error: mutationErrorMessage(result),
@@ -463,10 +458,7 @@ export class ExpressServer {
           return;
         }
 
-        const result = await this.dbService.deleteUser(
-          this.currentUser(res).id,
-          userId,
-        );
+        const result = await this.dbService.deleteUser(userId);
         if (!result.ok) {
           res.status(mutationErrorStatus(result)).json({
             error: mutationErrorMessage(result),
