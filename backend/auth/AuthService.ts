@@ -8,11 +8,15 @@ import type { TokenService } from "./TokenService.ts";
 export class AuthService {
   private readonly dbService: DBServices;
   private readonly userDB: UserDB;
-  private readonly token: TokenService;
-  constructor(userdb: UserDB, dbservice: DBServices, token: TokenService) {
-    this.dbService = dbservice;
-    this.userDB = userdb;
-    this.token = token;
+  private readonly tokenService: TokenService;
+  constructor(
+    userDB: UserDB,
+    dbService: DBServices,
+    tokenService: TokenService,
+  ) {
+    this.dbService = dbService;
+    this.userDB = userDB;
+    this.tokenService = tokenService;
   }
 
   public async login(
@@ -29,6 +33,6 @@ export class AuthService {
       return null;
     }
 
-    return this.token.sessionFor(this.dbService.rowToUser(row));
+    return this.tokenService.sessionFor(this.dbService.rowToUser(row));
   }
 }
