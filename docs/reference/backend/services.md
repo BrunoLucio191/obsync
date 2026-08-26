@@ -24,6 +24,7 @@ new DBServices(userDB: UserDB)
 | `updateUserRole(id, role)` | `UserMutationResult` | Prevents demotion of the last active admin |
 | `updateUserStatus(id, active)` | `UserMutationResult` | Prevents deactivating the last active admin |
 | `updateUserPassword(id, currentPassword, newPassword)` | `UserMutationResult` | Verifies the current password before hashing and storing the new one |
+| `adminSetUserPassword(id, newPassword)` | `UserMutationResult` | Sets a new password without the current one; route-level checks restrict the target to `user`-role accounts |
 | `deleteUser(id)` | `UserMutationResult` | Prevents deleting the last active admin |
 
 ## ExpressServer

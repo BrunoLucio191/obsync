@@ -141,6 +141,7 @@ new UserAdminService(auth: AuthService)
 | `updateUserRole(id, role)` | `PATCH /api/users/:id/role` | updated user |
 | `updateUserStatus(id, active)` | `PATCH /api/users/:id/status` | updated user |
 | `updateUserName(id, name)` | `PATCH /api/users/:id/name` | updated user |
+| `resetUserPassword(id, newPassword)` | `PATCH /api/users/:id/password` | updated user |
 | `deleteUser(id)` | `DELETE /api/users/:id` | deleted user snapshot |
 
 Every method resolves to `UserActionResult<T>` instead of throwing expected API

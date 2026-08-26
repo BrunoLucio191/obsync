@@ -84,8 +84,14 @@ Any account can change its own password from Obsidian, under **Settings →
 ObSync → Conta → Trocar senha**, or by calling
 [`POST /auth/change-password`](reference/backend/http.md#post-authchange-password)
 directly. The current password must be supplied and is verified before the
-change is applied; there is no admin-triggered reset for another account's
-password yet. Change the temporary seed password the first time you sign in.
+change is applied. Change the temporary seed password the first time you sign
+in.
+
+An admin can also reset a `user`-role account's password directly from the
+user administration list (a password field next to each user), without
+knowing the current one. This does not apply to admin accounts: an admin
+resetting their own password still goes through the self-service flow above,
+which requires the current password.
 
 ## Signing secret
 

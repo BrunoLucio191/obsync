@@ -110,6 +110,7 @@ All routes in this section require an active admin.
 | `GET /api/users` | none | `200 { users: AuthenticatedUser[] }` |
 | `POST /api/users` | `name`, `email`, `password`, optional `role` | `201 { user }` |
 | `PATCH /api/users/:id/name` | `{ name }` | `200 { user }` |
+| `PATCH /api/users/:id/password` | `{ newPassword }` | `200 { user }` |
 | `PATCH /api/users/:id/role` | `{ role }` | `200 { user }` |
 | `PATCH /api/users/:id/status` | `{ active }` | `200 { user }` |
 | `DELETE /api/users/:id` | none | `200 { user }` |
@@ -117,7 +118,10 @@ All routes in this section require an active admin.
 Names contain 2–64 characters. Passwords contain 6–128 characters. The backend
 prevents operations that would leave no active admin; an admin may otherwise
 deactivate or delete their own account. An admin may change only their own
-name when the target is another admin.
+name when the target is another admin. `PATCH /api/users/:id/password` only
+accepts a `user`-role target — an admin resets their own password through
+[`POST /auth/change-password`](#post-authchange-password) instead, which
+requires the current password.
 
 ## Initial vault download
 
