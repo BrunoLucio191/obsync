@@ -234,7 +234,7 @@ export class TokenService {
         typeof payloadValue.exp !== "number" ||
         !Number.isInteger(userId) ||
         userId <= 0 ||
-        payloadValue.nbf >= now ||
+        payloadValue.nbf > now ||
         payloadValue.exp <= now
       ) {
         return null;
