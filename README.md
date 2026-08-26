@@ -167,6 +167,31 @@ terminal.
   proxy in front of it and point the field at that proxy's HTTPS URL. See
   [Security: transport rules](docs/security.md#transport-rules).
 
+### Installing from the Obsidian Community Plugins directory
+
+Steps 1–5 above are only for the person who builds and runs the backend.
+Everyone else installs ObSync from **Settings → Community plugins → Browse**
+like any other plugin — Obsidian downloads the release's `main.js`,
+`manifest.json`, and `styles.css` for them automatically. They start at
+[step 6](#6-connect-and-sign-in): they still need the backend's URL and an
+account, both provided by whoever is running that backend.
+
+### Testing across devices on your LAN, without hosting it publicly
+
+The backend refuses plain HTTP on any host other than loopback
+(`127.0.0.1`/`localhost`) — binding it to your machine's LAN IP (e.g.
+`192.168.1.20`) to reach it from your phone still requires
+`OBSYNC_REQUIRE_TLS=true`, which in turn requires a TLS-terminating reverse
+proxy (`OBSYNC_TRUST_PROXY=true`). There's no "just open the firewall" mode.
+
+The lightest way to satisfy that on your own network: run a local reverse
+proxy with automatic self-signed HTTPS (e.g. [Caddy](https://caddyserver.com)'s
+`caddy reverse-proxy --from :8443 --to 127.0.0.1:3000`) on the same machine as
+the backend — the backend itself stays on `127.0.0.1`, only the proxy binds
+to your LAN IP. Open your firewall for the proxy's port (`8443` above), not
+the backend's. Each other device trusts the proxy's local certificate once,
+then points the plugin's backend URL field at `https://<your-lan-ip>:8443`.
+
 ## Development
 
 Once you're set up, iterate with watch mode instead of rebuilding by hand.
