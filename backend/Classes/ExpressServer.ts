@@ -36,6 +36,9 @@ function mutationErrorStatus(result: UserMutationResult): number {
 
     case "name_exists":
       return 409;
+
+    case "invalid_current_password":
+      return 401;
   }
 }
 
@@ -54,6 +57,9 @@ function mutationErrorMessage(result: UserMutationResult): string {
 
     case "name_exists":
       return "Já existe um usuário com esse nome.";
+
+    case "invalid_current_password":
+      return "Senha atual incorreta.";
   }
 }
 
@@ -85,6 +91,9 @@ export class ExpressServer {
   });
   private readonly ipLoginRateLimiter = new LoginRateLimiter({
     maxFailedAttempts: 25,
+  });
+  private readonly passwordChangeRateLimiter = new LoginRateLimiter({
+    maxFailedAttempts: 5,
   });
 
   constructor({
@@ -288,6 +297,55 @@ export class ExpressServer {
         }
 
         res.json(ticket);
+      },
+    );
+
+    this.app.post(
+      "/auth/change-password",
+      requireAuth,
+      async (req: Request, res: Response): Promise<void> => {
+        const { currentPassword, newPassword } = req.body ?? {};
+        if (
+          typeof currentPassword !== "string" ||
+          typeof newPassword !== "string" ||
+          newPassword.length < 6 ||
+          newPassword.length > 128
+        ) {
+          res.status(400).json({
+            error: "A nova senha precisa ter entre 6 e 128 caracteres.",
+          });
+          return;
+        }
+
+        const actor = this.currentUser(res);
+        const rateLimitKey = String(actor.id);
+        const limit = this.passwordChangeRateLimiter.check(rateLimitKey);
+        if (!limit.allowed) {
+          res.setHeader("Retry-After", limit.retryAfterSeconds);
+          res.status(429).json({
+            error: "Muitas tentativas. Tente novamente mais tarde.",
+          });
+          return;
+        }
+
+        const result = await this.dbService.updateUserPassword(
+          actor.id,
+          currentPassword,
+          newPassword,
+        );
+
+        if (!result.ok) {
+          if (result.reason === "invalid_current_password") {
+            this.passwordChangeRateLimiter.recordFailure(rateLimitKey);
+          }
+          res.status(mutationErrorStatus(result)).json({
+            error: mutationErrorMessage(result),
+          });
+          return;
+        }
+
+        this.passwordChangeRateLimiter.reset(rateLimitKey);
+        res.json({ user: result.user });
       },
     );
 

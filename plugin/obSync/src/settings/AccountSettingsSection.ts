@@ -1,9 +1,16 @@
-import type { SettingDefinition, SettingDefinitionGroup } from 'obsidian';
+import {
+	Notice,
+	type SettingDefinition,
+	type SettingDefinitionGroup,
+} from 'obsidian';
 import type { AuthenticatedUser } from '../auth/auth.types.ts';
 import type { SettingsController } from './SettingsController.ts';
 import type { UserManagementSection } from './UserManagementSection.ts';
 
 export class AccountSettingsSection {
+	private currentPassword = '';
+	private newPassword = '';
+
 	public constructor(
 		private readonly controller: SettingsController,
 		private readonly users: UserManagementSection,
@@ -38,6 +45,57 @@ export class AccountSettingsSection {
 				desc: 'Suas edições de texto ficam somente neste dispositivo. Você recebe mudanças globais, mas não pode publicá-las no vault compartilhado.',
 			});
 		}
+
+		items.push({
+			name: 'Trocar senha',
+			desc: 'Informe a senha atual e a nova senha (6 a 128 caracteres).',
+			render: (setting) => {
+				setting.addText((text) => {
+					text.inputEl.type = 'password';
+					text
+						.setPlaceholder('Senha atual')
+						.setValue(this.currentPassword)
+						.onChange((value) => (this.currentPassword = value));
+				});
+				setting.addText((text) => {
+					text.inputEl.type = 'password';
+					text
+						.setPlaceholder('Nova senha')
+						.setValue(this.newPassword)
+						.onChange((value) => (this.newPassword = value));
+				});
+				setting.addButton((button) =>
+					button.setButtonText('Salvar nova senha').onClick(async () => {
+						if (
+							this.newPassword.length < 6 ||
+							this.newPassword.length > 128
+						) {
+							new Notice(
+								'A nova senha precisa ter entre 6 e 128 caracteres.',
+							);
+							return;
+						}
+
+						button.setDisabled(true);
+						const result = await this.controller.changePassword(
+							this.currentPassword,
+							this.newPassword,
+						);
+						button.setDisabled(false);
+
+						if (!result.ok) {
+							new Notice(result.error);
+							return;
+						}
+
+						this.currentPassword = '';
+						this.newPassword = '';
+						new Notice('Senha atualizada.');
+						this.refresh();
+					}),
+				);
+			},
+		});
 
 		items.push({
 			name: 'Sessão',

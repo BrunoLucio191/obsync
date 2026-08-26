@@ -1,4 +1,4 @@
-import { hashPassword } from "../auth/PasswordUtil.ts";
+import { hashPassword, passwordMatches } from "../auth/PasswordUtil.ts";
 import type {
   AuthenticatedUser,
   CreateUserResult,
@@ -222,6 +222,36 @@ export class DBServices {
 
     if (result.ok) this.event.emitAuthorizationChanged(userId);
     return result;
+  }
+
+  public async updateUserPassword(
+    userId: number,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<UserMutationResult> {
+    const row = this.userDB
+      .prepare(
+        "SELECT id, email, name, password_hash, role, active FROM users WHERE id = ?",
+      )
+      .get(userId) as StoredUserRow | undefined;
+    if (!row) return { ok: false, reason: "not_found" };
+
+    if (!(await passwordMatches(currentPassword, row.password_hash))) {
+      return { ok: false, reason: "invalid_current_password" };
+    }
+
+    const passwordHash = await hashPassword(newPassword);
+
+    return this.runImmediateTransaction<UserMutationResult>(() => {
+      const current = this.getUserRow(userId);
+      if (!current) return { ok: false, reason: "not_found" };
+
+      this.userDB
+        .prepare("UPDATE users SET password_hash = ? WHERE id = ?")
+        .run(passwordHash, userId);
+
+      return { ok: true, user: this.rowToUser(current) };
+    });
   }
 
   public async deleteUser(userId: number): Promise<UserMutationResult> {

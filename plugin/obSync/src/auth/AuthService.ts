@@ -5,6 +5,7 @@ import { LoginModal } from './LoginModal.ts';
 import type {
 	AuthenticatedUser,
 	AuthSession,
+	UserActionResult,
 	WebSocketChannel,
 	WebSocketTicket,
 } from './auth.types.ts';
@@ -103,6 +104,45 @@ export class AuthService {
 		return typeof payload.ticket === 'string' && payload.ticket
 			? payload.ticket
 			: null;
+	}
+
+	public async changePassword(
+		currentPassword: string,
+		newPassword: string,
+	): Promise<UserActionResult<null>> {
+		if (!(await this.ensureFreshAccessToken())) {
+			return { ok: false, error: 'Sua sessão expirou. Entre novamente.' };
+		}
+
+		try {
+			let response = await this.requestChangePassword(
+				currentPassword,
+				newPassword,
+			);
+			if (response.status === 401 && (await this.refreshAccessToken())) {
+				response = await this.requestChangePassword(
+					currentPassword,
+					newPassword,
+				);
+			}
+
+			if (response.status === 200) return { ok: true, value: null };
+
+			const payload = response.json as { error?: unknown };
+			const error =
+				typeof payload?.error === 'string' && payload.error.trim()
+					? payload.error
+					: 'Não foi possível trocar a senha.';
+			return { ok: false, error };
+		} catch (error) {
+			return {
+				ok: false,
+				error:
+					error instanceof Error && error.message
+						? error.message
+						: 'Não foi possível trocar a senha.',
+			};
+		}
 	}
 
 	public scheduleSessionRefresh(): void {
@@ -345,6 +385,16 @@ export class AuthService {
 		return requestUrl({
 			url: `${API_BASE_URL}/auth/me`,
 			headers: this.headers(),
+			throw: false,
+		});
+	}
+
+	private requestChangePassword(currentPassword: string, newPassword: string) {
+		return requestUrl({
+			url: `${API_BASE_URL}/auth/change-password`,
+			method: 'POST',
+			headers: this.headers(),
+			body: JSON.stringify({ currentPassword, newPassword }),
 			throw: false,
 		});
 	}

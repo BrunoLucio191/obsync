@@ -30,7 +30,12 @@ export type UserMutationResult =
   | { ok: true; user: AuthenticatedUser }
   | {
       ok: false;
-      reason: "not_found" | "last_admin" | "invalid_role" | "name_exists";
+      reason:
+        | "not_found"
+        | "last_admin"
+        | "invalid_role"
+        | "name_exists"
+        | "invalid_current_password";
     };
 
 export type StoredUserRow = {
