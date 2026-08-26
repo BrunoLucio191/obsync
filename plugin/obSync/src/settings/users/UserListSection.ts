@@ -18,6 +18,7 @@ export class UserListSection {
 	private loading = false;
 	private loaded = false;
 	private loadError: string | null = null;
+	private searchQuery = '';
 
 	public constructor(
 		private readonly controller: SettingsController,
@@ -31,6 +32,27 @@ export class UserListSection {
 			type: 'group',
 			heading: 'Administração de usuários',
 			items: [
+				{
+					name: 'Buscar contas',
+					desc: '',
+					searchable: false,
+					// Owns its own text input instead of the group-level `search`
+					// option, so it stays in this always-visible group and never
+					// scrolls away with the list below (see obsync-user-search-setting
+					// in styles.css).
+					render: (setting) => {
+						setting.setClass('obsync-user-search-setting');
+						setting.addSearch((search) => {
+							search
+								.setPlaceholder('Nome ou e-mail')
+								.setValue(this.searchQuery)
+								.onChange((value) => {
+									this.searchQuery = value;
+									this.refresh();
+								});
+						});
+					},
+				},
 				{
 					name: 'Administração de usuários',
 					desc: 'Somente administradores podem listar contas, criar usuários e alterar nomes, senhas, papéis ou status.',
@@ -67,23 +89,23 @@ export class UserListSection {
 			const currentUser = this.controller.config.user;
 			const activeAdminCount = this.directory.activeAdminCount();
 			for (const user of this.directory.all()) {
-				userItems.push(
-					this.userDefinition(user, currentUser, activeAdminCount),
+				const definition = this.userDefinition(
+					user,
+					currentUser,
+					activeAdminCount,
 				);
+				if (this.matchesSearch(definition, this.searchQuery)) {
+					userItems.push(definition);
+				}
 			}
 		}
 
-		// Separate group so the search box and rows can scroll on their own,
-		// without dragging the always-visible info group above along with them.
+		// Separate group so the rows can scroll on their own, without dragging
+		// the always-visible info group (and its search box) along with them.
 		const listGroup: SettingDefinitionGroup = {
 			type: 'group',
 			cls: 'obsync-user-list-scroll',
 			visible: () => this.loaded,
-			search: {
-				placeholder: 'Nome ou e-mail',
-				match: (definition, query) =>
-					this.matchesSearch(definition, query),
-			},
 			items: userItems,
 		};
 

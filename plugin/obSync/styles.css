@@ -7,7 +7,7 @@ If your plugin does not need CSS, delete this file.
 
 */
 
-/* Mantém o nome colorido do colaborador visível, como no Google Docs. */
+/* Keeps the collaborator's colored name visible, like in Google Docs. */
 .cm-ySelectionInfo {
 	opacity: 1 !important;
 	border-radius: 3px;
@@ -16,7 +16,7 @@ If your plugin does not need CSS, delete this file.
 	padding: 1px 4px !important;
 }
 
-/* Permite que os controles de uma conta se reorganizem em telas estreitas. */
+/* Lets one account's controls wrap onto multiple lines on narrow screens. */
 .obsync-settings-user-row .setting-item-control {
 	align-items: center;
 	column-gap: var(--size-4-3);
@@ -39,10 +39,12 @@ If your plugin does not need CSS, delete this file.
 }
 
 /*
- * Limita a lista de contas a ~9 linhas visíveis, com scroll para o resto.
- * A altura de cada linha varia (algumas têm só um toggle, outras têm nome,
- * senha, papel e status juntos), então --obsync-user-row-height é uma média
- * aproximada: ajuste esse valor se 9 linhas não couberem exatamente.
+ * Caps the account list to ~9 visible rows, scrolling for the rest. Row
+ * height varies (some rows are a single toggle, others carry a name, a
+ * password field, a role dropdown, and a status toggle together), so
+ * --obsync-user-row-height is an approximation: adjust it if 9 rows don't
+ * fit exactly. The search box lives in the sibling info group above this
+ * one (see obsync-user-search-setting), so it never scrolls away with it.
  */
 .obsync-user-list-scroll {
 	--obsync-user-row-height: 60px;
@@ -50,10 +52,23 @@ If your plugin does not need CSS, delete this file.
 	overflow-y: auto;
 }
 
-/* Mantém a busca visível durante o scroll, caso ela fique dentro da área rolável. */
-.obsync-user-list-scroll .search-input-container {
-	position: sticky;
-	top: 0;
-	z-index: 1;
-	background: var(--background-primary);
+/*
+ * The user-search Setting only hosts a search box: hide the name/description
+ * column and let the input take the full row width, matching the framework's
+ * own full-width search styling instead of the standard name+control layout.
+ */
+.obsync-user-search-setting {
+	border: none;
+}
+
+.obsync-user-search-setting .setting-item-info {
+	display: none;
+}
+
+.obsync-user-search-setting .setting-item-control {
+	width: 100%;
+}
+
+.obsync-user-search-setting .search-input-container {
+	width: 100%;
 }
