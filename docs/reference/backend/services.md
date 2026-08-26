@@ -41,6 +41,7 @@ new ExpressServer({
 	tokenService,
 	dbService,
 	authService,
+	collaborationServer,
 })
 ```
 
@@ -52,30 +53,64 @@ new ExpressServer({
 
 Routes are documented in [HTTP API](http.md).
 
-## WebSHocket
+## WebSocketServer
 
-`WebSHocket` is the exported WebSocket transport class. The spelling is the
-current code symbol and must be used exactly in imports.
+`WebSocketServer` is the exported WebSocket transport class. Note the `ws`
+package also exports a class named `WebSocketServer`; this file imports it
+under the alias `WsServer` to avoid the collision.
 
 Source: [`backend/Classes/WebSocketServer.ts`](../../../backend/Classes/WebSocketServer.ts)
 
 ```ts
-new WebSHocket(
+new WebSocketServer(
 	server: Server,
 	tokenService: TokenService,
 	requireTls: boolean,
 	trustProxy: boolean,
+	collaborationServer: YjsCollaborationServer,
 )
 ```
 
 | Member | Type | Description |
 | --- | --- | --- |
-| `wssSystem` | `WebSocketServer` | Receive-only vault-event server |
-| `wssYjs` | `WebSocketServer` | Collaborative Yjs server |
+| `wssSystem` | `WsServer` (`ws`) | Receive-only vault-event server |
+| `wssYjs` | `WsServer` (`ws`) | Collaborative Yjs server |
 | `initializeWebSockets()` | method | Installs persistence, connection handlers, event broadcasting, and heartbeat |
 
 Upgrade behavior and close codes are documented in
 [WebSocket API](websocket.md).
+
+## YjsCollaborationServer
+
+`YjsCollaborationServer` is the composition root and public API for the Yjs
+backend. It owns a `YjsRoomRegistry`, `YjsPersistenceGateway`,
+`DeletedPathRegistry`, `SyncMessageHandler`, and `AwarenessOwnershipGuard`,
+and is constructor-injected into both `ExpressServer` and `WebSocketServer` so
+REST mutations and live rooms share the same state.
+
+Source: [`backend/yjs/YjsCollaborationServer.ts`](../../../backend/yjs/YjsCollaborationServer.ts)
+
+```ts
+new YjsCollaborationServer()
+```
+
+| Method | Description |
+| --- | --- |
+| `setPersistence(adapter)` | Registers the `YjsPersistenceAdapter` backing every room (see `YjsPersistence`) |
+| `setupConnection(connection, request, authenticatedUser)` | Reserves a room, wires message/close/error handlers, and sends the initial sync |
+| `isPathDeleted(filePath)` | Whether the path or an ancestor is currently marked deleted |
+| `isDocumentInvalidated(doc)` | Whether a specific Yjs document was invalidated by a deletion |
+| `markPathDeleted(targetPath)` | Marks a path deleted and closes any live rooms under it |
+| `clearPathDeleted(targetPath)` | Clears a deletion mark, e.g. when a path is recreated |
+| `deletePersistedStateUnderPath(targetPath)` | Removes on-disk Yjs state for a note or folder subtree |
+| `renamePersistedStatePath(oldPath, newPath)` | Moves on-disk Yjs state to match a vault rename |
+
+The finer-grained collaborator classes (`YjsRoom`, `YjsRoomRegistry`,
+`YjsConnectionSession`, `SyncMessageHandler`, `AwarenessOwnershipGuard`,
+`DeletedPathRegistry`, `YjsPersistenceGateway`) are internal to
+`backend/yjs/` and are not constructed directly outside it; see
+[Architecture](../../architecture.md#backend-modules) for their individual
+responsibilities.
 
 ## FileManager
 

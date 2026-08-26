@@ -78,9 +78,10 @@ is explicitly required to register vault events. The settings sections depend
 on `SettingsController`, so their code is not coupled to the concrete plugin
 entry class.
 
-Low-level Yjs protocol helpers remain functions. They are stateless operations,
-so wrapping each one in a class would add indirection without creating a useful
-object boundary.
+The plugin's low-level Yjs protocol helpers (`collab/collab.ts` and
+`collab/collab.utils.ts`) remain functions over a single active-room variable.
+There is only ever one editor open at a time, so a class would add indirection
+without creating a useful object boundary.
 
 ## Backend modules
 
@@ -89,13 +90,27 @@ object boundary.
 | `backend/server.ts` | Application composition and startup |
 | `backend/Classes/ExpressServer.ts` | HTTP routes and route-level authorization |
 | `backend/Classes/WebSocketServer.ts` | WebSocket upgrade authentication and channel routing |
-| `backend/yjsUtils.ts` | Yjs protocol handling, shared rooms, awareness, and update authorization |
+| `backend/yjs/YjsCollaborationServer.ts` | Composition root for the Yjs backend: wires the room registry, persistence gateway, and message handlers, and exposes the public API used by `ExpressServer` and `WebSocketServer` |
+| `backend/yjs/YjsRoomRegistry.ts` | Shared-room lifecycle: reservation, creation, cleanup, and path invalidation |
+| `backend/yjs/YjsRoom.ts` | One shared Yjs document: connections, awareness state, and broadcast |
+| `backend/yjs/YjsConnectionSession.ts` | Per-connection message queue and dispatch |
+| `backend/yjs/SyncMessageHandler.ts` | Yjs sync-protocol steps and write-permission enforcement |
+| `backend/yjs/AwarenessOwnershipGuard.ts` | Awareness update validation and per-client ownership |
+| `backend/yjs/DeletedPathRegistry.ts` | Tracks deleted vault paths and invalidated documents |
+| `backend/yjs/YjsPersistenceGateway.ts` | Optional-adapter wrapper around `YjsPersistence` |
 | `backend/Classes/YjsPersistence.ts` | Persistent Yjs state and Markdown snapshots |
 | `backend/Classes/FileManager.ts` | Shared-vault filesystem operations |
 | `backend/auth/TokenService.ts` | Token issuance and verification |
 | `backend/users/DBServices.ts` | User lookup and role management |
 | `backend/users/databaseLifecycle.ts` | Explicit database creation and runtime validation |
 | `backend/scripts/setupDatabase.ts` | Command-line entry point for schema creation and user seeding |
+
+The Yjs backend used to live in a single `backend/yjsUtils.ts` file mixing room
+lifecycle, persistence, sync-protocol handling, and awareness validation behind
+module-level state. It was split into the single-responsibility classes above,
+composed by `YjsCollaborationServer` and constructor-injected into
+`ExpressServer` and `WebSocketServer` from `server.ts`, matching how the plugin
+composes its own services.
 
 ## Communication channels
 

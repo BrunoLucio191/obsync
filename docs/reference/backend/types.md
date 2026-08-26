@@ -124,7 +124,7 @@ type ServerConfig = {
 
 ## Yjs connection objects
 
-Source: [`backend/yjsUtils.ts`](../../../backend/yjsUtils.ts)
+Source: [`backend/yjs/yjs.types.ts`](../../../backend/yjs/yjs.types.ts)
 
 ```ts
 type YjsAuthenticatedConnection = {
@@ -135,5 +135,6 @@ type YjsAuthenticatedConnection = {
 };
 ```
 
-The setup function converts this authenticated context into the internal
-connection state used by sync and awareness validation.
+`YjsCollaborationServer.setupConnection()` converts this authenticated context
+into the internal `YjsConnectionState` used by `SyncMessageHandler` and
+`AwarenessOwnershipGuard`.

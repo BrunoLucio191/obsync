@@ -9,9 +9,14 @@ server.ts
 ├── openUserDatabase()
 ├── DBServices
 ├── TokenService ── AuthService
+├── YjsCollaborationServer
 ├── FileManager ── ExpressServer
-└── WebSHocket ── YjsPersistence
+└── WebSocketServer ── YjsPersistence
 ```
+
+`ExpressServer` and `WebSocketServer` both receive the same
+`YjsCollaborationServer` instance, so REST mutations (create, delete, rename)
+and live WebSocket rooms observe the same deleted-path and room state.
 
 ## Services
 
@@ -21,7 +26,8 @@ server.ts
 | `LoginRateLimiter` | In-memory failure windows and blocking | [Authentication](authentication.md#loginratelimiter) |
 | `DBServices` | User queries and protected mutations | [Services](services.md#dbservices) |
 | `ExpressServer` | Middleware, HTTP routes, and route authorization | [Services](services.md#expressserver) |
-| `WebSHocket` | Upgrade authentication and channel routing | [Services](services.md#webshocket) |
+| `WebSocketServer` | Upgrade authentication and channel routing | [Services](services.md#websocketserver) |
+| `YjsCollaborationServer` | Yjs room lifecycle, sync, and awareness | [Services](services.md#yjscollaborationserver) |
 | `FileManager` | Shared-vault filesystem operations | [Services](services.md#filemanager) |
 | `YjsPersistence` | Binary Yjs state and Markdown snapshots | [Services](services.md#yjspersistence) |
 
