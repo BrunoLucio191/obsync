@@ -181,6 +181,7 @@ export class ExpressServer {
 
         if (!email.includes("@")) {
           res.status(400).json({ error: "E-mail não é válido" });
+          return;
         }
 
         if (typeof email !== "string" || typeof password !== "string") {
