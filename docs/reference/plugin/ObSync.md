@@ -29,8 +29,13 @@ stored through Obsidian `SecretStorage`.
 onload(): Promise<void>
 ```
 
-Loads configuration, constructs services, registers the settings tab, and
-waits for `workspace.onLayoutReady()` before starting authentication and sync.
+Initializes i18next against Obsidian's configured language, loads
+configuration, applies the stored `backendUrl` (if any) through
+[`ApiConfig`](README.md#runtime-backend-endpoint), constructs services,
+registers the settings tab, and waits for `workspace.onLayoutReady()` before
+starting authentication and sync. A stored URL that fails to apply is logged
+and skipped rather than blocking the rest of `onload()`, since a broken saved
+value should never keep the whole plugin from loading.
 
 ### `onunload()`
 
@@ -84,6 +89,7 @@ These methods delegate to `UserAdminService` and return a discriminated
 | `updateUserStatus(userId, active)` | numeric ID and active flag | updated user |
 | `updateUserName(userId, name)` | numeric ID and display name | updated user |
 | `deleteUser(userId)` | numeric ID | deleted user snapshot |
+| `resetUserPassword(userId, newPassword)` | numeric ID and new password | updated user |
 
 ```ts
 const result = await plugin.updateUserRole(12, 'admin');
@@ -93,3 +99,41 @@ if (!result.ok) {
 ```
 
 The backend remains the authority for every user-management operation.
+`resetUserPassword` is admin-only and, unlike `changePassword` below, does not
+require the target account's current password. See
+[Settings: user management](settings.md#usermanagementsection) for the UI
+that calls it and the restrictions the settings layer adds on top (an admin
+can never reset another admin's password).
+
+## Account methods
+
+### `changePassword()`
+
+```ts
+changePassword(
+	currentPassword: string,
+	newPassword: string,
+): Promise<UserActionResult<null>>
+```
+
+Delegates to `AuthService`. Lets the signed-in account change its own
+password. Unlike `resetUserPassword`, this always requires the caller's
+current password, whether they're an admin or a regular user.
+
+### `setBackendUrl()`
+
+```ts
+setBackendUrl(url: string): Promise<UserActionResult<null>>
+```
+
+Validates `url` through
+[`configureApiEndpoint()`](README.md#runtime-backend-endpoint), persists it
+to `config.backendUrl` on success, and returns the validation error as
+`UserActionResult` failure otherwise so the settings UI can show it inline
+instead of throwing. An empty string is valid input and clears the
+configured endpoint, returning the plugin to its pre-setup state. If the URL
+actually changes while a session is already connected, the previous session
+is cleared first, since its tokens belong to a different backend and sending
+them anywhere else would be wrong. See
+[Settings: BackendConnectionSection](settings.md#backendconnectionsection)
+for the field that calls this and who is allowed to edit it.

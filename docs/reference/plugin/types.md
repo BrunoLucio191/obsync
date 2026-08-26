@@ -66,12 +66,18 @@ Source: [`plugin/obSync/src/config/ObSyncConfig.ts`](../../../plugin/obSync/src/
 
 ```ts
 type ObSyncConfig = {
+	backendUrl: string;
 	accessTokenExpiresAt: number;
 	user: AuthenticatedUser | null;
 };
 ```
 
-`accessTokenExpiresAt` is an absolute Unix timestamp in milliseconds.
+`backendUrl` is the last URL saved through **Settings → ObSync → Backend
+server URL**; an empty string means no backend is configured yet.
+`accessTokenExpiresAt` is an absolute Unix timestamp in milliseconds. See
+[Runtime backend endpoint](README.md#runtime-backend-endpoint) for how
+`backendUrl` is turned into the actual HTTP and WebSocket URLs the plugin
+calls.
 
 ## Collaboration
 
