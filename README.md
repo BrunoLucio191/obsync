@@ -162,6 +162,10 @@ terminal.
 - Only `admin` accounts publish edits to the shared vault; `user` accounts
   edit locally and receive shared changes. See
   [How synchronization works](#how-synchronization-works).
+- Want to reach the backend from outside your own machine? The backend URL
+  field takes any custom domain, not just `127.0.0.1` — put a TLS reverse
+  proxy in front of it and point the field at that proxy's HTTPS URL. See
+  [Security: transport rules](docs/security.md#transport-rules).
 
 ## Development
 
