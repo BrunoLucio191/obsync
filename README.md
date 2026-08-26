@@ -24,13 +24,13 @@ two roles, with no limit on how many accounts can hold either one:
 - **`user`** accounts edit locally and receive whatever admins publish, but
   their own edits stay private and are never sent back to the shared vault.
 
-## Demo
+## Demonstration
 
 ![Two accounts editing the same note in real time, with per-user awareness labels](docs/assets/demo.gif)
 
 ## Contents
 
-- [Demo](#demo)
+- [Demonstration](#demonstration)
 - [How synchronization works](#how-synchronization-works)
 - [Repository layout](#repository-layout)
 - [Documentation](#documentation)
