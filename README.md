@@ -1,9 +1,31 @@
+<div align="center">
+
 # ObSync
 
-ObSync is an Obsidian plugin and Node.js service for collaborative Markdown editing. It supports two account roles with different publishing rights:
+**Self-hosted, real-time collaborative Markdown editing for Obsidian.**
 
-- `admin` accounts can publish changes to the shared vault.
-- `user` accounts can edit locally and receive shared changes, but cannot publish their private edits.
+![License](https://img.shields.io/badge/license-ISC-blue.svg)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white)
+![Node.js](https://img.shields.io/badge/Node.js-ESM-339933?logo=node.js&logoColor=white)
+![Obsidian](https://img.shields.io/badge/Obsidian-Plugin-7C3AED?logo=obsidian&logoColor=white)
+![Yjs](https://img.shields.io/badge/CRDT-Yjs-F5A623)
+
+</div>
+
+ObSync pairs an Obsidian plugin with a self-hosted Node.js backend so a vault
+can be edited by several people at once, backed by [Yjs](https://yjs.dev) CRDTs
+over WebSocket. It supports two account roles with different publishing rights:
+
+- **`admin`** accounts publish changes to the shared vault.
+- **`user`** accounts edit locally and receive shared changes, but their
+  own edits stay private — never published back to the vault.
+
+## Contents
+
+- [How synchronization works](#how-synchronization-works)
+- [Repository layout](#repository-layout)
+- [Documentation](#documentation)
+- [Development](#development)
 
 ## How synchronization works
 
@@ -96,3 +118,11 @@ npm run dev --workspace=plugin/obSync
 ```
 
 The plugin build produces `plugin/obSync/main.js`. Copy `main.js`, `manifest.json`, and `styles.css` to the plugin directory used by the target Obsidian vault, then reload the plugin in Obsidian.
+
+---
+
+<div align="center">
+
+Made for a self-hosted, private Obsidian vault.
+
+</div>
