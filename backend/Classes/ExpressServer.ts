@@ -589,18 +589,18 @@ export class ExpressServer {
       requireAuth,
       async (_req: Request, res: Response): Promise<void> => {
         try {
-          console.log("📦 [ZIP] Starting compression...");
+          console.log("[ZIP] Starting compression...");
           await this.fileManager.directoryZiped();
           const zipPath = systemPaths.vaultExit;
 
           res.download(zipPath, "vault.zip", async (error) => {
             if (error) {
-              console.error("❌ [ZIP] Error sending file:", error.message);
+              console.error("[ZIP] Error sending file:", error.message);
               if (!res.headersSent) {
                 res.status(500).json({ error: "Failed to send the files." });
               }
             } else {
-              console.log("✅ [ZIP] Sent successfully.");
+              console.log("[ZIP] Sent successfully.");
             }
 
             await fs.unlink(zipPath).catch((unlinkError: unknown) => {
@@ -610,14 +610,14 @@ export class ExpressServer {
                 (unlinkError as NodeJS.ErrnoException).code !== "ENOENT"
               ) {
                 console.error(
-                  "⚠️ [ZIP] Error cleaning up temporary file:",
+                  "[ZIP] Error cleaning up temporary file:",
                   unlinkError,
                 );
               }
             });
           });
         } catch (error) {
-          console.error("❌ [ZIP] General error:", error);
+          console.error("[ZIP] General error:", error);
           res.status(500).json({ error: "Internal error generating the file." });
         }
       },
@@ -655,7 +655,7 @@ export class ExpressServer {
         });
         res.sendStatus(200);
       } catch (error) {
-        console.error("❌ [Sync] Error in Create:", error);
+        console.error("[Sync] Error in Create:", error);
         res.status(500).send("Error creating file or folder");
       }
     });
@@ -711,7 +711,7 @@ export class ExpressServer {
         });
         res.sendStatus(200);
       } catch (error) {
-        console.error("❌ [Sync] Error in Modify:", error);
+        console.error("[Sync] Error in Modify:", error);
         res.status(500).send("Error modifying file");
       }
     });
@@ -742,7 +742,7 @@ export class ExpressServer {
         });
         res.sendStatus(200);
       } catch (error) {
-        console.error("❌ [Sync] Error in Rename:", error);
+        console.error("[Sync] Error in Rename:", error);
         res.status(500).send("Error renaming");
       }
     });
