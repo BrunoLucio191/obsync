@@ -431,6 +431,7 @@ export class ExpressServer {
       async (req: Request, res: Response): Promise<void> => {
         const userId = this.parseUserId(req.params.id);
         const active = req.body?.active;
+
         if (!userId || typeof active !== "boolean") {
           res.status(400).json({ error: "Usuário ou status inválido." });
           return;
@@ -651,7 +652,7 @@ export class ExpressServer {
   private parseUserId(value: string | string[] | undefined): number | null {
     if (Array.isArray(value)) return null;
     const userId = Number(value);
-    return Number.isInteger(userId) && userId > 0 ? userId : null;
+    return userId > 0 ? userId : null;
   }
 
   private requestPath(req: Request): string | undefined {
