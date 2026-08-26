@@ -8,36 +8,20 @@ import type {
 } from "./auth.types.ts";
 import { decode, encode } from "./encoding.ts";
 import type { DBServices } from "../users/DBServices.ts";
+import type {
+  SessionRecord,
+  WebSocketTicketRecord,
+  TokenServiceConstructor,
+  WebSocketAuthorization,
+  AccessAuthorization,
+  TokenHeader,
+} from "./tokenService.types.ts";
 
 const ACCESS_TOKEN_LIFETIME_SECONDS = 15 * 60;
 const REFRESH_TOKEN_LIFETIME_MS = 30 * 24 * 60 * 60 * 1_000;
 const WEB_SOCKET_TICKET_LIFETIME_SECONDS = 30;
 const TOKEN_ISSUER = "obsync";
 const TOKEN_AUDIENCE = "obsync-api";
-
-type TokenServiceConstructor = {
-  secret: string;
-  dbService: DBServices;
-};
-
-type SessionRecord = {
-  readonly userId: number;
-  refreshTokenHash: string;
-  readonly refreshExpiresAt: number;
-};
-
-type AccessAuthorization = {
-  readonly user: AuthenticatedUser;
-  readonly sessionId: string;
-  readonly expiresAt: number;
-};
-
-type WebSocketTicketRecord = AccessAuthorization & {
-  readonly channel: WebSocketChannel;
-  readonly ticketExpiresAt: number;
-};
-
-export type WebSocketAuthorization = AccessAuthorization;
 
 export class TokenService {
   private readonly secret: string;
@@ -59,7 +43,6 @@ export class TokenService {
 
   public sessionFor(user: AuthenticatedUser): AuthSession {
     this.removeExpiredState();
-
     const sessionId = this.randomValue();
     const refreshToken = this.createRefreshToken(sessionId);
     this.sessions.set(sessionId, {
@@ -197,6 +180,7 @@ export class TokenService {
   }
 
   private issueAccessToken(user: AuthenticatedUser, sessionId: string): string {
+    //transform in seconds;
     const now = Math.floor(Date.now() / 1_000);
     const header = encode({ alg: "HS256", typ: "JWT" });
     const payload = encode({
@@ -208,7 +192,7 @@ export class TokenService {
       iat: now,
       nbf: now,
       exp: now + ACCESS_TOKEN_LIFETIME_SECONDS,
-    } satisfies TokenPayload);
+    });
     const signed = `${header}.${payload}`;
     return `${signed}.${this.sign(signed)}`;
   }
@@ -218,44 +202,42 @@ export class TokenService {
   ): Promise<AccessAuthorization | null> {
     if (!token) return null;
 
-    const parts = token.split(".");
+    const tokenParts = token.split(".");
 
-    if (parts.length !== 3) return null;
+    if (tokenParts.length !== 3) return null;
 
-    const [header, payload, signature] = parts;
+    const [header, payload, signature] = tokenParts;
 
     if (!header || !payload || !signature) return null;
 
-    const signed = `${header}.${payload}`;
-
-    if (!this.safeEqual(signature, this.sign(signed))) return null;
+    const signedForVerication = `${header}.${payload}`;
+    if (!this.safeEqual(signature, this.sign(signedForVerication))) return null;
 
     try {
-      const headerValue = decode<{ alg?: unknown; typ?: unknown }>(header);
-      const value = decode<Partial<TokenPayload>>(payload);
+      const headerValue = decode<TokenHeader>(header);
+      const payloadValue = decode<Partial<TokenPayload>>(payload);
       const now = Math.floor(Date.now() / 1_000);
-      const userId = Number(value.sub);
+      const userId = Number(payloadValue.sub);
 
       if (
         headerValue.alg !== "HS256" ||
         headerValue.typ !== "JWT" ||
-        value.iss !== TOKEN_ISSUER ||
-        value.aud !== TOKEN_AUDIENCE ||
-        typeof value.sid !== "string" ||
-        typeof value.jti !== "string" ||
-        typeof value.iat !== "number" ||
-        typeof value.nbf !== "number" ||
-        typeof value.exp !== "number" ||
+        payloadValue.iss !== TOKEN_ISSUER ||
+        payloadValue.aud !== TOKEN_AUDIENCE ||
+        typeof payloadValue.sid !== "string" ||
+        typeof payloadValue.jti !== "string" ||
+        typeof payloadValue.iat !== "number" ||
+        typeof payloadValue.nbf !== "number" ||
+        typeof payloadValue.exp !== "number" ||
         !Number.isInteger(userId) ||
         userId <= 0 ||
-        value.nbf > now ||
-        value.exp <= now
+        payloadValue.nbf >= now ||
+        payloadValue.exp <= now
       ) {
         return null;
       }
 
-      const session = this.sessions.get(value.sid);
-
+      const session = this.sessions.get(payloadValue.sid);
       if (
         !session ||
         session.userId !== userId ||
@@ -265,16 +247,15 @@ export class TokenService {
       }
 
       const user = await this.dbService.getUserById(userId);
-
       if (!user) {
-        this.revokeSessionId(value.sid);
+        this.revokeSessionId(payloadValue.sid);
         return null;
       }
 
       return {
         user,
-        sessionId: value.sid,
-        expiresAt: value.exp * 1_000,
+        sessionId: payloadValue.sid,
+        expiresAt: payloadValue.exp * 1_000,
       };
     } catch {
       return null;
@@ -289,12 +270,13 @@ export class TokenService {
         this.webSocketTickets.delete(ticketHash);
       }
     }
-    for (const listener of this.revocationListeners) listener(sessionId);
+    for (const listener of this.revocationListeners) {
+      listener(sessionId);
+    }
   }
 
   private removeExpiredState(): void {
     const now = Date.now();
-
     for (const [sessionId, session] of this.sessions) {
       if (session.refreshExpiresAt <= now) this.revokeSessionId(sessionId);
     }
