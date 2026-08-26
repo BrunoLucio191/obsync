@@ -1,0 +1,9 @@
+export const MAX_WS_MESSAGE_BYTES = 16 * 1024 * 1024;
+
+export const MESSAGE_SYNC = 0;
+export const MESSAGE_AWARENESS = 1;
+export const MESSAGE_AUTH = 2;
+export const MESSAGE_QUERY_AWARENESS = 3;
+
+export const MAX_PENDING_MESSAGES_PER_DOCUMENT = 1_024;
+export const MAX_AWARENESS_ENTRIES_PER_MESSAGE = 128;

@@ -1,12 +1,9 @@
 import { type IncomingMessage, type Server } from "node:http";
 import { type Duplex } from "node:stream";
-import { WebSocket, WebSocketServer } from "ws";
+import { WebSocket, WebSocketServer as WsServer } from "ws";
 import { YjsPersistence } from "./YjsPersistence.ts";
-import {
-  MAX_WS_MESSAGE_BYTES,
-  setupWSConnection,
-  setPersistence,
-} from "../yjsUtils.ts";
+import type { YjsCollaborationServer } from "../yjs/YjsCollaborationServer.ts";
+import { MAX_WS_MESSAGE_BYTES } from "../yjs/yjs.cons.ts";
 import { vaultEvents, type VaultChange } from "../syncEvents.ts";
 import { dbEvents } from "../users/DBEvents.ts";
 import type { TokenService } from "../auth/TokenService.ts";
@@ -16,11 +13,12 @@ import { type WebSocketAuthorization } from "../auth/tokenService.types.ts";
 const HEARTBEAT_INTERVAL_MS = 30_000;
 const TICKET_PROTOCOL_PREFIX = "obsync-ticket.";
 
-export class WebSHocket {
-  public readonly wssSystem: WebSocketServer;
-  public readonly wssYjs: WebSocketServer;
+export class WebSocketServer {
+  public readonly wssSystem: WsServer;
+  public readonly wssYjs: WsServer;
   private readonly event;
   private readonly tokenService: TokenService;
+  private readonly collaborationServer: YjsCollaborationServer;
   private readonly authenticatedConnections = new Map<
     WebSocket,
     WebSocketAuthorization
@@ -37,13 +35,15 @@ export class WebSHocket {
     tokenService: TokenService,
     requireTls: boolean,
     trustProxy: boolean,
+    collaborationServer: YjsCollaborationServer,
   ) {
-    this.wssSystem = new WebSocketServer({
+    this.collaborationServer = collaborationServer;
+    this.wssSystem = new WsServer({
       noServer: true,
       maxPayload: MAX_WS_MESSAGE_BYTES,
       perMessageDeflate: false,
     });
-    this.wssYjs = new WebSocketServer({
+    this.wssYjs = new WsServer({
       noServer: true,
       maxPayload: MAX_WS_MESSAGE_BYTES,
       perMessageDeflate: false,
@@ -132,9 +132,10 @@ export class WebSHocket {
     const yjsPersistence = new YjsPersistence(
       systemPaths.vault,
       systemPaths.yjsState,
+      this.collaborationServer,
     );
 
-    setPersistence({
+    this.collaborationServer.setPersistence({
       bindState: (docName, ydoc) => yjsPersistence.bindState(docName, ydoc),
       writeState: (docName, ydoc) => yjsPersistence.writeState(docName, ydoc),
       destroyState: (docName, ydoc) =>
@@ -154,15 +155,17 @@ export class WebSHocket {
       }
       const { user } = authorization;
 
-      void setupWSConnection(webSocket, request, {
-        userId: user.id,
-        userName: user.name,
-        userEmail: user.email,
-        userRole: user.role,
-      }).catch((error: unknown) => {
-        console.error("[Yjs] Falha inesperada na conexão:", error);
-        webSocket.close(1011, "Internal Yjs error");
-      });
+      void this.collaborationServer
+        .setupConnection(webSocket, request, {
+          userId: user.id,
+          userName: user.name,
+          userEmail: user.email,
+          userRole: user.role,
+        })
+        .catch((error: unknown) => {
+          console.error("[Yjs] Falha inesperada na conexão:", error);
+          webSocket.close(1011, "Internal Yjs error");
+        });
     });
 
     this.wssSystem.on("connection", (webSocket) => {
@@ -268,7 +271,7 @@ export class WebSHocket {
     this.heartbeatTimer = null;
   }
 
-  private pingServerClients(server: WebSocketServer): void {
+  private pingServerClients(server: WsServer): void {
     for (const client of server.clients) {
       if (!this.aliveConnections.has(client)) {
         client.terminate();

@@ -16,13 +16,7 @@ import type {
 } from "../auth/auth.types.ts";
 import { LoginRateLimiter } from "../auth/LoginRateLimiter.ts";
 import { publishVaultChange } from "../syncEvents.ts";
-import {
-  clearPathDeleted,
-  deletePersistedStateUnderPath,
-  isPathDeleted,
-  markPathDeleted,
-  renamePersistedStatePath,
-} from "../yjsUtils.ts";
+import type { YjsCollaborationServer } from "../yjs/YjsCollaborationServer.ts";
 import { FileManager } from "./FileManager.ts";
 import { AuthService } from "../auth/authService.ts";
 import type { TokenService } from "../auth/TokenService.ts";
@@ -63,7 +57,7 @@ function mutationErrorMessage(result: UserMutationResult): string {
   }
 }
 
-type ExpreeServerConstructor = {
+type ExpressServerConstructorOptions = {
   port: number;
   host: string;
   requireTls: boolean;
@@ -72,6 +66,7 @@ type ExpreeServerConstructor = {
   tokenService: TokenService;
   dbService: DBServices;
   authService: AuthService;
+  collaborationServer: YjsCollaborationServer;
 };
 
 export class ExpressServer {
@@ -80,10 +75,11 @@ export class ExpressServer {
   private readonly host: string;
   private readonly requireTls: boolean;
   private readonly server: Server;
-  private readonly filemanager: FileManager;
+  private readonly fileManager: FileManager;
   private readonly dbService: DBServices;
-  private readonly token: TokenService;
-  private readonly auth: AuthService;
+  private readonly tokenService: TokenService;
+  private readonly authService: AuthService;
+  private readonly collaborationServer: YjsCollaborationServer;
   private readonly accountLoginRateLimiter = new LoginRateLimiter({
     maxFailedAttempts: 5,
   });
@@ -100,17 +96,19 @@ export class ExpressServer {
     tokenService,
     dbService,
     authService,
-  }: ExpreeServerConstructor) {
+    collaborationServer,
+  }: ExpressServerConstructorOptions) {
     this.port = port;
     this.host = host;
     this.requireTls = requireTls;
     this.app = express();
     this.app.set("trust proxy", trustProxy);
     this.server = createServer(this.app);
-    this.filemanager = fileManager;
-    this.token = tokenService;
+    this.fileManager = fileManager;
+    this.tokenService = tokenService;
     this.dbService = dbService;
-    this.auth = authService;
+    this.authService = authService;
+    this.collaborationServer = collaborationServer;
     this.initializeMiddleware();
     this.initializeRoutes();
   }
@@ -140,7 +138,7 @@ export class ExpressServer {
     ): Promise<void> => {
       const token = req.header("Authorization")?.replace(/^Bearer\s+/i, "");
 
-      const authenticatedUser = await this.token.verifyToken(token);
+      const authenticatedUser = await this.tokenService.verifyToken(token);
 
       if (!authenticatedUser) {
         res.status(401).json({ error: "Não autorizado." });
@@ -210,7 +208,7 @@ export class ExpressServer {
           return;
         }
 
-        const session = await this.auth.login(email, password);
+        const session = await this.authService.login(email, password);
 
         if (!session) {
           const updatedAccountLimit =
@@ -242,7 +240,7 @@ export class ExpressServer {
       "/auth/refresh",
       async (req: Request, res: Response): Promise<void> => {
         const refreshToken = req.body?.refreshToken;
-        const session = await this.token.refreshSession(
+        const session = await this.tokenService.refreshSession(
           typeof refreshToken === "string" ? refreshToken : null,
         );
         if (!session) {
@@ -256,7 +254,7 @@ export class ExpressServer {
 
     this.app.post("/auth/logout", (req: Request, res: Response): void => {
       const refreshToken = req.body?.refreshToken;
-      this.token.revokeSession(
+      this.tokenService.revokeSession(
         typeof refreshToken === "string" ? refreshToken : null,
       );
       res.sendStatus(204);
@@ -280,7 +278,7 @@ export class ExpressServer {
           return;
         }
 
-        const ticket = await this.token.issueWebSocketTicket(
+        const ticket = await this.tokenService.issueWebSocketTicket(
           res.locals.accessToken as string,
           channel,
         );
@@ -477,7 +475,7 @@ export class ExpressServer {
       async (_req: Request, res: Response): Promise<void> => {
         try {
           console.log("📦 [ZIP] Iniciando compactação...");
-          await this.filemanager.directoryZiped();
+          await this.fileManager.directoryZiped();
           const zipPath = systemPaths.vaultExit;
 
           res.download(zipPath, "vault.zip", async (error) => {
@@ -521,12 +519,14 @@ export class ExpressServer {
           return;
         }
 
-        if (isPathDeleted(path)) await deletePersistedStateUnderPath(path);
-        clearPathDeleted(path);
+        if (this.collaborationServer.isPathDeleted(path)) {
+          await this.collaborationServer.deletePersistedStateUnderPath(path);
+        }
+        this.collaborationServer.clearPathDeleted(path);
 
-        if (isFolder) await this.filemanager.createFolder(path);
+        if (isFolder) await this.fileManager.createFolder(path);
         else
-          await this.filemanager.createOrModifyFile(
+          await this.fileManager.createOrModifyFile(
             path,
             typeof content === "string" ? content : "",
           );
@@ -553,15 +553,15 @@ export class ExpressServer {
           return;
         }
 
-        markPathDeleted(path);
+        this.collaborationServer.markPathDeleted(path);
         try {
-          await this.filemanager.deletePath(path);
+          await this.fileManager.deletePath(path);
         } catch (error) {
-          clearPathDeleted(path);
+          this.collaborationServer.clearPathDeleted(path);
           throw error;
         }
 
-        await deletePersistedStateUnderPath(path);
+        await this.collaborationServer.deletePersistedStateUnderPath(path);
         publishVaultChange({
           type: "delete",
           path,
@@ -582,12 +582,12 @@ export class ExpressServer {
           res.status(400).send("Conteúdo ou caminho inválido");
           return;
         }
-        if (isPathDeleted(path)) {
+        if (this.collaborationServer.isPathDeleted(path)) {
           res.status(409).send("O caminho foi excluído");
           return;
         }
 
-        await this.filemanager.createOrModifyFile(path, content);
+        await this.fileManager.createOrModifyFile(path, content);
         publishVaultChange({
           type: "modify",
           path,
@@ -614,8 +614,11 @@ export class ExpressServer {
           return;
         }
 
-        await this.filemanager.rename(oldPath, newPath);
-        await renamePersistedStatePath(oldPath, newPath);
+        await this.fileManager.rename(oldPath, newPath);
+        await this.collaborationServer.renamePersistedStatePath(
+          oldPath,
+          newPath,
+        );
         publishVaultChange({
           type: "rename",
           oldPath,

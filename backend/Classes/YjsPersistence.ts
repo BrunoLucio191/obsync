@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import fsPromises from "node:fs/promises";
 import path from "node:path";
 import * as Y from "yjs";
-import { isDocumentInvalidated, isPathDeleted } from "../yjsUtils.ts";
+import type { YjsCollaborationServer } from "../yjs/YjsCollaborationServer.ts";
 
 const BINARY_STATE_EXTENSION = ".yjs-state";
 const BINARY_HYDRATION_ORIGIN = Symbol("binary-state-hydration");
@@ -25,11 +25,17 @@ type DocumentSnapshot = {
 export class YjsPersistence {
   private readonly vaultRoot: string;
   private readonly stateRoot: string;
+  private readonly collaborationServer: YjsCollaborationServer;
   private readonly documentStates = new WeakMap<Y.Doc, DocumentWriteState>();
 
-  public constructor(vaultPath: string, statePath: string) {
+  public constructor(
+    vaultPath: string,
+    statePath: string,
+    collaborationServer: YjsCollaborationServer,
+  ) {
     this.vaultRoot = path.resolve(vaultPath);
     this.stateRoot = path.resolve(statePath);
+    this.collaborationServer = collaborationServer;
   }
 
   public async bindState(docName: string, ydoc: Y.Doc): Promise<void> {
@@ -195,7 +201,10 @@ export class YjsPersistence {
     while (state.dirty) {
       state.dirty = false;
 
-      if (isDocumentInvalidated(state.ydoc) || isPathDeleted(state.fileName)) {
+      if (
+        this.collaborationServer.isDocumentInvalidated(state.ydoc) ||
+        this.collaborationServer.isPathDeleted(state.fileName)
+      ) {
         return;
       }
 
