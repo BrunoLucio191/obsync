@@ -38,18 +38,36 @@ If your plugin does not need CSS, delete this file.
 	color: var(--text-muted);
 }
 
+/* A user's name/password rows: indented and lighter than the identity row
+   above them, so the group reads as belonging to that one account. */
+.obsync-settings-user-subrow {
+	padding-left: var(--size-4-6);
+}
+
+.obsync-settings-user-subrow .setting-item-name {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
 /*
  * Caps the account list to ~9 visible rows, scrolling for the rest. Row
- * height varies (some rows are a single toggle, others carry a name, a
- * password field, a role dropdown, and a status toggle together), so
+ * height varies (an admin row is a single line, a regular user spans an
+ * identity row plus a name row and a password row), so
  * --obsync-user-row-height is an approximation: adjust it if 9 rows don't
  * fit exactly. The search box lives in the sibling info group above this
  * one (see obsync-user-search-setting), so it never scrolls away with it.
+ *
+ * clip-path (not just border-radius+overflow) is what keeps the corners
+ * round once a scrollbar appears: Chromium renders the native scrollbar
+ * track outside the border-radius clip in some cases, but clip-path always
+ * clips it along with the content.
  */
 .obsync-user-list-scroll {
 	--obsync-user-row-height: 60px;
 	max-height: calc(var(--obsync-user-row-height) * 9);
 	overflow-y: auto;
+	border-radius: var(--radius-m);
+	clip-path: inset(0 round var(--radius-m));
 }
 
 /*

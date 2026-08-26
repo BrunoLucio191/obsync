@@ -33,27 +33,6 @@ export class UserListSection {
 			heading: 'Administração de usuários',
 			items: [
 				{
-					name: 'Buscar contas',
-					desc: '',
-					searchable: false,
-					// Owns its own text input instead of the group-level `search`
-					// option, so it stays in this always-visible group and never
-					// scrolls away with the list below (see obsync-user-search-setting
-					// in styles.css).
-					render: (setting) => {
-						setting.setClass('obsync-user-search-setting');
-						setting.addSearch((search) => {
-							search
-								.setPlaceholder('Nome ou e-mail')
-								.setValue(this.searchQuery)
-								.onChange((value) => {
-									this.searchQuery = value;
-									this.refresh();
-								});
-						});
-					},
-				},
-				{
 					name: 'Administração de usuários',
 					desc: 'Somente administradores podem listar contas, criar usuários e alterar nomes, senhas, papéis ou status.',
 					searchable: false,
@@ -81,6 +60,27 @@ export class UserListSection {
 						}
 					},
 				},
+				{
+					name: 'Buscar contas',
+					desc: '',
+					searchable: false,
+					// Owns its own text input instead of the group-level `search`
+					// option, so it stays in this always-visible group, right
+					// below "Contas cadastradas", instead of scrolling away with
+					// the list below (see obsync-user-search-setting in styles.css).
+					render: (setting) => {
+						setting.setClass('obsync-user-search-setting');
+						setting.addSearch((search) => {
+							search
+								.setPlaceholder('Nome ou e-mail')
+								.setValue(this.searchQuery)
+								.onChange((value) => {
+									this.searchQuery = value;
+									this.refresh();
+								});
+						});
+					},
+				},
 			],
 		};
 
@@ -89,14 +89,10 @@ export class UserListSection {
 			const currentUser = this.controller.config.user;
 			const activeAdminCount = this.directory.activeAdminCount();
 			for (const user of this.directory.all()) {
-				const definition = this.userDefinition(
-					user,
-					currentUser,
-					activeAdminCount,
+				if (!this.matchesQuery(user, this.searchQuery)) continue;
+				userItems.push(
+					...this.userDefinitions(user, currentUser, activeAdminCount),
 				);
-				if (this.matchesSearch(definition, this.searchQuery)) {
-					userItems.push(definition);
-				}
 			}
 		}
 
@@ -151,45 +147,62 @@ export class UserListSection {
 		return `${this.directory.size} usuários cadastrados. Use a busca acima para filtrar por nome ou e-mail.`;
 	}
 
-	private userDefinition(
+	// Each user contributes one identity/actions item, plus a dedicated item
+	// per editable field (name, password) instead of cramming every control
+	// into a single row. Every item still gets its Setting from the
+	// framework via `render`, same as the rest of this file.
+	private userDefinitions(
 		user: AuthenticatedUser,
 		currentUser: AuthenticatedUser | null,
 		activeAdminCount: number,
-	): SettingDefinition {
+	): SettingDefinition[] {
 		const isCurrent = user.id === currentUser?.id;
-		return {
-			name: `${user.email}${isCurrent ? ' (você)' : ''}`,
-			aliases: [user.email, user.name],
-			render: (setting) =>
-				this.renderUser(setting, user, isCurrent, activeAdminCount),
-		};
-	}
-
-	private renderUser(
-		setting: Setting,
-		user: AuthenticatedUser,
-		isCurrent: boolean,
-		activeAdminCount: number,
-	): void {
 		const protectsLastAdmin =
 			user.active && user.role === 'admin' && activeAdminCount === 1;
-		setting
-			.setName(`${user.email}${isCurrent ? ' (você)' : ''}`)
-			.setClass('obsync-settings-user-row');
-		const statusEl = setting.descEl.createDiv({
-			cls: 'obsync-settings-user-status',
-		});
-		this.updateDescription(statusEl, user, isCurrent);
+		const label = `${user.email}${isCurrent ? ' (você)' : ''}`;
 
-		if (!isCurrent && user.role === 'user') {
-			this.addNameControl(setting, user);
-			this.addPasswordResetControl(setting, user);
-		}
-		if (!isCurrent) {
-			this.addStatusControl(setting, user, protectsLastAdmin);
-			this.addRoleControl(setting, user, protectsLastAdmin);
-			this.addDeleteControl(setting, user, protectsLastAdmin);
-		}
+		const identity: SettingDefinition = {
+			name: label,
+			aliases: [user.email, user.name],
+			render: (setting) => {
+				setting.setName(label).setClass('obsync-settings-user-row');
+				const statusEl = setting.descEl.createDiv({
+					cls: 'obsync-settings-user-status',
+				});
+				this.updateDescription(statusEl, user, isCurrent);
+
+				if (!isCurrent) {
+					this.addStatusControl(setting, user, protectsLastAdmin);
+					this.addRoleControl(setting, user, protectsLastAdmin);
+					this.addDeleteControl(setting, user, protectsLastAdmin);
+				}
+			},
+		};
+
+		if (isCurrent || user.role !== 'user') return [identity];
+
+		const nameRow: SettingDefinition = {
+			name: `${label} — nome`,
+			searchable: false,
+			render: (setting) => {
+				setting
+					.setName('Nome de exibição')
+					.setClass('obsync-settings-user-subrow');
+				this.addNameControl(setting, user);
+			},
+		};
+		const passwordRow: SettingDefinition = {
+			name: `${label} — senha`,
+			searchable: false,
+			render: (setting) => {
+				setting
+					.setName('Redefinir senha')
+					.setClass('obsync-settings-user-subrow');
+				this.addPasswordResetControl(setting, user);
+			},
+		};
+
+		return [identity, nameRow, passwordRow];
 	}
 
 	private addNameControl(
@@ -358,16 +371,11 @@ export class UserListSection {
 		);
 	}
 
-	private matchesSearch(
-		definition: SettingDefinition,
-		query: string,
-	): boolean {
+	private matchesQuery(user: AuthenticatedUser, query: string): boolean {
 		const normalizedQuery = query.normalize('NFKC').trim().toLowerCase();
 		if (!normalizedQuery) return true;
 
-		const description =
-			typeof definition.desc === 'string' ? definition.desc : '';
-		return [definition.name, description, ...(definition.aliases ?? [])]
+		return [user.email, user.name]
 			.join(' ')
 			.normalize('NFKC')
 			.toLowerCase()
