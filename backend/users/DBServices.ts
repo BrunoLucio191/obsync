@@ -254,6 +254,24 @@ export class DBServices {
     });
   }
 
+  public async adminSetUserPassword(
+    userId: number,
+    newPassword: string,
+  ): Promise<UserMutationResult> {
+    const passwordHash = await hashPassword(newPassword);
+
+    return this.runImmediateTransaction<UserMutationResult>(() => {
+      const current = this.getUserRow(userId);
+      if (!current) return { ok: false, reason: "not_found" };
+
+      this.userDB
+        .prepare("UPDATE users SET password_hash = ? WHERE id = ?")
+        .run(passwordHash, userId);
+
+      return { ok: true, user: this.rowToUser(current) };
+    });
+  }
+
   public async deleteUser(userId: number): Promise<UserMutationResult> {
     const result = this.runImmediateTransaction<UserMutationResult>(() => {
       const row = this.getUserRow(userId);

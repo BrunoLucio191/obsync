@@ -396,6 +396,56 @@ export class ExpressServer {
       },
     );
 
+    this.app.patch(
+      "/api/users/:id/password",
+      requireAuth,
+      requireAdmin,
+      async (req: Request, res: Response): Promise<void> => {
+        const userId = this.parseUserId(req.params.id);
+        const newPassword = req.body?.newPassword;
+
+        if (!userId) {
+          res.status(400).json({ error: "Usuário inválido." });
+          return;
+        }
+        if (
+          typeof newPassword !== "string" ||
+          newPassword.length < 6 ||
+          newPassword.length > 128
+        ) {
+          res.status(400).json({
+            error: "A nova senha precisa ter entre 6 e 128 caracteres.",
+          });
+          return;
+        }
+
+        const target = await this.dbService.getUserById(userId, true);
+        if (!target) {
+          res.status(404).json({ error: "Usuário não encontrado." });
+          return;
+        }
+        if (target.role !== "user") {
+          res.status(403).json({
+            error:
+              "Administradores só podem redefinir a senha de usuários comuns. Use a troca de senha para a própria conta.",
+          });
+          return;
+        }
+
+        const result = await this.dbService.adminSetUserPassword(
+          userId,
+          newPassword,
+        );
+        if (!result.ok) {
+          res.status(mutationErrorStatus(result)).json({
+            error: mutationErrorMessage(result),
+          });
+          return;
+        }
+        res.json({ user: result.user });
+      },
+    );
+
     this.app.get(
       "/api/users",
       requireAuth,

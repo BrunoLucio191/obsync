@@ -133,6 +133,13 @@ export default class ObSync extends Plugin {
 		return this.userAdmin.updateUserName(userId, name);
 	}
 
+	public resetUserPassword(
+		userId: number,
+		newPassword: string,
+	): Promise<UserActionResult<AuthenticatedUser>> {
+		return this.userAdmin.resetUserPassword(userId, newPassword);
+	}
+
 	public changePassword(
 		currentPassword: string,
 		newPassword: string,

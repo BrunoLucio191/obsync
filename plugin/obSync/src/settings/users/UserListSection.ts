@@ -29,7 +29,7 @@ export class UserListSection {
 		const items: SettingDefinition[] = [
 			{
 				name: 'Administração de usuários',
-				desc: 'Somente administradores podem listar contas, criar usuários e alterar nomes, papéis ou status.',
+				desc: 'Somente administradores podem listar contas, criar usuários e alterar nomes, senhas, papéis ou status.',
 				searchable: false,
 			},
 			{
@@ -150,6 +150,7 @@ export class UserListSection {
 
 		if (!isCurrent && user.role === 'user') {
 			this.addNameControl(setting, user);
+			this.addPasswordResetControl(setting, user);
 		}
 		if (!isCurrent) {
 			this.addStatusControl(setting, user, protectsLastAdmin);
@@ -179,6 +180,44 @@ export class UserListSection {
 					);
 				});
 		});
+	}
+
+	private addPasswordResetControl(
+		setting: Setting,
+		user: AuthenticatedUser,
+	): void {
+		let newPassword = '';
+		setting.addText((text) => {
+			text.inputEl.type = 'password';
+			text
+				.setPlaceholder('Nova senha (6-128 caracteres)')
+				.onChange((value) => (newPassword = value));
+		});
+		setting.addButton((button) =>
+			button.setButtonText('Redefinir senha').onClick(async () => {
+				if (newPassword.length < 6 || newPassword.length > 128) {
+					new Notice(
+						'A nova senha precisa ter entre 6 e 128 caracteres.',
+					);
+					return;
+				}
+
+				button.setDisabled(true);
+				const result = await this.controller.resetUserPassword(
+					user.id,
+					newPassword,
+				);
+				button.setDisabled(false);
+
+				if (!result.ok) {
+					new Notice(result.error);
+					return;
+				}
+
+				new Notice(`Senha de ${result.value.email} redefinida.`);
+				this.refresh();
+			}),
+		);
 	}
 
 	private addStatusControl(

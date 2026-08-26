@@ -30,6 +30,10 @@ export interface SettingsController {
 		active: boolean,
 	): Promise<UserActionResult<AuthenticatedUser>>;
 	deleteUser(userId: number): Promise<UserActionResult<AuthenticatedUser>>;
+	resetUserPassword(
+		userId: number,
+		newPassword: string,
+	): Promise<UserActionResult<AuthenticatedUser>>;
 	changePassword(
 		currentPassword: string,
 		newPassword: string,

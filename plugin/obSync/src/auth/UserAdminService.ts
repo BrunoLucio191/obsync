@@ -145,6 +145,18 @@ export class UserAdminService {
 		);
 	}
 
+	public resetUserPassword(
+		userId: number,
+		newPassword: string,
+	): Promise<UserActionResult<AuthenticatedUser>> {
+		return this.mutateUser(
+			`/api/users/${userId}/password`,
+			'PATCH',
+			{ newPassword },
+			'Não foi possível redefinir a senha do usuário.',
+		);
+	}
+
 	private async mutateUser(
 		path: string,
 		method: 'PATCH' | 'DELETE',
