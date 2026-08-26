@@ -185,12 +185,11 @@ The backend refuses plain HTTP on any host other than loopback
 proxy (`OBSYNC_TRUST_PROXY=true`). There's no "just open the firewall" mode.
 
 The lightest way to satisfy that on your own network: run a local reverse
-proxy with automatic self-signed HTTPS (e.g. [Caddy](https://caddyserver.com)'s
-`caddy reverse-proxy --from :8443 --to 127.0.0.1:3000`) on the same machine as
-the backend — the backend itself stays on `127.0.0.1`, only the proxy binds
-to your LAN IP. Open your firewall for the proxy's port (`8443` above), not
-the backend's. Each other device trusts the proxy's local certificate once,
-then points the plugin's backend URL field at `https://<your-lan-ip>:8443`.
+proxy with automatic self-signed HTTPS on the same machine as the backend —
+it stays on `127.0.0.1`, only the proxy binds to your LAN IP — and open the
+firewall for the proxy's port, not the backend's. See
+[Security: reaching the backend from other devices on your LAN](docs/security.md#reaching-the-backend-from-other-devices-on-your-lan)
+for the Caddyfile, firewall commands, and certificate-trust steps.
 
 ## Development
 
