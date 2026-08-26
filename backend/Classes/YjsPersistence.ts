@@ -65,7 +65,7 @@ export class YjsPersistence {
       state.dirty = true;
 
       void this.flush(state).catch((error: unknown) => {
-        console.error(`[Yjs] Falha ao persistir ${state.fileName}:`, error);
+        console.error(`[Yjs] Failed to persist ${state.fileName}:`, error);
       });
     };
 
@@ -154,7 +154,7 @@ export class YjsPersistence {
     try {
       const buffer = await fsPromises.readFile(statePath);
       if (buffer.byteLength === 0) {
-        throw new Error(`Estado Yjs vazio ou corrompido: ${statePath}`);
+        throw new Error(`Empty or corrupted Yjs state: ${statePath}`);
       }
 
       const state = new Uint8Array(
@@ -276,7 +276,7 @@ export class YjsPersistence {
 
     if (!fullPath.startsWith(`${root}${path.sep}`)) {
       throw new Error(
-        "O documento Yjs precisa estar dentro do diretório permitido.",
+        "The Yjs document must be inside the allowed directory.",
       );
     }
 
@@ -287,12 +287,12 @@ export class YjsPersistence {
     const normalized = relativePath.replace(/\\/g, "/").trim();
 
     if (!normalized || path.isAbsolute(normalized)) {
-      throw new Error("Caminho de documento Yjs inválido.");
+      throw new Error("Invalid Yjs document path.");
     }
 
     const segments = normalized.split("/");
     if (segments.some((segment) => segment === "." || segment === "..")) {
-      throw new Error("Caminho de documento Yjs inválido.");
+      throw new Error("Invalid Yjs document path.");
     }
 
     return normalized;
@@ -302,7 +302,7 @@ export class YjsPersistence {
     try {
       return this.normalizeRelativePath(decodeURIComponent(docName));
     } catch {
-      throw new Error(`Nome de documento Yjs inválido: ${docName}`);
+      throw new Error(`Invalid Yjs document name: ${docName}`);
     }
   }
 

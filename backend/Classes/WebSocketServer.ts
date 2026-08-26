@@ -163,7 +163,7 @@ export class WebSocketServer {
           userRole: user.role,
         })
         .catch((error: unknown) => {
-          console.error("[Yjs] Falha inesperada na conexão:", error);
+          console.error("[Yjs] Unexpected connection failure:", error);
           webSocket.close(1011, "Internal Yjs error");
         });
     });
@@ -178,7 +178,7 @@ export class WebSocketServer {
       const { user } = authorization;
 
       webSocket.on("message", () => {
-        console.warn("[Audit] Mensagem de mutação recusada no canal /system", {
+        console.warn("[Audit] Mutation message refused on the /system channel", {
           userId: user.id,
           role: user.role,
           operation: "system-message",

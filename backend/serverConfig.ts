@@ -20,12 +20,12 @@ export function loadServerConfig(
 
   if (!isLoopbackHost(host) && !requireTls) {
     throw new Error(
-      "OBSYNC_REQUIRE_TLS deve ser true quando OBSYNC_HOST não é loopback.",
+      "OBSYNC_REQUIRE_TLS must be true when OBSYNC_HOST is not loopback.",
     );
   }
   if (requireTls && !trustProxy) {
     throw new Error(
-      "Esta versão termina TLS em um proxy reverso. Defina OBSYNC_TRUST_PROXY=true e mantenha a porta do backend protegida da rede pública.",
+      "This version terminates TLS at a reverse proxy. Set OBSYNC_TRUST_PROXY=true and keep the backend port protected from the public network.",
     );
   }
 
@@ -36,7 +36,7 @@ function parsePort(value: string | undefined): number {
   if (!value) return 3_000;
   const port = Number(value);
   if (!Number.isInteger(port) || port < 1 || port > 65_535) {
-    throw new Error("PORT deve ser um número inteiro entre 1 e 65535.");
+    throw new Error("PORT must be an integer between 1 and 65535.");
   }
   return port;
 }
@@ -45,7 +45,7 @@ function parseBoolean(value: string | undefined, fallback: boolean): boolean {
   if (value === undefined) return fallback;
   if (value === "true") return true;
   if (value === "false") return false;
-  throw new Error("Valores booleanos de ambiente devem ser 'true' ou 'false'.");
+  throw new Error("Environment boolean values must be 'true' or 'false'.");
 }
 
 function isLoopbackHost(host: string): boolean {

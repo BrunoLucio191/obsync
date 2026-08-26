@@ -33,7 +33,7 @@ export class TokenService {
   public constructor({ secret, dbService }: TokenServiceConstructor) {
     if (!secret || Buffer.byteLength(secret, "utf8") < 32) {
       throw new Error(
-        "OBSYNC_TOKEN_SECRET deve conter pelo menos 32 bytes aleatórios.",
+        "OBSYNC_TOKEN_SECRET must contain at least 32 random bytes.",
       );
     }
 

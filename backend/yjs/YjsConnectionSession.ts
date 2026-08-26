@@ -72,7 +72,7 @@ export class YjsConnectionSession {
 
     room.messageQueue = task
       .catch((error: unknown) => {
-        console.error(`[Yjs] Mensagem inválida em ${room.filePath}:`, error);
+        console.error(`[Yjs] Invalid message in ${room.filePath}:`, error);
         closeConnection(this.connection, 1007, "Invalid Yjs payload");
       })
       .finally(() => {
@@ -82,7 +82,7 @@ export class YjsConnectionSession {
 
   private processMessage(message: Uint8Array): void {
     if (message.byteLength === 0) {
-      throw new Error("Mensagem WebSocket Yjs vazia.");
+      throw new Error("Empty Yjs WebSocket message.");
     }
 
     if (message.byteLength > MAX_WS_MESSAGE_BYTES) {
@@ -130,11 +130,11 @@ export class YjsConnectionSession {
 
       case MESSAGE_AUTH:
         throw new Error(
-          "Mensagens de autenticação dentro do protocolo Yjs não são aceitas; use o ticket do handshake WebSocket.",
+          "Authentication messages inside the Yjs protocol are not accepted; use the WebSocket handshake ticket instead.",
         );
 
       default:
-        throw new Error(`Tipo de mensagem Yjs desconhecido: ${messageType}`);
+        throw new Error(`Unknown Yjs message type: ${messageType}`);
     }
   }
 }

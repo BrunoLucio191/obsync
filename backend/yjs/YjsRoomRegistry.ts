@@ -22,9 +22,8 @@ export class YjsRoomRegistry {
     const existing = this.rooms.get(docName);
 
     if (existing) {
-      // Uma nova conexão durante o flush final deve reconectar alguns
-      // instantes depois, em vez de entrar em uma geração de sala que está
-      // sendo destruída.
+      // A new connection during the final flush should reconnect a moment
+      // later instead of joining a room generation that is being destroyed.
       if (existing.closingPromise) return null;
 
       existing.reservations += 1;
@@ -104,7 +103,7 @@ export class YjsRoomRegistry {
     })()
       .catch((error: unknown) => {
         console.error(
-          `[Yjs] Não foi possível finalizar a sala ${room.filePath}:`,
+          `[Yjs] Could not finalize room ${room.filePath}:`,
           error,
         );
       })

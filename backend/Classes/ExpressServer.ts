@@ -47,19 +47,19 @@ function mutationErrorMessage(result: UserMutationResult): string {
 
   switch (result.reason) {
     case "not_found":
-      return "Usuário não encontrado.";
+      return "User not found.";
 
     case "last_admin":
-      return "A operação deixaria a plataforma sem um administrador ativo.";
+      return "This operation would leave the platform without an active administrator.";
 
     case "invalid_role":
-      return "Papel de usuário inválido.";
+      return "Invalid user role.";
 
     case "name_exists":
-      return "Já existe um usuário com esse nome.";
+      return "A user with that name already exists.";
 
     case "invalid_current_password":
-      return "Senha atual incorreta.";
+      return "Incorrect current password.";
   }
 }
 
@@ -125,7 +125,7 @@ export class ExpressServer {
   public initializeMiddleware(): void {
     this.app.use((req: Request, res: Response, next: NextFunction) => {
       if (this.requireTls && !req.secure) {
-        res.status(426).json({ error: "Esta instalação exige conexão HTTPS." });
+        res.status(426).json({ error: "This installation requires an HTTPS connection." });
         return;
       }
       next();
@@ -150,7 +150,7 @@ export class ExpressServer {
       const authenticatedUser = await this.tokenService.verifyToken(token);
 
       if (!authenticatedUser) {
-        res.status(401).json({ error: "Não autorizado." });
+        res.status(401).json({ error: "Unauthorized." });
         return;
       }
 
@@ -170,7 +170,7 @@ export class ExpressServer {
         this.auditDenied(user, req.method, req.path, this.requestPath(req));
         res
           .status(403)
-          .json({ error: "Apenas administradores podem executar esta ação." });
+          .json({ error: "Only administrators can perform this action." });
         return;
       }
 
@@ -187,18 +187,18 @@ export class ExpressServer {
         const { email, password } = req.body ?? {};
 
         if (!email.includes("@")) {
-          res.status(400).json({ error: "E-mail não é válido" });
+          res.status(400).json({ error: "E-mail is not valid" });
           return;
         }
 
         if (typeof email !== "string" || typeof password !== "string") {
-          res.status(400).json({ error: "E-mail e senha são obrigatórios." });
+          res.status(400).json({ error: "E-mail and password are required." });
 
           return;
         }
 
         if (email.length > 254 || password.length > 128) {
-          res.status(400).json({ error: "Credenciais inválidas." });
+          res.status(400).json({ error: "Invalid credentials." });
           return;
         }
 
@@ -212,7 +212,7 @@ export class ExpressServer {
             Math.max(accountLimit.retryAfterSeconds, ipLimit.retryAfterSeconds),
           );
           res.status(429).json({
-            error: "Muitas tentativas de login. Tente novamente mais tarde.",
+            error: "Too many login attempts. Try again later.",
           });
           return;
         }
@@ -232,11 +232,11 @@ export class ExpressServer {
               ),
             );
             res.status(429).json({
-              error: "Muitas tentativas de login. Tente novamente mais tarde.",
+              error: "Too many login attempts. Try again later.",
             });
             return;
           }
-          res.status(401).json({ error: "E-mail ou senha inválidos." });
+          res.status(401).json({ error: "Invalid e-mail or password." });
 
           return;
         }
@@ -253,7 +253,7 @@ export class ExpressServer {
           typeof refreshToken === "string" ? refreshToken : null,
         );
         if (!session) {
-          res.status(401).json({ error: "Sessão inválida ou expirada." });
+          res.status(401).json({ error: "Invalid or expired session." });
           return;
         }
 
@@ -283,7 +283,7 @@ export class ExpressServer {
       async (req: Request, res: Response): Promise<void> => {
         const channel = req.body?.channel;
         if (!this.isWebSocketChannel(channel)) {
-          res.status(400).json({ error: "Canal WebSocket inválido." });
+          res.status(400).json({ error: "Invalid WebSocket channel." });
           return;
         }
 
@@ -292,7 +292,7 @@ export class ExpressServer {
           channel,
         );
         if (!ticket) {
-          res.status(401).json({ error: "Sessão inválida ou expirada." });
+          res.status(401).json({ error: "Invalid or expired session." });
           return;
         }
 
@@ -312,7 +312,7 @@ export class ExpressServer {
           newPassword.length > 128
         ) {
           res.status(400).json({
-            error: "A nova senha precisa ter entre 6 e 128 caracteres.",
+            error: "The new password must be between 6 and 128 characters.",
           });
           return;
         }
@@ -323,7 +323,7 @@ export class ExpressServer {
         if (!limit.allowed) {
           res.setHeader("Retry-After", limit.retryAfterSeconds);
           res.status(429).json({
-            error: "Muitas tentativas. Tente novamente mais tarde.",
+            error: "Too many attempts. Try again later.",
           });
           return;
         }
@@ -340,6 +340,7 @@ export class ExpressServer {
           }
           res.status(mutationErrorStatus(result)).json({
             error: mutationErrorMessage(result),
+            reason: result.reason,
           });
           return;
         }
@@ -359,12 +360,12 @@ export class ExpressServer {
           typeof req.body?.name === "string" ? req.body.name.trim() : "";
 
         if (!userId) {
-          res.status(400).json({ error: "Usuário inválido." });
+          res.status(400).json({ error: "Invalid user." });
           return;
         }
         if (normalizedName.length < 2 || normalizedName.length > 64) {
           res.status(400).json({
-            error: "O nome precisa ter entre 2 e 64 caracteres.",
+            error: "The name must be between 2 and 64 characters.",
           });
           return;
         }
@@ -372,12 +373,12 @@ export class ExpressServer {
         const actor = this.currentUser(res);
         const target = await this.dbService.getUserById(userId, true);
         if (!target) {
-          res.status(404).json({ error: "Usuário não encontrado." });
+          res.status(404).json({ error: "User not found." });
           return;
         }
         if (target.role === "admin" && target.id !== actor.id) {
           res.status(403).json({
-            error: "Administradores só podem alterar o próprio nome.",
+            error: "Administrators can only change their own name.",
           });
           return;
         }
@@ -389,6 +390,7 @@ export class ExpressServer {
         if (!result.ok) {
           res.status(mutationErrorStatus(result)).json({
             error: mutationErrorMessage(result),
+            reason: result.reason,
           });
           return;
         }
@@ -405,7 +407,7 @@ export class ExpressServer {
         const newPassword = req.body?.newPassword;
 
         if (!userId) {
-          res.status(400).json({ error: "Usuário inválido." });
+          res.status(400).json({ error: "Invalid user." });
           return;
         }
         if (
@@ -414,20 +416,20 @@ export class ExpressServer {
           newPassword.length > 128
         ) {
           res.status(400).json({
-            error: "A nova senha precisa ter entre 6 e 128 caracteres.",
+            error: "The new password must be between 6 and 128 characters.",
           });
           return;
         }
 
         const target = await this.dbService.getUserById(userId, true);
         if (!target) {
-          res.status(404).json({ error: "Usuário não encontrado." });
+          res.status(404).json({ error: "User not found." });
           return;
         }
         if (target.role !== "user") {
           res.status(403).json({
             error:
-              "Administradores só podem redefinir a senha de usuários comuns. Use a troca de senha para a própria conta.",
+              "Administrators can only reset a regular user's password. Use the self-service password change for your own account.",
           });
           return;
         }
@@ -439,6 +441,7 @@ export class ExpressServer {
         if (!result.ok) {
           res.status(mutationErrorStatus(result)).json({
             error: mutationErrorMessage(result),
+            reason: result.reason,
           });
           return;
         }
@@ -471,11 +474,11 @@ export class ExpressServer {
         if (normalizedName.length < 2 || normalizedName.length > 64) {
           res
             .status(400)
-            .json({ error: "O nome precisa ter entre 2 e 64 caracteres." });
+            .json({ error: "The name must be between 2 and 64 characters." });
           return;
         }
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
-          res.status(400).json({ error: "Informe um e-mail válido." });
+          res.status(400).json({ error: "Enter a valid e-mail address." });
           return;
         }
         if (
@@ -485,7 +488,7 @@ export class ExpressServer {
         ) {
           res
             .status(400)
-            .json({ error: "A senha precisa ter entre 6 e 128 caracteres." });
+            .json({ error: "The password must be between 6 and 128 characters." });
           return;
         }
 
@@ -499,8 +502,9 @@ export class ExpressServer {
           res.status(409).json({
             error:
               result.reason === "email_exists"
-                ? "Já existe um usuário com esse e-mail."
-                : "Já existe um usuário com esse nome.",
+                ? "A user with that e-mail already exists."
+                : "A user with that name already exists.",
+            reason: result.reason,
           });
           return;
         }
@@ -516,7 +520,7 @@ export class ExpressServer {
         const userId = this.parseUserId(req.params.id);
         const role = req.body?.role;
         if (!userId || !this.dbService.isUserRole(role)) {
-          res.status(400).json({ error: "Usuário ou papel inválido." });
+          res.status(400).json({ error: "Invalid user or role." });
           return;
         }
 
@@ -524,6 +528,7 @@ export class ExpressServer {
         if (!result.ok) {
           res.status(mutationErrorStatus(result)).json({
             error: mutationErrorMessage(result),
+            reason: result.reason,
           });
           return;
         }
@@ -540,7 +545,7 @@ export class ExpressServer {
         const active = req.body?.active;
 
         if (!userId || typeof active !== "boolean") {
-          res.status(400).json({ error: "Usuário ou status inválido." });
+          res.status(400).json({ error: "Invalid user or status." });
           return;
         }
 
@@ -548,6 +553,7 @@ export class ExpressServer {
         if (!result.ok) {
           res.status(mutationErrorStatus(result)).json({
             error: mutationErrorMessage(result),
+            reason: result.reason,
           });
           return;
         }
@@ -562,7 +568,7 @@ export class ExpressServer {
       async (req: Request, res: Response): Promise<void> => {
         const userId = this.parseUserId(req.params.id);
         if (!userId) {
-          res.status(400).json({ error: "Usuário inválido." });
+          res.status(400).json({ error: "Invalid user." });
           return;
         }
 
@@ -570,6 +576,7 @@ export class ExpressServer {
         if (!result.ok) {
           res.status(mutationErrorStatus(result)).json({
             error: mutationErrorMessage(result),
+            reason: result.reason,
           });
           return;
         }
@@ -582,18 +589,18 @@ export class ExpressServer {
       requireAuth,
       async (_req: Request, res: Response): Promise<void> => {
         try {
-          console.log("📦 [ZIP] Iniciando compactação...");
+          console.log("📦 [ZIP] Starting compression...");
           await this.fileManager.directoryZiped();
           const zipPath = systemPaths.vaultExit;
 
           res.download(zipPath, "vault.zip", async (error) => {
             if (error) {
-              console.error("❌ [ZIP] Erro no envio:", error.message);
+              console.error("❌ [ZIP] Error sending file:", error.message);
               if (!res.headersSent) {
-                res.status(500).json({ error: "Falha ao enviar os arquivos." });
+                res.status(500).json({ error: "Failed to send the files." });
               }
             } else {
-              console.log("✅ [ZIP] Enviado com sucesso.");
+              console.log("✅ [ZIP] Sent successfully.");
             }
 
             await fs.unlink(zipPath).catch((unlinkError: unknown) => {
@@ -603,27 +610,27 @@ export class ExpressServer {
                 (unlinkError as NodeJS.ErrnoException).code !== "ENOENT"
               ) {
                 console.error(
-                  "⚠️ [ZIP] Erro ao limpar arquivo temporário:",
+                  "⚠️ [ZIP] Error cleaning up temporary file:",
                   unlinkError,
                 );
               }
             });
           });
         } catch (error) {
-          console.error("❌ [ZIP] Erro geral:", error);
-          res.status(500).json({ error: "Erro interno ao gerar o arquivo." });
+          console.error("❌ [ZIP] General error:", error);
+          res.status(500).json({ error: "Internal error generating the file." });
         }
       },
     );
 
-    // Toda mutação global da estrutura exige autenticação e papel admin.
+    // Every global structure mutation requires authentication and the admin role.
     this.app.use("/sync", requireAuth, requireAdmin);
 
     this.app.post("/sync/create", async (req: Request, res: Response) => {
       try {
         const { path, isFolder, content } = req.body;
         if (typeof path !== "string" || !path.trim()) {
-          res.status(400).send("Caminho inválido");
+          res.status(400).send("Invalid path");
           return;
         }
 
@@ -648,8 +655,8 @@ export class ExpressServer {
         });
         res.sendStatus(200);
       } catch (error) {
-        console.error("❌ [Sync] Erro no Create:", error);
-        res.status(500).send("Erro ao criar arquivo ou pasta");
+        console.error("❌ [Sync] Error in Create:", error);
+        res.status(500).send("Error creating file or folder");
       }
     });
 
@@ -657,7 +664,7 @@ export class ExpressServer {
       try {
         const { path, isFolder } = req.body;
         if (typeof path !== "string" || !path.trim()) {
-          res.status(400).send("Caminho inválido");
+          res.status(400).send("Invalid path");
           return;
         }
 
@@ -678,8 +685,8 @@ export class ExpressServer {
         });
         res.sendStatus(200);
       } catch (error) {
-        console.error("[Sync] Erro no Delete:", error);
-        res.status(500).send("Erro ao deletar");
+        console.error("[Sync] Error in Delete:", error);
+        res.status(500).send("Error deleting");
       }
     });
 
@@ -687,11 +694,11 @@ export class ExpressServer {
       try {
         const { path, content } = req.body;
         if (typeof path !== "string" || typeof content !== "string") {
-          res.status(400).send("Conteúdo ou caminho inválido");
+          res.status(400).send("Invalid content or path");
           return;
         }
         if (this.collaborationServer.isPathDeleted(path)) {
-          res.status(409).send("O caminho foi excluído");
+          res.status(409).send("The path was deleted");
           return;
         }
 
@@ -704,8 +711,8 @@ export class ExpressServer {
         });
         res.sendStatus(200);
       } catch (error) {
-        console.error("❌ [Sync] Erro no Modify:", error);
-        res.status(500).send("Erro ao modificar arquivo");
+        console.error("❌ [Sync] Error in Modify:", error);
+        res.status(500).send("Error modifying file");
       }
     });
     //TODO: fix bug when dealing with Tfolders
@@ -718,7 +725,7 @@ export class ExpressServer {
           typeof newPath !== "string" ||
           !newPath.trim()
         ) {
-          res.status(400).send("Caminho inválido");
+          res.status(400).send("Invalid path");
           return;
         }
 
@@ -735,8 +742,8 @@ export class ExpressServer {
         });
         res.sendStatus(200);
       } catch (error) {
-        console.error("❌ [Sync] Erro no Rename:", error);
-        res.status(500).send("Erro ao renomear");
+        console.error("❌ [Sync] Error in Rename:", error);
+        res.status(500).send("Error renaming");
       }
     });
   }
@@ -778,7 +785,7 @@ export class ExpressServer {
     route: string,
     targetPath?: string,
   ): void {
-    console.warn("[Audit] Operação global bloqueada", {
+    console.warn("[Audit] Global operation blocked", {
       userId: user.id,
       role: user.role,
       operation,
@@ -792,7 +799,7 @@ export class ExpressServer {
   public serverStart(port = this.port): void {
     this.server.once("error", (error) => {
       console.error(
-        `Não foi possível iniciar o servidor na porta ${port}:`,
+        `Could not start the server on port ${port}:`,
         error,
       );
     });

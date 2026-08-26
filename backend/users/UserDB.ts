@@ -32,7 +32,7 @@ export class UserDB extends DatabaseSync {
     ).get() as { found: number } | undefined;
 
     if (!usersTable) {
-      throw new Error("A tabela obrigatória 'users' não existe.");
+      throw new Error("The required 'users' table does not exist.");
     }
 
     const activeAdministrator = this.prepare(
@@ -40,7 +40,7 @@ export class UserDB extends DatabaseSync {
     ).get() as { found: number } | undefined;
 
     if (!activeAdministrator) {
-      throw new Error("Não existe um administrador ativo no banco de dados.");
+      throw new Error("There is no active administrator in the database.");
     }
 
     this.configDataBase();
@@ -110,7 +110,7 @@ export class UserDB extends DatabaseSync {
     ).get() as { id: number } | undefined;
     if (!first) {
       throw new Error(
-        "Não existe usuário ativo para promover a administrador.",
+        "There is no active user to promote to administrator.",
       );
     }
     this.prepare("UPDATE users SET role = 'admin' WHERE id = ?").run(first.id);
@@ -118,16 +118,16 @@ export class UserDB extends DatabaseSync {
   }
 
   private printSeedSummary(seeded: SeededUser[], adminId: number): void {
-    console.log("[Database] Seed: contas iniciais criadas.");
+    console.log("[Database] Seed: initial accounts created.");
     for (const user of seeded) {
       const role = user.id === adminId ? "admin" : "user";
       console.log(
-        `[Database]   ${user.email} — senha temporária (${role}): ${user.password}`,
+        `[Database]   ${user.email} — temporary password (${role}): ${user.password}`,
       );
     }
     console.log(
-      "[Database] Guarde essas senhas agora: elas não serão exibidas novamente. " +
-        "Entre no Obsidian e troque-as em Configurações do ObSync → Conta → Trocar senha.",
+      "[Database] Save these passwords now: they will not be shown again. " +
+        "Sign in to Obsidian and change them under ObSync Settings -> Account -> Change password.",
     );
   }
 }

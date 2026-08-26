@@ -15,18 +15,18 @@ export class FileManager {
 
   private resolveVaultPath(relativePath: string): string {
     if (typeof relativePath !== "string" || !relativePath.trim()) {
-      throw new Error("O caminho do arquivo é obrigatório.");
+      throw new Error("The file path is required.");
     }
 
     if (path.isAbsolute(relativePath)) {
-      throw new Error("Caminhos absolutos não são permitidos.");
+      throw new Error("Absolute paths are not allowed.");
     }
     const vaultRoot = path.resolve(this.vaultPath);
 
     const fullPath = path.resolve(vaultRoot, relativePath);
 
     if (!fullPath.startsWith(`${vaultRoot}${path.sep}`)) {
-      throw new Error("O caminho precisa estar dentro do vault.");
+      throw new Error("The path must be inside the vault.");
     }
 
     return fullPath;

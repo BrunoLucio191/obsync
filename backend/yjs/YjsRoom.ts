@@ -98,8 +98,8 @@ export class YjsRoom {
     this.sendAwarenessSnapshot(connection);
   }
 
-  // Chamada pelo release de uma conexão que se desconectou: revoga o
-  // ownership de awareness que ela controlava e limpa seu estado de sala.
+  // Called when releasing a connection that disconnected: revokes the
+  // awareness ownership it controlled and clears its room state.
   public releaseConnection(connection: WebSocket): void {
     const state = this.connections.get(connection);
     if (!state || state.closed) return;

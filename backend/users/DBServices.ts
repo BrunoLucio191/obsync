@@ -60,7 +60,7 @@ export class DBServices {
     row: Omit<StoredUserRow, "password_hash">,
   ): AuthenticatedUser {
     if (!this.isUserRole(row.role)) {
-      throw new Error(`Papel inválido armazenado para o usuário ${row.id}.`);
+      throw new Error(`Invalid role stored for user ${row.id}.`);
     }
 
     return {
@@ -128,7 +128,7 @@ export class DBServices {
           "SELECT id, email, name, role, active FROM users WHERE email = ?",
         )
         .get(emailKey) as Omit<StoredUserRow, "password_hash"> | undefined;
-      if (!row) throw new Error("O usuário criado não pôde ser carregado.");
+      if (!row) throw new Error("The created user could not be loaded.");
       return { ok: true, user: this.rowToUser(row) };
     });
 

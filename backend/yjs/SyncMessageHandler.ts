@@ -43,7 +43,7 @@ export class SyncMessageHandler {
         ensureDecoderConsumed(decoder);
 
         if (!connectionState.canWriteGlobal) {
-          console.warn("[Audit] Update Yjs global bloqueado", {
+          console.warn("[Audit] Global Yjs update blocked", {
             userId: connectionState.userId,
             role: connectionState.userRole,
             operation:
@@ -65,7 +65,7 @@ export class SyncMessageHandler {
 
       default:
         throw new Error(
-          `Tipo interno de sincronização Yjs desconhecido: ${syncMessageType}`,
+          `Unknown internal Yjs sync message type: ${syncMessageType}`,
         );
     }
   }

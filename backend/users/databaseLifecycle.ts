@@ -10,8 +10,8 @@ export const DATABASE_SETUP_COMMAND = "npm run db:setup";
 
 function missingDatabaseInstruction(databasePath: string): string {
   return [
-    `[Database] Banco de usuários não encontrado em: ${databasePath}`,
-    `[Database] Execute '${DATABASE_SETUP_COMMAND}' na raiz do projeto antes de iniciar o backend.`,
+    `[Database] User database not found at: ${databasePath}`,
+    `[Database] Run '${DATABASE_SETUP_COMMAND}' from the project root before starting the backend.`,
   ].join("\n");
 }
 
@@ -30,9 +30,9 @@ export function openUserDatabase(databasePath: string): UserDB {
     const reason = error instanceof Error ? error.message : String(error);
     throw new Error(
       [
-        `[Database] Banco de usuários inválido em: ${databasePath}`,
-        `[Database] Motivo: ${reason}`,
-        "[Database] Corrija ou restaure o arquivo. Para recriá-lo, faça backup, remova o arquivo inválido e execute " +
+        `[Database] Invalid user database at: ${databasePath}`,
+        `[Database] Reason: ${reason}`,
+        "[Database] Fix or restore the file. To recreate it, back it up, remove the invalid file, and run " +
           `'${DATABASE_SETUP_COMMAND}'.`,
       ].join("\n"),
     );
@@ -42,8 +42,8 @@ export function openUserDatabase(databasePath: string): UserDB {
 export async function createUserDatabase(databasePath: string): Promise<void> {
   if (existsSync(databasePath)) {
     throw new Error(
-      `[Database] O banco de usuários já existe em: ${databasePath}\n` +
-        "[Database] Nenhum arquivo foi alterado.",
+      `[Database] The user database already exists at: ${databasePath}\n` +
+        "[Database] No file was changed.",
     );
   }
 

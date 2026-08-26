@@ -16,14 +16,14 @@ export function parseDocumentIdentity(
   const encodedPath = requestUrl.pathname.replace(/^\/+/, "");
 
   if (!encodedPath) {
-    throw new Error("A sala Yjs não possui um nome de documento.");
+    throw new Error("The Yjs room has no document name.");
   }
 
   let decodedPath: string;
   try {
     decodedPath = decodeURIComponent(encodedPath);
   } catch {
-    throw new Error("O nome da sala Yjs possui codificação inválida.");
+    throw new Error("The Yjs room name has invalid encoding.");
   }
 
   const filePath = normalizeVaultPath(decodedPath);
@@ -33,7 +33,7 @@ export function parseDocumentIdentity(
     !filePath ||
     segments.some((segment) => segment === "." || segment === "..")
   ) {
-    throw new Error("O caminho da sala Yjs é inválido.");
+    throw new Error("The Yjs room path is invalid.");
   }
 
   return {

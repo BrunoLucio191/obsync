@@ -75,7 +75,7 @@ export class YjsCollaborationServer {
     try {
       identity = parseDocumentIdentity(request);
     } catch (error) {
-      console.error("[Yjs] Sala recusada:", error);
+      console.error("[Yjs] Room rejected:", error);
       closeConnection(connection, 1008, "Invalid document path");
       return;
     }
@@ -131,7 +131,7 @@ export class YjsCollaborationServer {
     });
 
     connection.once("error", (error: Error) => {
-      console.error(`[Yjs] Erro na sala ${room.filePath}:`, error);
+      console.error(`[Yjs] Error in room ${room.filePath}:`, error);
     });
 
     try {
@@ -141,7 +141,7 @@ export class YjsCollaborationServer {
         room.sendInitialSync(connection);
       }
     } catch (error) {
-      console.error(`[Yjs] Falha ao inicializar ${room.filePath}:`, error);
+      console.error(`[Yjs] Failed to initialize ${room.filePath}:`, error);
       closeConnection(connection, 1011, "Document initialization failed");
     }
   }

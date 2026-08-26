@@ -24,7 +24,7 @@ export function sendBinaryMessage(
   try {
     connection.send(message, { binary: true });
   } catch (error) {
-    console.error("[Yjs] Falha ao enviar mensagem WebSocket:", error);
+    console.error("[Yjs] Failed to send WebSocket message:", error);
     connection.terminate();
   }
 }
@@ -50,7 +50,7 @@ export function closeConnection(
 
 export function ensureDecoderConsumed(decoder: decoding.Decoder): void {
   if (decoding.hasContent(decoder)) {
-    throw new Error("A mensagem Yjs contém bytes inesperados no final.");
+    throw new Error("The Yjs message contains unexpected trailing bytes.");
   }
 }
 
@@ -61,7 +61,7 @@ export function readBoundedByteArray(
   const value = decoding.readVarUint8Array(decoder);
 
   if (value.byteLength > MAX_WS_MESSAGE_BYTES) {
-    throw new Error(`${label} excede o tamanho máximo permitido.`);
+    throw new Error(`${label} exceeds the maximum allowed size.`);
   }
 
   return value;

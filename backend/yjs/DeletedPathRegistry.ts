@@ -15,7 +15,7 @@ export class DeletedPathRegistry {
     return false;
   }
 
-  // Retorna a forma normalizada para quem precisa invalidar salas ativas.
+  // Returns the normalized form for callers that need to invalidate active rooms.
   public markDeleted(targetPath: string): string {
     const normalizedTarget = normalizeVaultPath(targetPath);
 

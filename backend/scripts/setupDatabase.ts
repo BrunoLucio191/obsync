@@ -4,7 +4,7 @@ import { createUserDatabase } from "../users/databaseLifecycle.ts";
 
 async function main(): Promise<void> {
   await createUserDatabase(systemPaths.usersDatabase);
-  console.log(`[Database] Banco criado e seed aplicado em: ${systemPaths.usersDatabase}`);
+  console.log(`[Database] Database created and seed applied at: ${systemPaths.usersDatabase}`);
 }
 
 main().catch((error: unknown) => {

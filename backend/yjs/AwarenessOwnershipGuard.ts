@@ -28,8 +28,8 @@ export class AwarenessOwnershipGuard {
       const currentOwner = room.awarenessOwners.get(entry.clientId);
 
       if (entry.state === null) {
-        // O y-websocket pode ecoar snapshots de awareness remoto. Uma conexão
-        // só pode remover clientIds que ela realmente controla.
+        // y-websocket can echo back remote awareness snapshots. A connection
+        // can only remove clientIds it actually controls.
         if (currentOwner !== connection) {
           ignoredEntries.push({
             clientId: entry.clientId,
@@ -47,9 +47,9 @@ export class AwarenessOwnershipGuard {
 
       const presenceId = getAwarenessPresenceIdentity(entry.state);
 
-      // A identidade do awareness precisa ser a mesma identidade autenticada
-      // no upgrade HTTP. Isso descarta snapshots remotos reenviados pelo
-      // provider, como Bruno enviando acidentalmente o estado de Thiago.
+      // The awareness identity must match the identity authenticated at the
+      // HTTP upgrade. This discards remote snapshots re-sent by the
+      // provider, such as one user accidentally sending another user's state.
       if (
         authenticatedPresenceId === null ||
         presenceId === null ||
@@ -71,8 +71,8 @@ export class AwarenessOwnershipGuard {
         );
 
         if (currentOwnerPresenceId !== authenticatedPresenceId) {
-          // Uma colisão real entre usuários diferentes não deve derrubar
-          // nenhum socket nem transferir ownership silenciosamente.
+          // A real collision between different users must not drop any
+          // socket or silently transfer ownership.
           ignoredEntries.push({
             clientId: entry.clientId,
             reason: "cross-user-client-id-collision",
@@ -82,9 +82,9 @@ export class AwarenessOwnershipGuard {
           continue;
         }
 
-        // Reconexão do mesmo usuário. O ownership pode passar para o socket
-        // novo, mas o socket antigo não é fechado: isso evita o ping-pong de
-        // conexões.
+        // Reconnection of the same user. Ownership can move to the new
+        // socket, but the old socket is not closed: this avoids a
+        // connection ping-pong.
         room.connections
           .get(currentOwner)
           ?.controlledAwarenessIds.delete(entry.clientId);
@@ -95,7 +95,7 @@ export class AwarenessOwnershipGuard {
 
     if (ignoredEntries.length > 0) {
       console.warn(
-        `[Yjs] Entradas de awareness ignoradas em ${room.filePath}:`,
+        `[Yjs] Ignored awareness entries in ${room.filePath}:`,
         ignoredEntries,
       );
     }
@@ -137,7 +137,7 @@ export class AwarenessOwnershipGuard {
     const count = decoding.readVarUint(decoder);
 
     if (count > MAX_AWARENESS_ENTRIES_PER_MESSAGE) {
-      throw new Error("A mensagem de awareness possui entradas demais.");
+      throw new Error("The awareness message has too many entries.");
     }
 
     const entries: YjsAwarenessEntry[] = [];
@@ -151,7 +151,7 @@ export class AwarenessOwnershipGuard {
       try {
         state = JSON.parse(stateJson) as unknown;
       } catch {
-        throw new Error("Estado de awareness inválido.");
+        throw new Error("Invalid awareness state.");
       }
 
       entries.push({ clientId, clock, state });
