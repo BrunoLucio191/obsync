@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 import {
   normalizeEmailKey,
@@ -5,6 +6,12 @@ import {
   normalizeNameKey,
 } from "./userNormalization.ts";
 import { hashPassword } from "../auth/PasswordUtil.ts";
+
+type SeededUser = { id: number; email: string; password: string };
+
+function generateTemporaryPassword(): string {
+  return randomBytes(12).toString("base64url");
+}
 
 export class UserDB extends DatabaseSync {
   constructor(path: string) {
@@ -14,8 +21,9 @@ export class UserDB extends DatabaseSync {
   public async setup(): Promise<void> {
     this.createSchema();
     this.configDataBase();
-    await this.createInitialUsers();
-    this.ensureInitialAdministrator();
+    const seeded = await this.createInitialUsers();
+    const adminId = this.ensureInitialAdministrator();
+    this.printSeedSummary(seeded, adminId);
   }
 
   public prepareForRuntime(): void {
@@ -64,10 +72,10 @@ export class UserDB extends DatabaseSync {
           ON users(role,active);
       `);
   }
-  private async createInitialUsers(): Promise<void> {
+  private async createInitialUsers(): Promise<SeededUser[]> {
     const users = [
-      { email: "thiago@gmail.com", name: "Thiago", password: "123456" },
-      { email: "brunoestudos6@gmail.com", name: "Bruno", password: "123456" },
+      { email: "thiago@gmail.com", name: "Thiago" },
+      { email: "brunoestudos6@gmail.com", name: "Bruno" },
     ];
     const insert = this.prepare(
       `INSERT OR IGNORE INTO users
@@ -75,18 +83,28 @@ export class UserDB extends DatabaseSync {
        VALUES (?, ?, ?, ?, 'user', 1)`,
     );
 
+    const seeded: SeededUser[] = [];
+
     for (const user of users) {
       const email = normalizeEmailKey(user.email);
       const name = normalizeName(user.name);
-      insert.run(
+      const password = generateTemporaryPassword();
+      const result = insert.run(
         email,
         name,
         normalizeNameKey(name),
-        await hashPassword(user.password),
+        await hashPassword(password),
       );
+
+      if (result.changes > 0) {
+        seeded.push({ id: Number(result.lastInsertRowid), email, password });
+      }
     }
+
+    return seeded;
   }
-  private ensureInitialAdministrator(): void {
+
+  private ensureInitialAdministrator(): number {
     const first = this.prepare(
       "SELECT id FROM users WHERE active = 1 ORDER BY id LIMIT 1",
     ).get() as { id: number } | undefined;
@@ -96,8 +114,20 @@ export class UserDB extends DatabaseSync {
       );
     }
     this.prepare("UPDATE users SET role = 'admin' WHERE id = ?").run(first.id);
+    return first.id;
+  }
+
+  private printSeedSummary(seeded: SeededUser[], adminId: number): void {
+    console.log("[Database] Seed: contas iniciais criadas.");
+    for (const user of seeded) {
+      const role = user.id === adminId ? "admin" : "user";
+      console.log(
+        `[Database]   ${user.email} — senha temporária (${role}): ${user.password}`,
+      );
+    }
     console.log(
-      `[Database] Seed: usuário id=${first.id} definido como administrador inicial.`,
+      "[Database] Guarde essas senhas agora: elas não serão exibidas novamente. " +
+        "Entre no Obsidian e troque-as em Configurações do ObSync → Conta → Trocar senha.",
     );
   }
 }
