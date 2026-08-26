@@ -74,6 +74,19 @@ spraying across multiple accounts. A block lasts 15 minutes and returns HTTP
 `429` with `Retry-After`. A successful login resets the account counter; it does
 not erase other failures made by that IP.
 
+## Account passwords
+
+`npm run db:setup` seeds the initial accounts with a random temporary password
+per account, printed once to the terminal — it is not stored anywhere and
+cannot be recovered afterward. Copy it down before closing the terminal.
+
+Any account can change its own password from Obsidian, under **Settings →
+ObSync → Conta → Trocar senha**, or by calling
+[`POST /auth/change-password`](reference/backend/http.md#post-authchange-password)
+directly. The current password must be supplied and is verified before the
+change is applied; there is no admin-triggered reset for another account's
+password yet. Change the temporary seed password the first time you sign in.
+
 ## Signing secret
 
 `OBSYNC_TOKEN_SECRET` must contain at least 32 random bytes. Generate one

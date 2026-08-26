@@ -23,6 +23,7 @@ new DBServices(userDB: UserDB)
 | `updateUserName(id, name)` | `UserMutationResult` | Normalizes and updates a unique display name |
 | `updateUserRole(id, role)` | `UserMutationResult` | Prevents demotion of the last active admin |
 | `updateUserStatus(id, active)` | `UserMutationResult` | Prevents deactivating the last active admin |
+| `updateUserPassword(id, currentPassword, newPassword)` | `UserMutationResult` | Verifies the current password before hashing and storing the new one |
 | `deleteUser(id)` | `UserMutationResult` | Prevents deleting the last active admin |
 
 ## ExpressServer

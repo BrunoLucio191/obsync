@@ -72,6 +72,21 @@ Requires authentication. Returns the current database profile:
 { "user": { "id": 1, "email": "...", "name": "...", "role": "admin", "active": true } }
 ```
 
+### `POST /auth/change-password`
+
+Requires authentication. Any role can change its own password; there is no
+admin-triggered reset for another account.
+
+```json
+{ "currentPassword": "old-password", "newPassword": "new-password" }
+```
+
+`newPassword` must contain 6–128 characters. `currentPassword` is verified
+against the stored hash before the update. Failed attempts are rate-limited
+per account (5 per 15 minutes, independent of the login limiter) and return
+`429` with `Retry-After` once exceeded. An incorrect current password returns
+`401`. Returns `200 { user }` on success.
+
 ### `POST /auth/ws-ticket`
 
 Requires authentication.

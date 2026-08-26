@@ -24,11 +24,17 @@ The setup command:
 
 1. refuses to overwrite an existing database;
 2. creates the `users` schema;
-3. inserts the initial users defined by the seed;
+3. inserts the initial users defined by the seed, each with its own random
+   temporary password;
 4. promotes the first active seeded user to `admin`;
-5. removes a newly created database if setup fails before completion.
+5. prints every seeded email and its temporary password to the terminal —
+   this is the only time they are shown;
+6. removes a newly created database if setup fails before completion.
 
 At runtime, the backend validates that the database exists, contains the `users` table, and has an active administrator. Startup stops with the setup command in the terminal message when validation fails.
+
+See [Security: account passwords](security.md#account-passwords) for rotating
+these temporary passwords after first sign-in.
 
 ## Client storage
 

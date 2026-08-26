@@ -96,6 +96,20 @@ Requests a short-lived, one-use ticket for a specific WebSocket channel.
 Returns `null` when the session cannot be refreshed or the ticket endpoint
 rejects the request.
 
+### `changePassword()`
+
+```ts
+changePassword(
+	currentPassword: string,
+	newPassword: string,
+): Promise<UserActionResult<null>>
+```
+
+Calls `POST /auth/change-password` for the current user, retrying once after a
+token refresh on `401`. Available to both roles — changing your own password
+is not an admin-only action. Exposed in the plugin settings under **Conta →
+Trocar senha** (see `AccountSettingsSection`).
+
 ### Session maintenance
 
 | Method | Behavior |
