@@ -12,6 +12,16 @@ For local development, keep `OBSYNC_HOST=127.0.0.1` and
 proxy, enable `OBSYNC_REQUIRE_TLS` and `OBSYNC_TRUST_PROXY`, and make sure the
 proxy sends `X-Forwarded-Proto: https` for both HTTP and WebSocket requests.
 
+## Plugin can't reach a local backend
+
+The backend's default `OBSYNC_HOST=127.0.0.1` binds only the IPv4 loopback
+interface. If the plugin's **Backend server URL** setting uses `localhost`
+instead of `127.0.0.1`, the client's DNS/loopback resolution can prefer IPv6
+(`::1`), where nothing is listening, and the connection fails or stalls
+before falling back to IPv4. Use `http://127.0.0.1:<port>` directly for local
+testing to avoid this; it always reaches the exact interface the backend
+opened.
+
 ## User database is missing
 
 Backend startup reports the database path and exits when `backend/data/users.sqlite` has not been initialized. Create and seed it from the repository root:
@@ -58,7 +68,7 @@ The admin marker should be shared. The user marker should remain visible only in
 The backend reports rejected Yjs writes with:
 
 ```text
-[Audit] Update Yjs global bloqueado
+[Audit] Global Yjs update blocked
 ```
 
 When a private edit appears in shared state, check the following in order:
