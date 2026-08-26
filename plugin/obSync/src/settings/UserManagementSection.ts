@@ -32,7 +32,7 @@ export class UserManagementSection {
 	}
 
 	public definitions(): SettingDefinitionItem[] {
-		return [this.list.definition(), this.createForm.definition()];
+		return [...this.list.definitions(), this.createForm.definition()];
 	}
 
 	public renderEditableName(

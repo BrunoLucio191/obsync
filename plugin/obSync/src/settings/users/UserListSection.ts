@@ -3,6 +3,7 @@ import {
 	type Setting,
 	type SettingDefinition,
 	type SettingDefinitionGroup,
+	type SettingDefinitionItem,
 } from 'obsidian';
 import type {
 	AuthenticatedUser,
@@ -25,59 +26,68 @@ export class UserListSection {
 		private readonly refresh: () => void,
 	) {}
 
-	public definition(): SettingDefinitionGroup {
-		const items: SettingDefinition[] = [
-			{
-				name: 'Administração de usuários',
-				desc: 'Somente administradores podem listar contas, criar usuários e alterar nomes, senhas, papéis ou status.',
-				searchable: false,
-			},
-			{
-				name: 'Contas cadastradas',
-				desc: this.listStatusDescription(),
-				searchable: false,
-				render: (setting) => {
-					setting
-						.setName('Contas cadastradas')
-						.setDesc(this.listStatusDescription());
-					if (this.loadError) {
-						setting.addButton((button) =>
-							button
-								.setButtonText('Tentar novamente')
-								.onClick(() => {
-									this.loadError = null;
-									this.ensureLoaded();
-									this.refresh();
-								}),
-						);
-					} else {
-						this.ensureLoaded();
-					}
+	public definitions(): SettingDefinitionItem[] {
+		const infoGroup: SettingDefinitionGroup = {
+			type: 'group',
+			heading: 'Administração de usuários',
+			items: [
+				{
+					name: 'Administração de usuários',
+					desc: 'Somente administradores podem listar contas, criar usuários e alterar nomes, senhas, papéis ou status.',
+					searchable: false,
 				},
-			},
-		];
+				{
+					name: 'Contas cadastradas',
+					desc: this.listStatusDescription(),
+					searchable: false,
+					render: (setting) => {
+						setting
+							.setName('Contas cadastradas')
+							.setDesc(this.listStatusDescription());
+						if (this.loadError) {
+							setting.addButton((button) =>
+								button
+									.setButtonText('Tentar novamente')
+									.onClick(() => {
+										this.loadError = null;
+										this.ensureLoaded();
+										this.refresh();
+									}),
+							);
+						} else {
+							this.ensureLoaded();
+						}
+					},
+				},
+			],
+		};
 
+		const userItems: SettingDefinition[] = [];
 		if (this.loaded) {
 			const currentUser = this.controller.config.user;
 			const activeAdminCount = this.directory.activeAdminCount();
 			for (const user of this.directory.all()) {
-				items.push(
+				userItems.push(
 					this.userDefinition(user, currentUser, activeAdminCount),
 				);
 			}
 		}
 
-		return {
+		// Separate group so the search box and rows can scroll on their own,
+		// without dragging the always-visible info group above along with them.
+		const listGroup: SettingDefinitionGroup = {
 			type: 'group',
-			heading: 'Administração de usuários',
 			cls: 'obsync-user-list-scroll',
+			visible: () => this.loaded,
 			search: {
 				placeholder: 'Nome ou e-mail',
 				match: (definition, query) =>
 					this.matchesSearch(definition, query),
 			},
-			items,
+			items: userItems,
 		};
+
+		return [infoGroup, listGroup];
 	}
 
 	public destroy(): void {
