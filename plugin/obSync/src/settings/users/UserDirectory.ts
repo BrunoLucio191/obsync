@@ -14,6 +14,20 @@ export class UserDirectory {
 		if (index !== -1) this.users[index] = updatedUser;
 	}
 
+	// Inserts a user created after the initial listUsers() fetch, keeping the
+	// id ordering replaceAll() establishes. A no-op if the id is already
+	// cached, so a stale double-call can't create a duplicate row.
+	public add(newUser: AuthenticatedUser): void {
+		if (this.users.some((user) => user.id === newUser.id)) return;
+
+		const insertAt = this.users.findIndex((user) => user.id > newUser.id);
+		if (insertAt === -1) {
+			this.users.push(newUser);
+		} else {
+			this.users.splice(insertAt, 0, newUser);
+		}
+	}
+
 	public remove(userId: number): void {
 		this.users = this.users.filter((user) => user.id !== userId);
 	}

@@ -112,6 +112,7 @@ export class CreateUserSection {
 										return;
 									}
 
+									this.directory.add(result.value);
 									this.reset();
 									new Notice(
 										t('userAdmin.userCreated', {
