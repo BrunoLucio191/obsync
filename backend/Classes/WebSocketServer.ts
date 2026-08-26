@@ -9,13 +9,10 @@ import {
 } from "../yjsUtils.ts";
 import { vaultEvents, type VaultChange } from "../syncEvents.ts";
 import { dbEvents } from "../users/DBEvents.ts";
-import type {
-  TokenService,
-  WebSocketAuthorization,
-} from "../auth/TokenService.ts";
+import type { TokenService } from "../auth/TokenService.ts";
 import type { WebSocketChannel } from "../auth/auth.types.ts";
 import { systemPaths } from "../paths.ts";
-
+import { type WebSocketAuthorization } from "../auth/tokenService.types.ts";
 const HEARTBEAT_INTERVAL_MS = 30_000;
 const TICKET_PROTOCOL_PREFIX = "obsync-ticket.";
 
@@ -115,9 +112,12 @@ export class WebSHocket {
 
     targetServer.handleUpgrade(request, socket, head, (webSocket) => {
       this.authenticatedConnections.set(webSocket, authorization);
-      const expirationTimer = setTimeout(() => {
-        webSocket.close(4003, "Access token expired");
-      }, Math.max(0, authorization.expiresAt - Date.now()));
+      const expirationTimer = setTimeout(
+        () => {
+          webSocket.close(4003, "Access token expired");
+        },
+        Math.max(0, authorization.expiresAt - Date.now()),
+      );
       expirationTimer.unref();
       webSocket.once("close", () => {
         clearTimeout(expirationTimer);
