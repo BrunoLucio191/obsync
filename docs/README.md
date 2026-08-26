@@ -39,6 +39,7 @@ methods, objects, endpoints, and protocols that implement that behavior.
 
 ## Operations
 
+- [Getting started](../README.md#getting-started) — first-time setup, from a fresh clone to a signed-in plugin
 - [Troubleshooting](debugging.md) — build, startup, authentication, and synchronization checks
 - [Security deployment](security.md#transport-rules) — local and remote transport configuration
 - [Database setup](storage.md#sqlite-user-database) — explicit database creation and seed

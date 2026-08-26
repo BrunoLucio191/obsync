@@ -26,6 +26,7 @@ accounts can hold either role:
 - [How synchronization works](#how-synchronization-works)
 - [Repository layout](#repository-layout)
 - [Documentation](#documentation)
+- [Getting started](#getting-started)
 - [Development](#development)
 
 ## How synchronization works
@@ -61,37 +62,110 @@ docs/            architecture and operational documentation
   - [WebSocket API](docs/reference/backend/websocket.md)
 - [Concepts and operational guides](docs/README.md#concepts)
 
-## Development
+## Getting started
 
-Install workspace dependencies from the repository root:
+These steps take a fresh clone to a signed-in plugin talking to your own
+backend. Run them from the repository root unless noted otherwise.
+
+### 1. Install dependencies
 
 ```bash
 npm install
 ```
 
-Create `backend/.env` with the backend settings:
+### 2. Configure the backend
+
+Generate a signing secret — this is a random value, not a password you choose:
+
+```bash
+openssl rand -base64 48
+```
+
+Create `backend/.env`:
 
 ```dotenv
-OBSYNC_TOKEN_SECRET=<output from openssl rand -base64 48>
+OBSYNC_TOKEN_SECRET=<paste the value generated above>
 PORT=3000
 OBSYNC_HOST=127.0.0.1
 OBSYNC_REQUIRE_TLS=false
 OBSYNC_TRUST_PROXY=false
 ```
 
-Generate the signing secret with:
+This configuration is for local development only. For a real deployment, see
+[Security: transport rules](docs/security.md#transport-rules) before exposing
+the backend beyond your own machine.
 
-```bash
-openssl rand -base64 48
-```
-
-Create the user database and apply the initial seed:
+### 3. Create and seed the user database
 
 ```bash
 npm run db:setup
 ```
 
-Database setup is explicit and runs only once. The command refuses to overwrite an existing `backend/data/users.sqlite` file. Backend startup also refuses to create a missing or invalid database.
+This is explicit and runs only once: it refuses to touch an existing
+`backend/data/users.sqlite`, and the backend refuses to start against a
+missing or invalid one. It prints one line per seeded account with a random
+temporary password, for example:
+
+```text
+[Database] Seed: initial accounts created.
+[Database]   thiago@gmail.com — temporary password (admin): Ax7f...
+[Database]   brunoestudos6@gmail.com — temporary password (user): Qm2k...
+[Database] Save these passwords now: they will not be shown again.
+```
+
+**Copy the admin account's temporary password now** — you'll use it in step 6,
+and the terminal is the only place it's ever shown. See
+[Security: account passwords](docs/security.md#account-passwords) for the
+seeded account list and how to rotate these later.
+
+### 4. Start the backend
+
+```bash
+npm run dev --workspace=backend
+```
+
+Leave this running; it must stay up while you use the plugin. It logs
+`Server running on http://127.0.0.1:3000` once ready.
+
+### 5. Build and install the plugin
+
+```bash
+npm run build --workspace=plugin/obSync
+```
+
+Copy `plugin/obSync/main.js`, `manifest.json`, and `styles.css` into
+`<vault>/.obsidian/plugins/obSync/` in the Obsidian vault you want to test
+with, then in Obsidian: enable **Community plugins** if you haven't already,
+and turn on **ObSync** in the plugin list.
+
+### 6. Connect and sign in
+
+Open **Settings → ObSync**. Since no account is connected yet, only the
+**Backend server URL** field is shown. Enter `http://127.0.0.1:3000` (use
+`127.0.0.1`, not `localhost` — see
+[Troubleshooting](docs/debugging.md#plugin-cant-reach-a-local-backend) if
+you're curious why) and save it. A **Sign in** button appears; use the admin
+e-mail and the temporary password from step 3.
+
+### 7. Change the temporary password
+
+Go to **Settings → ObSync → Account → Change password** and set a real
+password immediately — the temporary one only ever appeared once, in your
+terminal.
+
+### 8. Next steps
+
+- As admin, add more accounts under **Settings → ObSync → User management**
+  (shown in Portuguese as "Administração de usuários" if Obsidian is set to
+  that language) — each person installs the same plugin build and connects
+  to the same backend URL, then signs in with their own account.
+- Only `admin` accounts publish edits to the shared vault; `user` accounts
+  edit locally and receive shared changes. See
+  [How synchronization works](#how-synchronization-works).
+
+## Development
+
+Once you're set up, iterate with watch mode instead of rebuilding by hand.
 
 Start the backend in watch mode:
 
@@ -99,25 +173,14 @@ Start the backend in watch mode:
 npm run dev --workspace=backend
 ```
 
-Build the plugin:
-
-```bash
-npm run build --workspace=plugin/obSync
-```
-
-The backend URL is a runtime setting, not a build-time one: every install of
-the plugin ships the same `main.js`, and each user enters their own ObSync
-backend's URL under **Settings → ObSync → Backend connection** the first time
-they open it. Non-loopback URLs must use HTTPS; the WebSocket endpoint is
-derived automatically from it.
-
 Run the plugin compiler in watch mode:
 
 ```bash
 npm run dev --workspace=plugin/obSync
 ```
 
-The plugin build produces `plugin/obSync/main.js`. Copy `main.js`, `manifest.json`, and `styles.css` to the plugin directory used by the target Obsidian vault, then reload the plugin in Obsidian.
+`plugin/obSync/main.js` is rewritten on every source change; reload the
+plugin in Obsidian (or use a hot-reload plugin) to pick it up.
 
 ---
 
