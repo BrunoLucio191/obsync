@@ -3,10 +3,7 @@ import { promisify } from "node:util";
 
 const scryptAsync = promisify(scrypt);
 
-export async function hashPassword(
-  this: any,
-  password: string,
-): Promise<string> {
+export async function hashPassword(password: string): Promise<string> {
   const salt = randomBytes(16).toString("hex");
 
   const passwordNormalized = password.normalize("NFC");
@@ -23,7 +20,8 @@ export async function passwordMatches(
   const [salt, hash] = storedHash.split(":");
   if (!salt || !hash) return false;
 
-  const candidate = (await scryptAsync(password, salt, 64)) as Buffer;
+  const passwordNormalized = password.normalize("NFC");
+  const candidate = (await scryptAsync(passwordNormalized, salt, 64)) as Buffer;
 
   const expected = Buffer.from(hash, "hex");
   return (
