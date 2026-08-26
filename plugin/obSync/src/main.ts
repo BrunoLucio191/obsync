@@ -1,4 +1,5 @@
 import { Notice, Plugin } from 'obsidian';
+import { initI18n, t } from './i18n/i18n.ts';
 import { AuthService } from './auth/AuthService.ts';
 import { UserAdminService } from './auth/UserAdminService.ts';
 import { CollaborationController } from './collab/CollaborationController.ts';
@@ -32,6 +33,7 @@ export default class ObSync extends Plugin {
 	private synchronizationStarted = false;
 
 	public async onload(): Promise<void> {
+		initI18n();
 		await this.loadConfig();
 		this.composeServices();
 
@@ -59,13 +61,8 @@ export default class ObSync extends Plugin {
 				this.startSynchronization();
 			} catch (error) {
 				this.synchronizationStarted = false;
-				console.error(
-					'Não foi possível iniciar a sincronização:',
-					error,
-				);
-				new Notice(
-					'Login concluído, mas a sincronização não pôde ser iniciada.',
-				);
+				console.error(t('plugin.syncStartFailed'), error);
+				new Notice(t('plugin.loginCompletedSyncFailed'));
 				return false;
 			}
 		} else {
@@ -81,7 +78,7 @@ export default class ObSync extends Plugin {
 		this.app.workspace.updateOptions();
 
 		if (!(await this.auth.ensureAuthenticated())) {
-			new Notice('Você saiu do ObSync.');
+			new Notice(t('plugin.signedOut'));
 			return;
 		}
 
@@ -181,7 +178,7 @@ export default class ObSync extends Plugin {
 	private async initializeSynchronization(): Promise<void> {
 		if (this.synchronizationStarted) return;
 		if (!(await this.auth.ensureAuthenticated())) {
-			new Notice('Entre para usar a sincronização colaborativa.');
+			new Notice(t('plugin.signInToSync'));
 			return;
 		}
 

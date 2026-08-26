@@ -1,5 +1,6 @@
 import { Notice, type Setting } from 'obsidian';
 import type { AuthenticatedUser } from '../../auth/auth.types.ts';
+import { t } from '../../i18n/i18n.ts';
 import type { SettingsController } from '../SettingsController.ts';
 import type { UserDirectory } from './UserDirectory.ts';
 
@@ -21,11 +22,11 @@ export class UserNameEditor {
 		setting.setName(label).setDesc(description);
 		const statusEl = setting.descEl.createDiv({
 			cls: 'obsync-setting-save-status',
-			text: 'Salvo.',
+			text: t('settings.users.nameSaved'),
 		});
 		setting.addText((text) => {
 			text.setValue(user.name)
-				.setPlaceholder('Nome de exibição')
+				.setPlaceholder(t('settings.users.displayName'))
 				.onChange((value) => {
 					this.scheduleSave(
 						user,
@@ -55,11 +56,11 @@ export class UserNameEditor {
 		}
 
 		if (normalizedName.length < 2 || normalizedName.length > 64) {
-			statusEl.setText('Use entre 2 e 64 caracteres.');
+			statusEl.setText(t('settings.users.nameUseLength'));
 			return;
 		}
 		if (normalizedName === user.name) {
-			statusEl.setText('Salvo.');
+			statusEl.setText(t('settings.users.nameSaved'));
 			return;
 		}
 
@@ -68,11 +69,15 @@ export class UserNameEditor {
 			user.id,
 		);
 		if (duplicateUser) {
-			statusEl.setText(`Nome já usado por ${duplicateUser.email}.`);
+			statusEl.setText(
+				t('settings.users.nameAlreadyUsedBy', {
+					email: duplicateUser.email,
+				}),
+			);
 			return;
 		}
 
-		statusEl.setText('Salvando...');
+		statusEl.setText(t('settings.users.saving'));
 		const timer = window.setTimeout(() => {
 			this.saveTimers.delete(user.id);
 			void this.persist(
@@ -113,7 +118,7 @@ export class UserNameEditor {
 
 		if (!result.ok) {
 			inputEl.value = previousName;
-			statusEl.setText('Erro ao salvar.');
+			statusEl.setText(t('settings.users.saveError'));
 			new Notice(result.error);
 			return;
 		}
@@ -121,7 +126,7 @@ export class UserNameEditor {
 		user.name = result.value.name;
 		this.directory.replace(result.value);
 		inputEl.value = result.value.name;
-		statusEl.setText('Salvo.');
+		statusEl.setText(t('settings.users.nameSaved'));
 		onSaved?.();
 	}
 }

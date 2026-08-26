@@ -95,8 +95,8 @@ function removeRemoteClient(
 	const userClients = room.remoteUserClients.get(presence.id);
 	userClients?.delete(clientId);
 
-	// Outro clientId da mesma pessoa ainda está ativo. Isso pode acontecer por
-	// alguns instantes durante uma reconexão ou troca rápida de provider.
+	// Another clientId for the same person is still active. This can happen
+	// for a few moments during a reconnection or a quick provider swap.
 	if (userClients && userClients.size > 0) return;
 
 	room.remoteUserClients.delete(presence.id);
@@ -344,8 +344,8 @@ export function closeCollabRoom(): void {
 		room.networkDoc.destroy();
 	}
 
-	// O banco não é apagado. Apenas a conexão desta instância é encerrada para
-	// que a próxima abertura da nota recupere a mesma história CRDT.
+	// The database is not deleted. Only this instance's connection is closed,
+	// so the next time the note is opened it recovers the same CRDT history.
 	void room.persistence.destroy().finally(() => room.ydoc.destroy());
 }
 

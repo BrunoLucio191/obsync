@@ -4,6 +4,7 @@ import {
 	type SettingDefinitionGroup,
 } from 'obsidian';
 import type { AuthenticatedUser } from '../auth/auth.types.ts';
+import { t } from '../i18n/i18n.ts';
 import type { SettingsController } from './SettingsController.ts';
 import type { UserManagementSection } from './UserManagementSection.ts';
 
@@ -18,91 +19,100 @@ export class AccountSettingsSection {
 	) {}
 
 	public definition(currentUser: AuthenticatedUser): SettingDefinitionGroup {
+		const role =
+			currentUser.role === 'admin'
+				? t('settings.account.roleAdmin')
+				: t('settings.account.roleUser');
 		const items: SettingDefinition[] = [
 			{
-				name: 'Usuário conectado',
-				desc: `${currentUser.email} • ${currentUser.role === 'admin' ? 'Administrador' : 'Usuário comum'}`,
+				name: t('settings.account.connectedUser'),
+				desc: t('settings.account.connectedUserDesc', {
+					email: currentUser.email,
+					role,
+				}),
 			},
 		];
 
 		if (currentUser.role === 'admin') {
 			items.push({
-				name: 'Seu nome de exibição',
-				desc: 'Como administrador, você pode alterar seu próprio nome. A mudança é enviada automaticamente.',
+				name: t('settings.account.yourDisplayName'),
+				desc: t('settings.account.yourDisplayNameDesc'),
 				render: (setting) =>
 					this.users.renderEditableName(setting, currentUser),
 			});
 		} else {
 			items.push({
-				name: 'Nome de exibição',
-				desc: `${currentUser.name}. Somente administradores podem alterar nomes de usuários.`,
+				name: t('settings.account.displayName'),
+				desc: t('settings.account.displayNameDesc', {
+					name: currentUser.name,
+				}),
 			});
 		}
 
 		if (currentUser.role === 'user') {
 			items.push({
-				name: 'Modo privado',
-				desc: 'Suas edições de texto ficam somente neste dispositivo. Você recebe mudanças globais, mas não pode publicá-las no vault compartilhado.',
+				name: t('settings.account.privateMode'),
+				desc: t('settings.account.privateModeDesc'),
 			});
 		}
 
 		items.push({
-			name: 'Trocar senha',
-			desc: 'Informe a senha atual e a nova senha (6 a 128 caracteres).',
+			name: t('settings.account.changePassword'),
+			desc: t('settings.account.changePasswordDesc'),
 			render: (setting) => {
 				setting.addText((text) => {
 					text.inputEl.type = 'password';
 					text
-						.setPlaceholder('Senha atual')
+						.setPlaceholder(t('settings.account.currentPassword'))
 						.setValue(this.currentPassword)
 						.onChange((value) => (this.currentPassword = value));
 				});
 				setting.addText((text) => {
 					text.inputEl.type = 'password';
 					text
-						.setPlaceholder('Nova senha')
+						.setPlaceholder(t('settings.account.newPassword'))
 						.setValue(this.newPassword)
 						.onChange((value) => (this.newPassword = value));
 				});
 				setting.addButton((button) =>
-					button.setButtonText('Salvar nova senha').onClick(async () => {
-						if (
-							this.newPassword.length < 6 ||
-							this.newPassword.length > 128
-						) {
-							new Notice(
-								'A nova senha precisa ter entre 6 e 128 caracteres.',
+					button
+						.setButtonText(t('settings.account.savePassword'))
+						.onClick(async () => {
+							if (
+								this.newPassword.length < 6 ||
+								this.newPassword.length > 128
+							) {
+								new Notice(t('auth.passwordTooShort'));
+								return;
+							}
+
+							button.setDisabled(true);
+							const result = await this.controller.changePassword(
+								this.currentPassword,
+								this.newPassword,
 							);
-							return;
-						}
+							button.setDisabled(false);
 
-						button.setDisabled(true);
-						const result = await this.controller.changePassword(
-							this.currentPassword,
-							this.newPassword,
-						);
-						button.setDisabled(false);
+							if (!result.ok) {
+								new Notice(result.error);
+								return;
+							}
 
-						if (!result.ok) {
-							new Notice(result.error);
-							return;
-						}
-
-						this.currentPassword = '';
-						this.newPassword = '';
-						new Notice('Senha atualizada.');
-						this.refresh();
-					}),
+							this.currentPassword = '';
+							this.newPassword = '';
+							new Notice(t('settings.account.passwordUpdated'));
+							this.refresh();
+						}),
 				);
 			},
 		});
 
 		items.push({
-			name: 'Sessão',
-			desc: 'Encerra a sessão atual e permite entrar com outra conta.',
+			name: t('settings.account.session'),
+			desc: t('settings.account.sessionDesc'),
 			render: (setting) => {
 				setting.addButton((button) =>
-					button.setButtonText('Sair').onClick(async () => {
+					button.setButtonText(t('common.signOut')).onClick(async () => {
 						await this.controller.logout();
 						this.refresh();
 					}),
@@ -112,7 +122,7 @@ export class AccountSettingsSection {
 
 		return {
 			type: 'group',
-			heading: 'Conta',
+			heading: t('settings.account.heading'),
 			items,
 		};
 	}

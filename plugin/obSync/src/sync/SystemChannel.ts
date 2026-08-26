@@ -2,6 +2,7 @@ import {
 	WEB_SOCKET_BASE_URL,
 	webSocketTicketProtocol,
 } from '../config/ApiConfig.ts';
+import { t } from '../i18n/i18n.ts';
 import type { AuthService } from '../auth/AuthService.ts';
 import type { RemoteVaultChangeService } from '../vault/RemoteVaultChangeService.ts';
 import type { VaultChange } from '../vault/VaultChange.ts';
@@ -49,7 +50,7 @@ export class SystemChannel {
 					void this.remoteChanges.apply(change);
 				}
 			} catch (error) {
-				console.error('Evento de sincronização inválido:', error);
+				console.error(t('sync.invalidSyncEvent'), error);
 			}
 		};
 

@@ -1,6 +1,7 @@
 import { requestUrl, Notice } from 'obsidian';
 import { API_BASE_URL } from '../config/ApiConfig.ts';
 import JSZip from 'jszip';
+import { t } from '../i18n/i18n.ts';
 import type { App } from 'obsidian';
 import type { AuthService } from '../auth/AuthService.ts';
 import type { PathMuteRegistry } from '../vault/PathMuteRegistry.ts';
@@ -20,7 +21,7 @@ export class SyncInitialVault {
 	public async sync(): Promise<void> {
 		try {
 			if (!(await this.auth.prepareAuthenticatedRequest())) {
-				throw new Error('Sessão inválida ou expirada.');
+				throw new Error(t('sync.invalidOrExpiredSession'));
 			}
 			const response = await requestUrl({
 				url: `${API_BASE_URL}/api/syncfiles`,
@@ -30,7 +31,9 @@ export class SyncInitialVault {
 			});
 
 			if (response.status !== 200) {
-				throw new Error(`Servidor retornou erro: ${response.status}`);
+				throw new Error(
+					t('sync.serverReturnedError', { status: response.status }),
+				);
 			}
 			const zip = await JSZip.loadAsync(response.arrayBuffer);
 			const adapter = this.app.vault.adapter;
@@ -64,10 +67,10 @@ export class SyncInitialVault {
 					}
 				}
 			}
-			new Notice('Sincronização inicial concluída.');
+			new Notice(t('sync.initialSyncComplete'));
 		} catch (error) {
-			console.error('Erro na sincronização inicial:', error);
-			new Notice('Não foi possível sincronizar os arquivos iniciais.');
+			console.error(t('sync.initialSyncError'), error);
+			new Notice(t('sync.initialSyncFailed'));
 		}
 	}
 }

@@ -27,6 +27,10 @@ plugin/obSync/src/
 ├── config/
 │   ├── ApiConfig.ts                backend endpoint configuration
 │   └── ObSyncConfig.ts            persisted plugin configuration
+├── i18n/
+│   ├── i18n.ts                     i18next setup and Obsidian-locale detection
+│   ├── backendErrors.ts            maps backend `reason` codes to localized text
+│   └── locales/                    en.ts and pt.ts translation dictionaries
 ├── settings/
 │   ├── ObSyncSettingTab.ts        settings composition
 │   ├── AccountSettingsSection.ts   current-account UI
@@ -59,6 +63,8 @@ plugin/obSync/src/
 | `plugin/obSync/src/vault/PathMuteRegistry.ts` | Temporarily marks remote paths so Obsidian events are not sent back to the server |
 | `plugin/obSync/src/settings/ObSyncSettingTab.ts` | Composes account and user-management settings sections |
 | `plugin/obSync/src/settings/users/*` | Separates the user directory, creation form, list actions, and debounced name updates |
+| `plugin/obSync/src/i18n/i18n.ts` | Initializes i18next with the `en`/`pt` dictionaries, chosen from Obsidian's own configured language (`moment.locale()`), not the OS locale |
+| `plugin/obSync/src/i18n/backendErrors.ts` | Maps a structured-mutation endpoint's `reason` code to a localized message, falling back to the backend's English text for codes it doesn't recognize |
 
 ## Dependency direction
 

@@ -1,5 +1,6 @@
 import type { Setting, SettingDefinitionItem } from 'obsidian';
 import type { AuthenticatedUser } from '../auth/auth.types.ts';
+import { t } from '../i18n/i18n.ts';
 import type { SettingsController } from './SettingsController.ts';
 import { CreateUserSection } from './users/CreateUserSection.ts';
 import { UserDirectory } from './users/UserDirectory.ts';
@@ -42,8 +43,8 @@ export class UserManagementSection {
 		this.nameEditor.render(
 			setting,
 			user,
-			'Seu nome de exibição',
-			'Como administrador, você pode alterar seu próprio nome. A mudança é enviada automaticamente.',
+			t('settings.account.yourDisplayName'),
+			t('settings.account.yourDisplayNameDesc'),
 		);
 	}
 

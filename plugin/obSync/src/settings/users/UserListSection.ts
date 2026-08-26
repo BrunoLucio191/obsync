@@ -9,6 +9,7 @@ import type {
 	AuthenticatedUser,
 	UserRole,
 } from '../../auth/auth.types.ts';
+import { t } from '../../i18n/i18n.ts';
 import type { SettingsController } from '../SettingsController.ts';
 import type { UserDirectory } from './UserDirectory.ts';
 import type { UserNameEditor } from './UserNameEditor.ts';
@@ -30,25 +31,25 @@ export class UserListSection {
 	public definitions(): SettingDefinitionItem[] {
 		const infoGroup: SettingDefinitionGroup = {
 			type: 'group',
-			heading: 'Administração de usuários',
+			heading: t('settings.users.heading'),
 			items: [
 				{
-					name: 'Administração de usuários',
-					desc: 'Somente administradores podem listar contas, criar usuários e alterar nomes, senhas, papéis ou status.',
+					name: t('settings.users.heading'),
+					desc: t('settings.users.adminOnlyDesc'),
 					searchable: false,
 				},
 				{
-					name: 'Contas cadastradas',
+					name: t('settings.users.registeredAccounts'),
 					desc: this.listStatusDescription(),
 					searchable: false,
 					render: (setting) => {
 						setting
-							.setName('Contas cadastradas')
+							.setName(t('settings.users.registeredAccounts'))
 							.setDesc(this.listStatusDescription());
 						if (this.loadError) {
 							setting.addButton((button) =>
 								button
-									.setButtonText('Tentar novamente')
+									.setButtonText(t('common.retry'))
 									.onClick(() => {
 										this.loadError = null;
 										this.ensureLoaded();
@@ -61,18 +62,18 @@ export class UserListSection {
 					},
 				},
 				{
-					name: 'Buscar contas',
+					name: t('settings.users.searchAccounts'),
 					desc: '',
 					searchable: false,
 					// Owns its own text input instead of the group-level `search`
 					// option, so it stays in this always-visible group, right
-					// below "Contas cadastradas", instead of scrolling away with
+					// below "Registered accounts", instead of scrolling away with
 					// the list below (see obsync-user-search-setting in styles.css).
 					render: (setting) => {
 						setting.setClass('obsync-user-search-setting');
 						setting.addSearch((search) => {
 							search
-								.setPlaceholder('Nome ou e-mail')
+								.setPlaceholder(t('settings.users.searchPlaceholder'))
 								.setValue(this.searchQuery)
 								.onChange((value) => {
 									this.searchQuery = value;
@@ -142,9 +143,11 @@ export class UserListSection {
 
 	private listStatusDescription(): string {
 		if (this.loadError) return this.loadError;
-		if (!this.loaded) return 'Carregando usuários...';
+		if (!this.loaded) return t('settings.users.loading');
 
-		return `${this.directory.size} usuários cadastrados. Use a busca acima para filtrar por nome ou e-mail.`;
+		return t('settings.users.registeredAccountsDesc', {
+			count: this.directory.size,
+		});
 	}
 
 	// Each user contributes one identity/actions item, plus a dedicated item
@@ -159,7 +162,7 @@ export class UserListSection {
 		const isCurrent = user.id === currentUser?.id;
 		const protectsLastAdmin =
 			user.active && user.role === 'admin' && activeAdminCount === 1;
-		const label = `${user.email}${isCurrent ? ' (você)' : ''}`;
+		const label = `${user.email}${isCurrent ? t('settings.users.you') : ''}`;
 
 		const identity: SettingDefinition = {
 			name: label,
@@ -185,11 +188,11 @@ export class UserListSection {
 		// row per field: keeps the extra controls visually attached to the
 		// identity row above instead of doubling this account's height.
 		const editRow: SettingDefinition = {
-			name: `${label} — editar`,
+			name: `${label} — edit`,
 			searchable: false,
 			render: (setting) => {
 				setting
-					.setName('Nome e senha')
+					.setName(t('settings.users.displayName'))
 					.setClass('obsync-settings-user-subrow');
 				this.addNameControl(setting, user);
 				this.addPasswordResetControl(setting, user);
@@ -205,11 +208,11 @@ export class UserListSection {
 	): void {
 		const nameStatus = setting.descEl.createDiv({
 			cls: 'obsync-setting-save-status',
-			text: 'Nome salvo.',
+			text: t('settings.users.nameSaved'),
 		});
 		setting.addText((text) => {
 			text.setValue(user.name)
-				.setPlaceholder('Nome de exibição')
+				.setPlaceholder(t('settings.users.displayName'))
 				.onChange((value) => {
 					this.nameEditor.scheduleSave(
 						user,
@@ -230,15 +233,13 @@ export class UserListSection {
 		setting.addText((text) => {
 			text.inputEl.type = 'password';
 			text
-				.setPlaceholder('Nova senha (6-128 caracteres)')
+				.setPlaceholder(t('settings.users.newPasswordPlaceholder'))
 				.onChange((value) => (newPassword = value));
 		});
 		setting.addButton((button) =>
-			button.setButtonText('Redefinir senha').onClick(async () => {
+			button.setButtonText(t('settings.users.resetPassword')).onClick(async () => {
 				if (newPassword.length < 6 || newPassword.length > 128) {
-					new Notice(
-						'A nova senha precisa ter entre 6 e 128 caracteres.',
-					);
+					new Notice(t('auth.passwordTooShort'));
 					return;
 				}
 
@@ -254,7 +255,9 @@ export class UserListSection {
 					return;
 				}
 
-				new Notice(`Senha de ${result.value.email} redefinida.`);
+				new Notice(
+					t('userAdmin.passwordReset', { email: result.value.email }),
+				);
 				this.refresh();
 			}),
 		);
@@ -285,7 +288,9 @@ export class UserListSection {
 
 					this.directory.replace(mutation.value);
 					new Notice(
-						active ? 'Usuário ativado.' : 'Usuário desativado.',
+						active
+							? t('userAdmin.userActivated')
+							: t('userAdmin.userDeactivated'),
 					);
 					this.refresh();
 				});
@@ -300,8 +305,8 @@ export class UserListSection {
 		const previousRole = user.role;
 		setting.addDropdown((dropdown) => {
 			dropdown
-				.addOption('user', 'Usuário comum')
-				.addOption('admin', 'Administrador')
+				.addOption('user', t('settings.users.user'))
+				.addOption('admin', t('settings.users.admin'))
 				.setValue(previousRole)
 				.setDisabled(protectsLastAdmin)
 				.onChange(async (value) => {
@@ -318,9 +323,7 @@ export class UserListSection {
 					}
 
 					this.directory.replace(mutation.value);
-					new Notice(
-						'Papel atualizado. As permissões já foram aplicadas.',
-					);
+					new Notice(t('userAdmin.roleUpdated'));
 					this.refresh();
 				});
 		});
@@ -333,7 +336,7 @@ export class UserListSection {
 	): void {
 		setting.addButton((button) =>
 			button
-				.setButtonText('Excluir')
+				.setButtonText(t('settings.users.delete'))
 				.setDestructive()
 				.setDisabled(protectsLastAdmin)
 				.onClick(async () => {
@@ -346,7 +349,7 @@ export class UserListSection {
 					}
 
 					this.directory.remove(user.id);
-					new Notice(`Usuário ${user.email} excluído.`);
+					new Notice(t('userAdmin.userDeleted', { email: user.email }));
 					this.refresh();
 				}),
 		);
@@ -357,11 +360,16 @@ export class UserListSection {
 		user: AuthenticatedUser,
 		isCurrent: boolean,
 	): void {
-		const role = user.role === 'admin' ? 'Administrador' : 'Usuário comum';
-		const status = user.active ? 'Ativo' : 'Desativado';
+		const role =
+			user.role === 'admin' ? t('settings.users.admin') : t('settings.users.user');
+		const status = user.active
+			? t('settings.users.active')
+			: t('settings.users.inactive');
 		const description = `${role} • ${status}`;
 		statusEl.setText(
-			isCurrent ? `${description} • Sua conta` : description,
+			isCurrent
+				? `${description} • ${t('settings.users.yourAccount')}`
+				: description,
 		);
 	}
 

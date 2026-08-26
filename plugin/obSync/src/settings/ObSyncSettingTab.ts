@@ -4,6 +4,7 @@ import {
 	type Plugin,
 	type SettingDefinitionItem,
 } from 'obsidian';
+import { t } from '../i18n/i18n.ts';
 import { AccountSettingsSection } from './AccountSettingsSection.ts';
 import type { SettingsController } from './SettingsController.ts';
 import { UserManagementSection } from './UserManagementSection.ts';
@@ -49,15 +50,15 @@ export class ObSyncSettingTab extends PluginSettingTab {
 	private disconnectedDefinition(): SettingDefinitionItem {
 		return {
 			type: 'group',
-			heading: 'Conta',
+			heading: t('settings.account.heading'),
 			items: [
 				{
-					name: 'Usuário desconectado',
-					desc: 'Entre no ObSync para acessar a sincronização e as configurações da conta.',
+					name: t('settings.account.disconnectedUser'),
+					desc: t('settings.account.disconnectedUserDesc'),
 					render: (setting) => {
 						setting.addButton((button) =>
 							button
-								.setButtonText('Entrar')
+								.setButtonText(t('auth.signIn'))
 								.setCta()
 								.onClick(async () => {
 									button.setDisabled(true);

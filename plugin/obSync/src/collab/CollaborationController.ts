@@ -1,5 +1,6 @@
 import type { Extension } from '@codemirror/state';
 import { App, MarkdownView, Notice } from 'obsidian';
+import { t } from '../i18n/i18n.ts';
 import type { AuthenticatedUser } from '../auth/auth.types.ts';
 import { PathMuteRegistry } from '../vault/PathMuteRegistry.ts';
 import { closeCollabRoom, setupCollabRoom } from './collab.ts';
@@ -91,12 +92,12 @@ export class CollaborationController {
 				this.requestYjsWebSocketTicket,
 				(name) => {
 					if (this.activePath === filePath) {
-						new Notice(`${name} entrou nesta nota.`);
+						new Notice(t('collab.userJoinedNote', { name }));
 					}
 				},
 				(name) => {
 					if (this.activePath === filePath) {
-						new Notice(`${name} saiu desta nota.`);
+						new Notice(t('collab.userLeftNote', { name }));
 					}
 				},
 			);
@@ -124,13 +125,11 @@ export class CollaborationController {
 			if (generation !== this.roomGeneration) return;
 
 			console.error(
-				`Não foi possível inicializar a colaboração em ${filePath}:`,
+				t('collab.couldNotInitializeCollaboration', { filePath }),
 				error,
 			);
 			this.disconnect();
-			new Notice(
-				'Não foi possível restaurar o histórico offline desta nota.',
-			);
+			new Notice(t('collab.couldNotRestoreOfflineHistory'));
 		}
 	}
 
@@ -167,9 +166,7 @@ export class CollaborationController {
 		}
 
 		this.privateModeNotices.add(filePath);
-		new Notice(
-			'Você está em modo privado: suas edições ficam apenas neste dispositivo.',
-		);
+		new Notice(t('collab.privateModeNotice'));
 	}
 
 	private restoreEditorText(

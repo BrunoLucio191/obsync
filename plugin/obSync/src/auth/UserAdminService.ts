@@ -1,5 +1,7 @@
 import { requestUrl } from 'obsidian';
 import { API_BASE_URL } from '../config/ApiConfig.ts';
+import { localizeBackendError } from '../i18n/backendErrors.ts';
+import { t } from '../i18n/i18n.ts';
 import type {
 	AuthenticatedUser,
 	UserActionResult,
@@ -17,7 +19,7 @@ export class UserAdminService {
 
 	public async listUsers(): Promise<UserActionResult<AuthenticatedUser[]>> {
 		if (!this.hasSession() || !(await this.auth.prepareAuthenticatedRequest())) {
-			return { ok: false, error: 'Entre no ObSync para ver os usuários.' };
+			return { ok: false, error: t('userAdmin.signInToViewUsers') };
 		}
 
 		try {
@@ -29,10 +31,7 @@ export class UserAdminService {
 			if (response.status !== 200) {
 				return {
 					ok: false,
-					error: this.apiError(
-						response,
-						'Não foi possível carregar os usuários.',
-					),
+					error: this.apiError(response, t('userAdmin.couldNotLoadUsers')),
 				};
 			}
 
@@ -40,7 +39,7 @@ export class UserAdminService {
 			if (!Array.isArray(payload.users)) {
 				return {
 					ok: false,
-					error: 'O servidor retornou uma lista inválida.',
+					error: t('userAdmin.invalidUserList'),
 				};
 			}
 			return { ok: true, value: payload.users };
@@ -49,7 +48,7 @@ export class UserAdminService {
 				ok: false,
 				error: this.unknownRequestError(
 					error,
-					'Não foi possível carregar os usuários.',
+					t('userAdmin.couldNotLoadUsers'),
 				),
 			};
 		}
@@ -62,7 +61,7 @@ export class UserAdminService {
 		role: UserRole;
 	}): Promise<UserActionResult<AuthenticatedUser>> {
 		if (!this.hasSession() || !(await this.auth.prepareAuthenticatedRequest())) {
-			return { ok: false, error: 'Entre no ObSync para criar usuários.' };
+			return { ok: false, error: t('userAdmin.signInToCreateUsers') };
 		}
 
 		try {
@@ -76,23 +75,20 @@ export class UserAdminService {
 			if (response.status !== 201) {
 				return {
 					ok: false,
-					error: this.apiError(
-						response,
-						'Não foi possível criar o usuário.',
-					),
+					error: this.apiError(response, t('userAdmin.couldNotCreateUser')),
 				};
 			}
 
 			const payload = response.json as { user?: AuthenticatedUser };
 			return payload.user
 				? { ok: true, value: payload.user }
-				: { ok: false, error: 'O servidor não retornou o novo usuário.' };
+				: { ok: false, error: t('userAdmin.serverDidNotReturnUser') };
 		} catch (error) {
 			return {
 				ok: false,
 				error: this.unknownRequestError(
 					error,
-					'Não foi possível criar o usuário.',
+					t('userAdmin.couldNotCreateUser'),
 				),
 			};
 		}
@@ -106,7 +102,7 @@ export class UserAdminService {
 			`/api/users/${userId}/role`,
 			'PATCH',
 			{ role },
-			'Não foi possível alterar o papel do usuário.',
+			t('userAdmin.couldNotChangeRole'),
 		);
 	}
 
@@ -118,7 +114,7 @@ export class UserAdminService {
 			`/api/users/${userId}/status`,
 			'PATCH',
 			{ active },
-			'Não foi possível alterar o status do usuário.',
+			t('userAdmin.couldNotChangeStatus'),
 		);
 	}
 
@@ -129,7 +125,7 @@ export class UserAdminService {
 			`/api/users/${userId}`,
 			'DELETE',
 			undefined,
-			'Não foi possível excluir o usuário.',
+			t('userAdmin.couldNotDeleteUser'),
 		);
 	}
 
@@ -141,7 +137,7 @@ export class UserAdminService {
 			`/api/users/${userId}/name`,
 			'PATCH',
 			{ name },
-			'Não foi possível atualizar o nome do usuário.',
+			t('userAdmin.couldNotUpdateName'),
 		);
 	}
 
@@ -153,7 +149,7 @@ export class UserAdminService {
 			`/api/users/${userId}/password`,
 			'PATCH',
 			{ newPassword },
-			'Não foi possível redefinir a senha do usuário.',
+			t('userAdmin.couldNotResetPassword'),
 		);
 	}
 
@@ -170,7 +166,7 @@ export class UserAdminService {
 		) {
 			return {
 				ok: false,
-				error: 'Apenas administradores podem executar esta ação.',
+				error: t('userAdmin.adminsOnly'),
 			};
 		}
 
@@ -190,7 +186,7 @@ export class UserAdminService {
 			if (!payload.user) {
 				return {
 					ok: false,
-					error: 'O servidor retornou um usuário inválido.',
+					error: t('userAdmin.invalidUserReturned'),
 				};
 			}
 
@@ -211,11 +207,12 @@ export class UserAdminService {
 	}
 
 	private apiError(response: ApiResponse, fallback: string): string {
-		const payload = response.json as { error?: unknown };
-		if (typeof payload?.error === 'string' && payload.error.trim()) {
-			return payload.error;
-		}
-		return response.text.trim() || fallback;
+		const payload = response.json as { error?: unknown; reason?: unknown };
+		const raw =
+			typeof payload?.error === 'string' && payload.error.trim()
+				? payload.error
+				: response.text.trim() || fallback;
+		return localizeBackendError(payload?.reason, raw);
 	}
 
 	private unknownRequestError(error: unknown, fallback: string): string {

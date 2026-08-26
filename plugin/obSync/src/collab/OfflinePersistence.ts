@@ -1,5 +1,6 @@
 import { IndexeddbPersistence } from 'y-indexeddb';
 import * as Y from 'yjs';
+import { t } from '../i18n/i18n.ts';
 
 export const DEFAULT_OFFLINE_NAMESPACE = 'your-mon';
 
@@ -24,11 +25,11 @@ function buildDatabaseName(documentId: string, namespace: string): string {
 	const normalizedNamespace = namespace.trim();
 
 	if (!normalizedDocumentId) {
-		throw new Error('documentId não pode ser vazio.');
+		throw new Error(t('offlinePersistence.emptyDocumentId'));
 	}
 
 	if (!normalizedNamespace) {
-		throw new Error('namespace não pode ser vazio.');
+		throw new Error(t('offlinePersistence.emptyNamespace'));
 	}
 	return `${normalizedNamespace}:${encodeURIComponent(normalizedDocumentId)}`;
 }
@@ -43,7 +44,7 @@ export function initializeOfflinePersistence(
 	} = options;
 
 	if (typeof indexedDB === 'undefined') {
-		throw new Error('IndexedDB não está disponível neste ambiente.');
+		throw new Error(t('offlinePersistence.indexedDbUnavailable'));
 	}
 
 	const existingHandle = activePersistence.get(ydoc);

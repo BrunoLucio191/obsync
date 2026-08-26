@@ -55,7 +55,7 @@ export class SyncVaultChanges {
 			this.plugin.app.vault.on('modify', async (file) => {
 				if (!(await this.canPublish(file.path))) return;
 				const activeFile = this.plugin.app.workspace.getActiveFile();
-				// O Yjs cuida do arquivo ativo, então não disparamos o PUT para ele
+				// Yjs takes care of the active file, so we don't fire the PUT for it
 				if (activeFile && file.path === activeFile.path) return;
 
 				if (file instanceof TFile) {

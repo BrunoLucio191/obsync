@@ -1,4 +1,5 @@
 import { App, Modal, Notice, Setting } from 'obsidian';
+import { t } from '../i18n/i18n.ts';
 
 export class LoginModal extends Modal {
 	private email = '';
@@ -17,28 +18,28 @@ export class LoginModal extends Modal {
 	}
 
 	onOpen(): void {
-		this.setTitle('Entrar no ObSync');
+		this.setTitle(t('auth.loginTitle'));
 		this.contentEl.createEl('p', {
-			text: 'Informe o e-mail de qualquer conta cadastrada no servidor.',
+			text: t('auth.loginPrompt'),
 		});
 
-		new Setting(this.contentEl).setName('E-mail').addText((text) =>
+		new Setting(this.contentEl).setName(t('auth.email')).addText((text) =>
 			text
-				.setPlaceholder('usuario@exemplo.com')
+				.setPlaceholder(t('auth.emailPlaceholder'))
 				.setValue(this.email)
 				.onChange((value) => (this.email = value)),
 		);
 
-		new Setting(this.contentEl).setName('Senha').addText((text) => {
+		new Setting(this.contentEl).setName(t('auth.password')).addText((text) => {
 			text.inputEl.type = 'password';
-			text.setPlaceholder('Senha').onChange(
+			text.setPlaceholder(t('auth.password')).onChange(
 				(value) => (this.password = value),
 			);
 		});
 
 		new Setting(this.contentEl).addButton((button) =>
 			button
-				.setButtonText('Entrar')
+				.setButtonText(t('auth.signIn'))
 				.setCta()
 				.onClick(async () => {
 					button.setDisabled(true);
@@ -48,7 +49,7 @@ export class LoginModal extends Modal {
 					);
 					button.setDisabled(false);
 					if (!success) {
-						new Notice('E-mail ou senha inválidos.');
+						new Notice(t('auth.invalidCredentials'));
 						return;
 					}
 					this.authenticated = true;

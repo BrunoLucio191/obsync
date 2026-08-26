@@ -1,5 +1,6 @@
 import { Notice, type SettingDefinitionGroup } from 'obsidian';
 import type { UserRole } from '../../auth/auth.types.ts';
+import { t } from '../../i18n/i18n.ts';
 import type { SettingsController } from '../SettingsController.ts';
 import type { UserDirectory } from './UserDirectory.ts';
 
@@ -18,50 +19,50 @@ export class CreateUserSection {
 	public definition(): SettingDefinitionGroup {
 		return {
 			type: 'group',
-			heading: 'Adicionar novo usuário',
+			heading: t('settings.users.addUser'),
 			items: [
 				{
-					name: 'Nome',
-					desc: 'Nome do usuário no vault.',
+					name: t('settings.users.name'),
+					desc: t('settings.users.displayName'),
 					render: (setting) =>
 						setting.addText((text) =>
 							text
-								.setPlaceholder('Nome de exibição')
+								.setPlaceholder(t('settings.users.namePlaceholder'))
 								.setValue(this.name)
 								.onChange((value) => (this.name = value)),
 						),
 				},
 				{
-					name: 'E-mail',
-					desc: 'E-mail usado para fazer login no vault.',
+					name: t('auth.email'),
+					desc: t('auth.email'),
 					render: (setting) =>
 						setting.addText((text) =>
 							text
-								.setPlaceholder('usuario@exemplo.com')
+								.setPlaceholder(t('settings.users.emailPlaceholder'))
 								.setValue(this.email)
 								.onChange((value) => (this.email = value)),
 						),
 				},
 				{
-					name: 'Senha inicial',
-					desc: 'A senha não pode ser recuperada. Guarde-a em um local seguro.',
+					name: t('settings.users.initialPassword'),
+					desc: t('settings.users.initialPasswordDesc'),
 					render: (setting) => {
 						setting.addText((text) => {
 							text.inputEl.type = 'password';
-							text.setPlaceholder('Mínimo de 6 caracteres')
+							text.setPlaceholder(t('settings.users.minCharsPlaceholder'))
 								.setValue(this.password)
 								.onChange((value) => (this.password = value));
 						});
 					},
 				},
 				{
-					name: 'Papel inicial',
-					desc: 'Papel inicial do usuário.',
+					name: t('settings.users.initialRole'),
+					desc: t('settings.users.initialRoleDesc'),
 					render: (setting) =>
 						setting.addDropdown((dropdown) =>
 							dropdown
-								.addOption('user', 'Usuário comum')
-								.addOption('admin', 'Administrador')
+								.addOption('user', t('settings.users.user'))
+								.addOption('admin', t('settings.users.admin'))
 								.setValue(this.role)
 								.onChange(
 									(value) => (this.role = value as UserRole),
@@ -69,13 +70,13 @@ export class CreateUserSection {
 						),
 				},
 				{
-					name: 'Criar usuário',
-					desc: 'Cria a conta com os dados informados acima.',
+					name: t('settings.users.createUser'),
+					desc: t('settings.users.createUserDesc'),
 					searchable: false,
 					render: (setting) => {
 						setting.addButton((button) =>
 							button
-								.setButtonText('Criar usuário')
+								.setButtonText(t('settings.users.createUser'))
 								.setCta()
 								.onClick(async () => {
 									const duplicateName = this.directory.findByName(
@@ -83,14 +84,16 @@ export class CreateUserSection {
 									);
 									if (duplicateName) {
 										new Notice(
-											`O nome já pertence a ${duplicateName.email}.`,
+											t('userAdmin.nameAlreadyUsedBy', {
+												email: duplicateName.email,
+											}),
 										);
 										return;
 									}
 
 									if (this.directory.findByEmail(this.email)) {
 										new Notice(
-											'Já existe um usuário com esse e-mail.',
+											t('userAdmin.emailAlreadyExists'),
 										);
 										return;
 									}
@@ -111,7 +114,9 @@ export class CreateUserSection {
 
 									this.reset();
 									new Notice(
-										`Usuário ${result.value.email} criado.`,
+										t('userAdmin.userCreated', {
+											email: result.value.email,
+										}),
 									);
 									this.refresh();
 								}),

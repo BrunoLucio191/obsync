@@ -1,5 +1,7 @@
 import { App, Notice, requestUrl } from 'obsidian';
 import { API_BASE_URL } from '../config/ApiConfig.ts';
+import { localizeBackendError } from '../i18n/backendErrors.ts';
+import { t } from '../i18n/i18n.ts';
 import type { ObSyncConfig } from '../config/ObSyncConfig.ts';
 import { LoginModal } from './LoginModal.ts';
 import type {
@@ -111,7 +113,7 @@ export class AuthService {
 		newPassword: string,
 	): Promise<UserActionResult<null>> {
 		if (!(await this.ensureFreshAccessToken())) {
-			return { ok: false, error: 'Sua sessão expirou. Entre novamente.' };
+			return { ok: false, error: t('auth.sessionExpired') };
 		}
 
 		try {
@@ -128,19 +130,19 @@ export class AuthService {
 
 			if (response.status === 200) return { ok: true, value: null };
 
-			const payload = response.json as { error?: unknown };
-			const error =
+			const payload = response.json as { error?: unknown; reason?: unknown };
+			const fallback =
 				typeof payload?.error === 'string' && payload.error.trim()
 					? payload.error
-					: 'Não foi possível trocar a senha.';
-			return { ok: false, error };
+					: t('auth.passwordChangeUnknownError');
+			return { ok: false, error: localizeBackendError(payload?.reason, fallback) };
 		} catch (error) {
 			return {
 				ok: false,
 				error:
 					error instanceof Error && error.message
 						? error.message
-						: 'Não foi possível trocar a senha.',
+						: t('auth.passwordChangeUnknownError'),
 			};
 		}
 	}
@@ -168,7 +170,7 @@ export class AuthService {
 			if (response.status !== 200) {
 				if (response.status === 401) {
 					await this.clearLocalSession();
-					new Notice('Sua sessão do ObSync foi encerrada.');
+					new Notice(t('auth.sessionExpiredNotice'));
 				}
 				return;
 			}
@@ -177,7 +179,7 @@ export class AuthService {
 			if (payload.user) await this.updateCurrentUser(payload.user);
 		} catch (error) {
 			console.error(
-				'Não foi possível atualizar a sessão do ObSync:',
+				t('auth.sessionRefreshFailed'),
 				error,
 			);
 		}
@@ -196,7 +198,7 @@ export class AuthService {
 				});
 			}
 		} catch (error) {
-			console.error('Não foi possível revogar a sessão no servidor:', error);
+			console.error(t('auth.sessionRevokeFailed'), error);
 		} finally {
 			await this.clearLocalSession();
 		}
@@ -305,7 +307,7 @@ export class AuthService {
 			await this.acceptSession(session);
 			return true;
 		} catch (error) {
-			console.error('Não foi possível renovar a sessão:', error);
+			console.error(t('auth.sessionRenewFailed'), error);
 			return false;
 		}
 	}
