@@ -37,3 +37,23 @@ If your plugin does not need CSS, delete this file.
 .obsync-settings-user-status {
 	color: var(--text-muted);
 }
+
+/*
+ * Limita a lista de contas a ~9 linhas visíveis, com scroll para o resto.
+ * A altura de cada linha varia (algumas têm só um toggle, outras têm nome,
+ * senha, papel e status juntos), então --obsync-user-row-height é uma média
+ * aproximada: ajuste esse valor se 9 linhas não couberem exatamente.
+ */
+.obsync-user-list-scroll {
+	--obsync-user-row-height: 60px;
+	max-height: calc(var(--obsync-user-row-height) * 9);
+	overflow-y: auto;
+}
+
+/* Mantém a busca visível durante o scroll, caso ela fique dentro da área rolável. */
+.obsync-user-list-scroll .search-input-container {
+	position: sticky;
+	top: 0;
+	z-index: 1;
+	background: var(--background-primary);
+}

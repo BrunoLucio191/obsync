@@ -70,6 +70,7 @@ export class UserListSection {
 		return {
 			type: 'group',
 			heading: 'Administração de usuários',
+			cls: 'obsync-user-list-scroll',
 			search: {
 				placeholder: 'Nome ou e-mail',
 				match: (definition, query) =>
