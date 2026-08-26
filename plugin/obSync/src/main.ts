@@ -4,6 +4,11 @@ import { AuthService } from './auth/AuthService.ts';
 import { UserAdminService } from './auth/UserAdminService.ts';
 import { CollaborationController } from './collab/CollaborationController.ts';
 import {
+	clearApiEndpoint,
+	configureApiEndpoint,
+	isApiEndpointConfigured,
+} from './config/ApiConfig.ts';
+import {
 	DEFAULT_CONFIG,
 	type ObSyncConfig,
 } from './config/ObSyncConfig.ts';
@@ -35,6 +40,13 @@ export default class ObSync extends Plugin {
 	public async onload(): Promise<void> {
 		initI18n();
 		await this.loadConfig();
+		try {
+			this.applyBackendUrl(this.config.backendUrl);
+		} catch (error) {
+			// A previously-saved URL should already be valid, but never let a
+			// stored config value keep the whole plugin from loading.
+			console.error(t('settings.backend.notConfigured'), error);
+		}
 		this.composeServices();
 
 		this.settingTab = new ObSyncSettingTab(this.app, this, this);
@@ -144,6 +156,39 @@ export default class ObSync extends Plugin {
 		return this.auth.changePassword(currentPassword, newPassword);
 	}
 
+	public async setBackendUrl(url: string): Promise<UserActionResult<null>> {
+		const previousUrl = this.config.backendUrl;
+		const wasConfigured = isApiEndpointConfigured();
+
+		try {
+			this.applyBackendUrl(url);
+		} catch (error) {
+			return {
+				ok: false,
+				error: error instanceof Error ? error.message : String(error),
+			};
+		}
+
+		this.config.backendUrl = url.trim();
+		await this.saveConfig();
+
+		// Switching to a different backend invalidates any session tied to the
+		// previous one; drop it instead of sending its tokens somewhere new.
+		if (wasConfigured && previousUrl !== this.config.backendUrl) {
+			await this.auth.clearSession();
+		}
+
+		return { ok: true, value: null };
+	}
+
+	private applyBackendUrl(url: string): void {
+		if (!url.trim()) {
+			clearApiEndpoint();
+			return;
+		}
+		configureApiEndpoint(url);
+	}
+
 	private composeServices(): void {
 		this.auth = new AuthService({
 			app: this.app,
@@ -177,6 +222,10 @@ export default class ObSync extends Plugin {
 
 	private async initializeSynchronization(): Promise<void> {
 		if (this.synchronizationStarted) return;
+		// Without a configured backend, ensureAuthenticated() would pop the
+		// login modal on every startup with no server to actually log in to.
+		// Let the settings tab collect the backend URL first.
+		if (!isApiEndpointConfigured()) return;
 		if (!(await this.auth.ensureAuthenticated())) {
 			new Notice(t('plugin.signInToSync'));
 			return;

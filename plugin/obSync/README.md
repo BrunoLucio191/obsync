@@ -26,15 +26,11 @@ Create a production bundle with:
 npm run build --workspace=plugin/obSync
 ```
 
-For a remote backend, provide its public HTTPS URL at build time:
-
-```bash
-OBSYNC_API_BASE_URL=https://sync.example.com \
-  npm run build --workspace=plugin/obSync
-```
-
-Non-loopback HTTP endpoints are rejected. The corresponding WebSocket endpoint
-is derived automatically and uses WSS.
+The backend URL is a runtime setting, not a build-time one: the same build
+works for every user, who each enter their own ObSync backend's URL under
+**Settings → ObSync → Backend connection** the first time they open the
+plugin. Non-loopback HTTP endpoints are rejected there; the corresponding
+WebSocket endpoint is derived automatically and uses WSS.
 
 The build writes `plugin/obSync/main.js`.
 

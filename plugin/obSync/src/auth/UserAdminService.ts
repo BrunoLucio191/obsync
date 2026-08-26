@@ -1,5 +1,5 @@
 import { requestUrl } from 'obsidian';
-import { API_BASE_URL } from '../config/ApiConfig.ts';
+import { getApiBaseUrl } from '../config/ApiConfig.ts';
 import { localizeBackendError } from '../i18n/backendErrors.ts';
 import { t } from '../i18n/i18n.ts';
 import type {
@@ -24,7 +24,7 @@ export class UserAdminService {
 
 		try {
 			const response = await requestUrl({
-				url: `${API_BASE_URL}/api/users`,
+				url: `${getApiBaseUrl()}/api/users`,
 				headers: this.auth.headers(),
 				throw: false,
 			});
@@ -66,7 +66,7 @@ export class UserAdminService {
 
 		try {
 			const response = await requestUrl({
-				url: `${API_BASE_URL}/api/users`,
+				url: `${getApiBaseUrl()}/api/users`,
 				method: 'POST',
 				headers: this.auth.headers(),
 				body: JSON.stringify(input),
@@ -172,7 +172,7 @@ export class UserAdminService {
 
 		try {
 			const response = await requestUrl({
-				url: `${API_BASE_URL}${path}`,
+				url: `${getApiBaseUrl()}${path}`,
 				method,
 				headers: this.auth.headers(),
 				body: body ? JSON.stringify(body) : undefined,

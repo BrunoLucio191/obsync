@@ -49,6 +49,21 @@ export default {
 		passwordReset: 'Senha de {{email}} redefinida.',
 	},
 	settings: {
+		backend: {
+			heading: 'Conexão com o backend',
+			url: 'URL do servidor backend',
+			urlDesc:
+				'O backend do ObSync com o qual este vault sincroniza. Precisa usar HTTPS, exceto para endereços locais (127.0.0.1, localhost).',
+			urlPlaceholder: 'https://sync.exemplo.com',
+			saved: 'URL do backend salva.',
+			notConfigured: 'Defina a URL do backend do ObSync nas configurações do plugin.',
+			urlRequired: 'Informe a URL do backend do ObSync.',
+			urlInvalid: 'Informe uma URL válida, por exemplo https://sync.exemplo.com.',
+			urlRequiresHttps:
+				'A URL do backend precisa usar HTTPS fora de um endereço local (loopback).',
+			urlDescReadOnly:
+				'Somente administradores podem alterar a URL do backend. Peça para o seu administrador caso precise mudar.',
+		},
 		account: {
 			heading: 'Conta',
 			connectedUser: 'Usuário conectado',

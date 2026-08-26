@@ -105,12 +105,11 @@ Build the plugin:
 npm run build --workspace=plugin/obSync
 ```
 
-Remote builds must provide an HTTPS backend URL:
-
-```bash
-OBSYNC_API_BASE_URL=https://sync.example.com \
-  npm run build --workspace=plugin/obSync
-```
+The backend URL is a runtime setting, not a build-time one: every install of
+the plugin ships the same `main.js`, and each user enters their own ObSync
+backend's URL under **Settings → ObSync → Backend connection** the first time
+they open it. Non-loopback URLs must use HTTPS; the WebSocket endpoint is
+derived automatically from it.
 
 Run the plugin compiler in watch mode:
 

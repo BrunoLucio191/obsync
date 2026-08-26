@@ -17,7 +17,7 @@ import {
 	OFFLINE_NAMESPACE_VERSION,
 } from './collab.cons.ts';
 import {
-	WEB_SOCKET_BASE_URL,
+	getWebSocketBaseUrl,
 	webSocketTicketProtocol,
 } from '../config/ApiConfig.ts';
 
@@ -208,7 +208,7 @@ export async function setupCollabRoom(
 	});
 
 	const provider = new WebsocketProvider(
-		WEB_SOCKET_BASE_URL,
+		getWebSocketBaseUrl(),
 		roomName,
 		networkDoc,
 		{

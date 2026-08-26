@@ -1,5 +1,5 @@
 import { App, Notice, requestUrl } from 'obsidian';
-import { API_BASE_URL } from '../config/ApiConfig.ts';
+import { getApiBaseUrl } from '../config/ApiConfig.ts';
 import { localizeBackendError } from '../i18n/backendErrors.ts';
 import { t } from '../i18n/i18n.ts';
 import type { ObSyncConfig } from '../config/ObSyncConfig.ts';
@@ -190,7 +190,7 @@ export class AuthService {
 		try {
 			if (refreshToken) {
 				await requestUrl({
-					url: `${API_BASE_URL}/auth/logout`,
+					url: `${getApiBaseUrl()}/auth/logout`,
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
 					body: JSON.stringify({ refreshToken }),
@@ -234,7 +234,7 @@ export class AuthService {
 	private async login(email: string, password: string): Promise<boolean> {
 		try {
 			const response = await requestUrl({
-				url: `${API_BASE_URL}/auth/login`,
+				url: `${getApiBaseUrl()}/auth/login`,
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ email, password }),
@@ -290,7 +290,7 @@ export class AuthService {
 
 		try {
 			const response = await requestUrl({
-				url: `${API_BASE_URL}/auth/refresh`,
+				url: `${getApiBaseUrl()}/auth/refresh`,
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ refreshToken: this.refreshToken }),
@@ -385,7 +385,7 @@ export class AuthService {
 
 	private requestCurrentUser() {
 		return requestUrl({
-			url: `${API_BASE_URL}/auth/me`,
+			url: `${getApiBaseUrl()}/auth/me`,
 			headers: this.headers(),
 			throw: false,
 		});
@@ -393,7 +393,7 @@ export class AuthService {
 
 	private requestChangePassword(currentPassword: string, newPassword: string) {
 		return requestUrl({
-			url: `${API_BASE_URL}/auth/change-password`,
+			url: `${getApiBaseUrl()}/auth/change-password`,
 			method: 'POST',
 			headers: this.headers(),
 			body: JSON.stringify({ currentPassword, newPassword }),
@@ -403,7 +403,7 @@ export class AuthService {
 
 	private requestWebSocketTicket(channel: WebSocketChannel) {
 		return requestUrl({
-			url: `${API_BASE_URL}/auth/ws-ticket`,
+			url: `${getApiBaseUrl()}/auth/ws-ticket`,
 			method: 'POST',
 			headers: this.headers(),
 			body: JSON.stringify({ channel }),

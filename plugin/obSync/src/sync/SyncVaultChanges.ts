@@ -1,5 +1,5 @@
 import { Plugin, TFile, TFolder, requestUrl } from 'obsidian';
-import { API_BASE_URL } from '../config/ApiConfig.ts';
+import { getApiBaseUrl } from '../config/ApiConfig.ts';
 import type { AuthService } from '../auth/AuthService.ts';
 import type { CollaborationController } from '../collab/CollaborationController.ts';
 import { PathMuteRegistry } from '../vault/PathMuteRegistry.ts';
@@ -23,7 +23,7 @@ export class SyncVaultChanges {
 						: null;
 
 				await requestUrl({
-					url: `${API_BASE_URL}/sync/create`,
+					url: `${getApiBaseUrl()}/sync/create`,
 					method: 'POST',
 					headers: this.auth.headers(),
 					body: JSON.stringify({
@@ -43,7 +43,7 @@ export class SyncVaultChanges {
 				this.collaboration.disconnectIfAffected(file.path);
 
 				await requestUrl({
-					url: `${API_BASE_URL}/sync/delete`,
+					url: `${getApiBaseUrl()}/sync/delete`,
 					method: 'DELETE',
 					headers: this.auth.headers(),
 					body: JSON.stringify({ path: file.path, isFolder }),
@@ -61,7 +61,7 @@ export class SyncVaultChanges {
 				if (file instanceof TFile) {
 					const content = await this.plugin.app.vault.read(file);
 					await requestUrl({
-						url: `${API_BASE_URL}/sync/modify`,
+						url: `${getApiBaseUrl()}/sync/modify`,
 						method: 'PUT',
 						headers: this.auth.headers(),
 						body: JSON.stringify({ path: file.path, content }),
@@ -74,7 +74,7 @@ export class SyncVaultChanges {
 				if (!(await this.canPublish(file.path, oldPath))) return;
 
 				await requestUrl({
-					url: `${API_BASE_URL}/sync/rename`,
+					url: `${getApiBaseUrl()}/sync/rename`,
 					method: 'PUT',
 					headers: this.auth.headers(),
 					body: JSON.stringify({ oldPath, newPath: file.path }),

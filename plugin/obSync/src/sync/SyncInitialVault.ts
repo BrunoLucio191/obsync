@@ -1,5 +1,5 @@
 import { requestUrl, Notice } from 'obsidian';
-import { API_BASE_URL } from '../config/ApiConfig.ts';
+import { getApiBaseUrl } from '../config/ApiConfig.ts';
 import JSZip from 'jszip';
 import { t } from '../i18n/i18n.ts';
 import type { App } from 'obsidian';
@@ -24,7 +24,7 @@ export class SyncInitialVault {
 				throw new Error(t('sync.invalidOrExpiredSession'));
 			}
 			const response = await requestUrl({
-				url: `${API_BASE_URL}/api/syncfiles`,
+				url: `${getApiBaseUrl()}/api/syncfiles`,
 				method: 'POST',
 				headers: this.auth.headers(),
 				body: JSON.stringify(payload),

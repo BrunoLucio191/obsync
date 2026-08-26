@@ -55,15 +55,11 @@ OBSYNC_TRUST_PROXY=true
 Keep port `3000` inaccessible from the public network. The reverse proxy must
 forward `X-Forwarded-Proto: https`, including WebSocket upgrade requests.
 
-Build the plugin with the public HTTPS endpoint:
-
-```bash
-OBSYNC_API_BASE_URL=https://sync.example.com \
-  npm run build --workspace=plugin/obSync
-```
-
-The plugin refuses a non-loopback endpoint that does not use HTTPS. Its
-WebSocket URL is derived automatically as WSS.
+Point the plugin at the public HTTPS endpoint from **Settings → ObSync →
+Backend connection** (only an admin can change it once an account is signed
+in; anyone can set it before the first sign-in). The plugin refuses a
+non-loopback endpoint that does not use HTTPS. Its WebSocket URL is derived
+automatically as WSS.
 
 ## Login rate limit
 

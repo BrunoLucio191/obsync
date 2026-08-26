@@ -1,5 +1,5 @@
 import {
-	WEB_SOCKET_BASE_URL,
+	getWebSocketBaseUrl,
 	webSocketTicketProtocol,
 } from '../config/ApiConfig.ts';
 import { t } from '../i18n/i18n.ts';
@@ -38,7 +38,7 @@ export class SystemChannel {
 			return;
 		}
 
-		const socket = new WebSocket(`${WEB_SOCKET_BASE_URL}/system`, [
+		const socket = new WebSocket(`${getWebSocketBaseUrl()}/system`, [
 			webSocketTicketProtocol(ticket),
 		]);
 		this.socket = socket;

@@ -49,6 +49,21 @@ export default {
 		passwordReset: "{{email}}'s password has been reset.",
 	},
 	settings: {
+		backend: {
+			heading: 'Backend connection',
+			url: 'Backend server URL',
+			urlDesc:
+				'The ObSync backend this vault syncs with. Must use HTTPS unless it is a loopback address (127.0.0.1, localhost).',
+			urlPlaceholder: 'https://sync.example.com',
+			saved: 'Backend URL saved.',
+			notConfigured: 'Set the ObSync backend URL in the plugin settings.',
+			urlRequired: 'Enter the ObSync backend URL.',
+			urlInvalid: 'Enter a valid URL, e.g. https://sync.example.com.',
+			urlRequiresHttps:
+				'The backend URL must use HTTPS outside a local (loopback) address.',
+			urlDescReadOnly:
+				'Only administrators can change the backend URL. Ask yours if this needs to change.',
+		},
 		account: {
 			heading: 'Account',
 			connectedUser: 'Connected user',

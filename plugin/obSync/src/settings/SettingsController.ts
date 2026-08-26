@@ -7,6 +7,7 @@ import type {
 
 export interface SettingsController {
 	readonly config: ObSyncConfig;
+	setBackendUrl(url: string): Promise<UserActionResult<null>>;
 	isAuthenticated(): boolean;
 	openLogin(): Promise<boolean>;
 	logout(): Promise<void>;

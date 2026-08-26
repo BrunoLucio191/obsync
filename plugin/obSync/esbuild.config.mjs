@@ -9,17 +9,12 @@ if you want to view the source, please visit the github repository of this plugi
 `;
 
 const prod = process.argv[2] === 'production';
-const apiBaseUrl =
-	process.env.OBSYNC_API_BASE_URL ?? 'http://127.0.0.1:3000';
 
 const context = await esbuild.context({
 	banner: {
 		js: banner,
 	},
 	entryPoints: ['src/main.ts'],
-	define: {
-		__OBSYNC_API_BASE_URL__: JSON.stringify(apiBaseUrl),
-	},
 	bundle: true,
 	external: [
 		'obsidian',

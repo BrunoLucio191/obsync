@@ -1,7 +1,7 @@
 {
 	"name": "obsync-plugin",
-	"version": "1.0.0",
-	"description": "This is a sample plugin for Obsidian (https://obsidian.md)",
+	"version": "2.0.0",
+	"description": "Real-time collaborative editing and role-based synchronization with a self-hosted ObSync backend.",
 	"main": "main.js",
 	"type": "module",
 	"scripts": {

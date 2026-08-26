@@ -70,7 +70,7 @@ Typical request pattern:
 if (!(await auth.prepareAuthenticatedRequest())) return;
 
 await requestUrl({
-	url: `${API_BASE_URL}/api/users`,
+	url: `${getApiBaseUrl()}/api/users`,
 	headers: auth.headers(),
 });
 ```

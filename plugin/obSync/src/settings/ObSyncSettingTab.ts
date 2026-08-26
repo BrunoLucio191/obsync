@@ -4,12 +4,15 @@ import {
 	type Plugin,
 	type SettingDefinitionItem,
 } from 'obsidian';
+import { isApiEndpointConfigured } from '../config/ApiConfig.ts';
 import { t } from '../i18n/i18n.ts';
 import { AccountSettingsSection } from './AccountSettingsSection.ts';
+import { BackendConnectionSection } from './BackendConnectionSection.ts';
 import type { SettingsController } from './SettingsController.ts';
 import { UserManagementSection } from './UserManagementSection.ts';
 
 export class ObSyncSettingTab extends PluginSettingTab {
+	private readonly backend: BackendConnectionSection;
 	private readonly users: UserManagementSection;
 	private readonly account: AccountSettingsSection;
 
@@ -20,6 +23,7 @@ export class ObSyncSettingTab extends PluginSettingTab {
 	) {
 		super(app, plugin);
 		const refresh = (): void => this.update();
+		this.backend = new BackendConnectionSection(controller, refresh);
 		this.users = new UserManagementSection(controller, refresh);
 		this.account = new AccountSettingsSection(
 			controller,
@@ -29,12 +33,21 @@ export class ObSyncSettingTab extends PluginSettingTab {
 	}
 
 	public getSettingDefinitions(): SettingDefinitionItem[] {
+		const backendSection = this.backend.definition();
+
+		// The login button needs a configured backend to talk to; without one,
+		// attempting to sign in would just fail with a confusing error.
+		if (!isApiEndpointConfigured()) {
+			return [backendSection];
+		}
+
 		const currentUser = this.controller.config.user;
 		if (!currentUser || !this.controller.isAuthenticated()) {
-			return [this.disconnectedDefinition()];
+			return [backendSection, this.disconnectedDefinition()];
 		}
 
 		const definitions: SettingDefinitionItem[] = [
+			backendSection,
 			this.account.definition(currentUser),
 		];
 		if (currentUser.role === 'admin') {
