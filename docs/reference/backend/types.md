@@ -49,6 +49,10 @@ links the access token to a revocable in-memory session.
 
 ### WebSocket credentials
 
+`WebSocketChannel` lives in `auth.types.ts`; `WebSocketAuthorization` and the
+other `TokenService` internals live in
+[`backend/auth/tokenService.types.ts`](../../../backend/auth/tokenService.types.ts).
+
 ```ts
 type WebSocketChannel = 'system' | 'yjs';
 
@@ -83,8 +87,6 @@ type UserMutationResult =
 			reason:
 				| 'not_found'
 				| 'last_admin'
-				| 'self_deactivate'
-				| 'self_delete'
 				| 'invalid_role'
 				| 'name_exists';
 	  };

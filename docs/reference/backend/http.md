@@ -1,8 +1,7 @@
 # HTTP API
 
 The API accepts and returns JSON unless an endpoint is documented as a file
-download. Authentication routes set `Cache-Control: no-store` and
-`Pragma: no-cache`.
+download. Authentication routes set `Cache-Control: no-store`.
 
 Remote deployments must use HTTPS. Loopback development may use HTTP.
 
@@ -25,7 +24,7 @@ Error responses generally use:
 
 ## Health
 
-### `GET /`
+### `GET /serverHealth`
 
 No authentication required.
 
@@ -101,9 +100,9 @@ All routes in this section require an active admin.
 | `DELETE /api/users/:id` | none | `200 { user }` |
 
 Names contain 2–64 characters. Passwords contain 6–128 characters. The backend
-prevents deletion or deactivation of the acting admin and prevents operations
-that would leave no active admin. An admin may change only their own name when
-the target is another admin.
+prevents operations that would leave no active admin; an admin may otherwise
+deactivate or delete their own account. An admin may change only their own
+name when the target is another admin.
 
 ## Initial vault download
 

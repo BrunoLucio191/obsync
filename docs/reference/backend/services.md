@@ -22,8 +22,8 @@ new DBServices(userDB: UserDB)
 | `createUser(name, email, password, role?)` | `CreateUserResult` | Hashes the password and enforces unique email and name |
 | `updateUserName(id, name)` | `UserMutationResult` | Normalizes and updates a unique display name |
 | `updateUserRole(id, role)` | `UserMutationResult` | Prevents demotion of the last active admin |
-| `updateUserStatus(actorId, id, active)` | `UserMutationResult` | Prevents self-deactivation and last-admin removal |
-| `deleteUser(actorId, id)` | `UserMutationResult` | Prevents self-deletion and last-admin removal |
+| `updateUserStatus(id, active)` | `UserMutationResult` | Prevents deactivating the last active admin |
+| `deleteUser(id)` | `UserMutationResult` | Prevents deleting the last active admin |
 
 ## ExpressServer
 
@@ -46,7 +46,7 @@ new ExpressServer({
 
 | Member | Description |
 | --- | --- |
-| `initializeMiddleware()` | Installs TLS enforcement, JSON parsing, and no-store auth headers |
+| `initializeMiddleware()` | Installs TLS enforcement, JSON parsing, and a no-store header on `/auth` routes |
 | `serverStart(port?)` | Starts the Node HTTP server on the configured host |
 | `getHttpServer` | Returns the underlying `node:http` server for WebSocket upgrades |
 
