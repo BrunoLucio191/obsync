@@ -23,7 +23,7 @@ accounts can hold either role:
 
 ## Demo
 
-https://github.com/user-attachments/assets/8646e54c-cf4c-4a1b-aca9-c9b15cc82c4f
+<video src="https://github.com/user-attachments/assets/8646e54c-cf4c-4a1b-aca9-c9b15cc82c4f" controls></video>
 
 ## Contents
 
