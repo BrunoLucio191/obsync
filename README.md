@@ -4,7 +4,7 @@
 
 **Self-hosted, real-time collaborative Markdown editing for Obsidian.**
 
-![License](https://img.shields.io/badge/license-ISC-blue.svg)
+![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white)
 ![Node.js](https://img.shields.io/badge/Node.js-ESM-339933?logo=node.js&logoColor=white)
 ![Obsidian](https://img.shields.io/badge/Obsidian-Plugin-7C3AED?logo=obsidian&logoColor=white)

@@ -1,6 +1,6 @@
 {
 	"name": "obsync-plugin",
-	"version": "2.0.0",
+	"version": "1.0.0",
 	"description": "Real-time collaborative editing and role-based synchronization with a self-hosted ObSync backend.",
 	"main": "main.js",
 	"type": "module",
