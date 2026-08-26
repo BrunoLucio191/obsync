@@ -21,8 +21,13 @@ accounts can hold either role:
 - **`user`** accounts edit locally and receive shared changes, but their
   own edits stay private — never published back to the vault.
 
+## Demo
+
+https://github.com/user-attachments/assets/8646e54c-cf4c-4a1b-aca9-c9b15cc82c4f
+
 ## Contents
 
+- [Demo](#demo)
 - [How synchronization works](#how-synchronization-works)
 - [Repository layout](#repository-layout)
 - [Documentation](#documentation)
