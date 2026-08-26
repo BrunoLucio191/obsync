@@ -181,28 +181,22 @@ export class UserListSection {
 
 		if (isCurrent || user.role !== 'user') return [identity];
 
-		const nameRow: SettingDefinition = {
-			name: `${label} — nome`,
+		// One compact sub-row for both editable fields, instead of a full-height
+		// row per field: keeps the extra controls visually attached to the
+		// identity row above instead of doubling this account's height.
+		const editRow: SettingDefinition = {
+			name: `${label} — editar`,
 			searchable: false,
 			render: (setting) => {
 				setting
-					.setName('Nome de exibição')
+					.setName('Nome e senha')
 					.setClass('obsync-settings-user-subrow');
 				this.addNameControl(setting, user);
-			},
-		};
-		const passwordRow: SettingDefinition = {
-			name: `${label} — senha`,
-			searchable: false,
-			render: (setting) => {
-				setting
-					.setName('Redefinir senha')
-					.setClass('obsync-settings-user-subrow');
 				this.addPasswordResetControl(setting, user);
 			},
 		};
 
-		return [identity, nameRow, passwordRow];
+		return [identity, editRow];
 	}
 
 	private addNameControl(

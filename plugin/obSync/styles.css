@@ -38,15 +38,28 @@ If your plugin does not need CSS, delete this file.
 	color: var(--text-muted);
 }
 
-/* A user's name/password rows: indented and lighter than the identity row
-   above them, so the group reads as belonging to that one account. */
+/* A user's edit row (name + password): tight, indented, no divider from the
+   identity row above, so it reads as attached to that one account instead
+   of as its own full-height setting. */
 .obsync-settings-user-subrow {
-	padding-left: var(--size-4-6);
+	padding: var(--size-4-1) 0 var(--size-4-2) var(--size-4-6);
+	border-top: none;
 }
 
 .obsync-settings-user-subrow .setting-item-name {
 	color: var(--text-muted);
 	font-size: var(--font-ui-smaller);
+}
+
+.obsync-settings-user-subrow .setting-item-control {
+	align-items: center;
+	column-gap: var(--size-4-2);
+	flex-wrap: wrap;
+}
+
+.obsync-settings-user-subrow .setting-item-control input,
+.obsync-settings-user-subrow .setting-item-control button {
+	flex: 0 0 auto;
 }
 
 /*
