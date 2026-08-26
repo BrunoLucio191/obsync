@@ -67,6 +67,7 @@ export class TokenService {
     this.removeExpiredState();
 
     const [sessionId, secret, extra] = refreshToken.split(".");
+
     if (!sessionId || !secret || extra) return null;
 
     const record = this.sessions.get(sessionId);
@@ -81,6 +82,7 @@ export class TokenService {
       return null;
     }
 
+    //user need to exist in the db
     const user = await this.dbService.getUserById(record.userId);
     if (!user) {
       this.revokeSessionId(sessionId);

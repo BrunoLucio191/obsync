@@ -196,18 +196,12 @@ export class DBServices {
   }
 
   public async updateUserStatus(
-    actorUserId: number,
     userId: number,
     active: boolean,
   ): Promise<UserMutationResult> {
     const result = this.runImmediateTransaction<UserMutationResult>(() => {
       const row = this.getUserRow(userId);
       if (!row) return { ok: false, reason: "not_found" };
-
-      if (actorUserId === userId && !active) {
-        return { ok: false, reason: "self_deactivate" };
-      }
-
       if (
         row.role === "admin" &&
         row.active === 1 &&
@@ -229,12 +223,7 @@ export class DBServices {
     return result;
   }
 
-  public async deleteUser(
-    actorUserId: number,
-    userId: number,
-  ): Promise<UserMutationResult> {
-    if (actorUserId === userId) return { ok: false, reason: "self_delete" };
-
+  public async deleteUser(userId: number): Promise<UserMutationResult> {
     const result = this.runImmediateTransaction<UserMutationResult>(() => {
       const row = this.getUserRow(userId);
       if (!row) return { ok: false, reason: "not_found" };
