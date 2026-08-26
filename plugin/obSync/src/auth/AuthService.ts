@@ -298,7 +298,10 @@ export class AuthService {
 			});
 
 			if (response.status !== 200) {
-				if (response.status === 401) await this.clearLocalSession();
+				if (response.status === 401) {
+					await this.clearLocalSession();
+					new Notice(t('auth.sessionExpiredNotice'));
+				}
 				return false;
 			}
 
