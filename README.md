@@ -14,7 +14,8 @@
 
 ObSync pairs an Obsidian plugin with a self-hosted Node.js backend so a vault
 can be edited by several people at once, backed by [Yjs](https://yjs.dev) CRDTs
-over WebSocket. It supports two account roles with different publishing rights:
+over WebSocket. Each account is assigned one of two roles, and any number of
+accounts can hold either role:
 
 - **`admin`** accounts publish changes to the shared vault.
 - **`user`** accounts edit locally and receive shared changes, but their
