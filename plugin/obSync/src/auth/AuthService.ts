@@ -16,6 +16,7 @@ const ACCESS_TOKEN_SECRET_ID = 'obsync-access-token';
 const REFRESH_TOKEN_SECRET_ID = 'obsync-refresh-token';
 const REFRESH_EARLY_MS = 60_000;
 
+/** Collaborators {@link AuthService} needs, injected instead of imported directly so it stays testable and decoupled from the plugin's own storage/lifecycle. */
 type AuthServiceDependencies = {
 	app: App;
 	getConfig: () => ObSyncConfig;
@@ -26,6 +27,13 @@ type AuthServiceDependencies = {
 	) => void;
 };
 
+/**
+ * Owns the plugin's authentication lifecycle: storing tokens in Obsidian's
+ * secret storage, keeping the access token fresh (proactively via a timer
+ * and reactively on 401 responses), prompting the user to log in when
+ * needed, and notifying the rest of the plugin when the signed-in user
+ * changes.
+ */
 export class AuthService {
 	private readonly app: App;
 	private readonly getConfig: () => ObSyncConfig;
@@ -36,8 +44,14 @@ export class AuthService {
 	private accessRefreshTimer: number | null = null;
 	private sessionRefreshTimer: number | null = null;
 	private refreshPromise: Promise<boolean> | null = null;
+	/** Unique id for this plugin instance, sent to the backend to distinguish this client's own broadcasted changes from other clients'. */
 	public readonly clientId = crypto.randomUUID();
 
+	/**
+	 * Restores any previously stored tokens from Obsidian's secret storage
+	 * and schedules a proactive refresh of the access token.
+	 * @param dependencies - Collaborators for storage, config persistence, and session-change notification.
+	 */
 	public constructor(dependencies: AuthServiceDependencies) {
 		this.app = dependencies.app;
 		this.getConfig = dependencies.getConfig;
@@ -50,10 +64,12 @@ export class AuthService {
 		this.scheduleAccessRefresh();
 	}
 
+	/** The currently authenticated user's profile, or `null` when signed out. */
 	public get user(): AuthenticatedUser | null {
 		return this.getConfig().user;
 	}
 
+	/** @returns Whether both tokens and a user profile are present locally. */
 	public isAuthenticated(): boolean {
 		return Boolean(this.accessToken && this.refreshToken && this.user);
 	}
@@ -66,6 +82,7 @@ export class AuthService {
 		return this.user?.role === 'user';
 	}
 
+	/** @returns HTTP headers (bearer token, client id) to attach to authenticated backend requests. */
 	public headers(): Record<string, string> {
 		return {
 			'Content-Type': 'application/json',
@@ -74,10 +91,20 @@ export class AuthService {
 		};
 	}
 
+	/**
+	 * Ensures the access token is valid (refreshing it if close to expiry)
+	 * before an authenticated request is made.
+	 * @returns Whether a usable access token is available.
+	 */
 	public prepareAuthenticatedRequest(): Promise<boolean> {
 		return this.ensureFreshAccessToken();
 	}
 
+	/**
+	 * Guarantees a valid session exists, restoring one from storage if
+	 * possible or otherwise prompting the user to log in via {@link LoginModal}.
+	 * @returns Whether the user ended up authenticated.
+	 */
 	public async ensureAuthenticated(): Promise<boolean> {
 		if (await this.restoreStoredSession()) return true;
 		await this.clearLocalSession();
@@ -91,6 +118,12 @@ export class AuthService {
 		});
 	}
 
+	/**
+	 * Exchanges the current access token for a short-lived ticket that can
+	 * be used to authenticate a WebSocket upgrade request.
+	 * @param channel - Which WebSocket channel the ticket is scoped to.
+	 * @returns The ticket string, or `null` if it couldn't be obtained.
+	 */
 	public async createWebSocketTicket(
 		channel: WebSocketChannel,
 	): Promise<string | null> {
@@ -108,6 +141,12 @@ export class AuthService {
 			: null;
 	}
 
+	/**
+	 * Changes the current user's password on the backend.
+	 * @param currentPassword - The user's existing password, for verification.
+	 * @param newPassword - The password to set.
+	 * @returns The updated result, with a localized error message on failure.
+	 */
 	public async changePassword(
 		currentPassword: string,
 		newPassword: string,
@@ -147,6 +186,11 @@ export class AuthService {
 		}
 	}
 
+	/**
+	 * Debounces a call to {@link refreshSession}, so multiple near-simultaneous
+	 * triggers (e.g. several admin actions completing in quick succession)
+	 * collapse into a single request.
+	 */
 	public scheduleSessionRefresh(): void {
 		if (this.sessionRefreshTimer !== null) {
 			window.clearTimeout(this.sessionRefreshTimer);
@@ -158,6 +202,12 @@ export class AuthService {
 		}, 250);
 	}
 
+	/**
+	 * Re-fetches the current user's profile from the backend and updates
+	 * local state if it changed (e.g. after an admin edits this user's role
+	 * elsewhere). Clears the session and notifies the user if it turns out
+	 * to be invalid.
+	 */
 	public async refreshSession(): Promise<void> {
 		if (!(await this.ensureFreshAccessToken())) return;
 
@@ -185,6 +235,10 @@ export class AuthService {
 		}
 	}
 
+	/**
+	 * Revokes the refresh token on the backend (best-effort) and clears the
+	 * local session regardless of whether that request succeeds.
+	 */
 	public async logout(): Promise<void> {
 		const refreshToken = this.refreshToken;
 		try {
@@ -204,10 +258,12 @@ export class AuthService {
 		}
 	}
 
+	/** Clears the local session (tokens and user) without contacting the backend. */
 	public async clearSession(): Promise<void> {
 		await this.clearLocalSession();
 	}
 
+	/** Cancels any pending refresh timers. Must be called when the plugin unloads to avoid leaking timers. */
 	public destroy(): void {
 		if (this.accessRefreshTimer !== null) {
 			window.clearTimeout(this.accessRefreshTimer);
@@ -219,6 +275,11 @@ export class AuthService {
 		}
 	}
 
+	/**
+	 * Attempts to reuse the access token already in memory if it isn't
+	 * expired, falling back to a refresh-token exchange.
+	 * @returns Whether a valid session is now in place.
+	 */
 	private async restoreStoredSession(): Promise<boolean> {
 		if (
 			this.accessToken &&
@@ -231,6 +292,13 @@ export class AuthService {
 		return this.refreshAccessToken();
 	}
 
+	/**
+	 * Submits credentials to the backend and, on success, stores the
+	 * returned session.
+	 * @param email - The account's e-mail address.
+	 * @param password - The account's password.
+	 * @returns Whether login succeeded.
+	 */
 	private async login(email: string, password: string): Promise<boolean> {
 		try {
 			const response = await requestUrl({
@@ -253,6 +321,11 @@ export class AuthService {
 		}
 	}
 
+	/**
+	 * Checks that the in-memory access token is still accepted by the
+	 * backend, refreshing the cached user profile if so.
+	 * @returns Whether the token is still valid.
+	 */
 	private async validateCurrentToken(): Promise<boolean> {
 		try {
 			const response = await this.requestCurrentUser();
@@ -267,6 +340,11 @@ export class AuthService {
 		}
 	}
 
+	/**
+	 * Resolves immediately if the access token has enough remaining
+	 * lifetime, otherwise triggers a refresh-token exchange.
+	 * @returns Whether a fresh-enough access token is available afterward.
+	 */
 	private ensureFreshAccessToken(): Promise<boolean> {
 		if (
 			this.accessToken &&
@@ -277,6 +355,12 @@ export class AuthService {
 		return this.refreshAccessToken();
 	}
 
+	/**
+	 * Exchanges the refresh token for a new session, coalescing concurrent
+	 * callers onto a single in-flight request so simultaneous 401s don't
+	 * each trigger their own refresh.
+	 * @returns Whether the refresh succeeded.
+	 */
 	private refreshAccessToken(): Promise<boolean> {
 		if (this.refreshPromise) return this.refreshPromise;
 		this.refreshPromise = this.exchangeRefreshToken().finally(() => {
@@ -285,6 +369,12 @@ export class AuthService {
 		return this.refreshPromise;
 	}
 
+	/**
+	 * Performs the actual refresh-token HTTP exchange. Clears the local
+	 * session and notifies the user if the refresh token itself was
+	 * rejected.
+	 * @returns Whether the refresh succeeded.
+	 */
 	private async exchangeRefreshToken(): Promise<boolean> {
 		if (!this.refreshToken) return false;
 
@@ -315,6 +405,12 @@ export class AuthService {
 		}
 	}
 
+	/**
+	 * Persists a newly received session: stores tokens in secret storage,
+	 * updates the plugin config, reschedules the proactive refresh timer,
+	 * and fires {@link onSessionChanged} if the signed-in user actually changed.
+	 * @param session - The session returned by a login or refresh call.
+	 */
 	private async acceptSession(session: AuthSession): Promise<void> {
 		const previousUser = this.user;
 		this.accessToken = session.token;
@@ -339,6 +435,11 @@ export class AuthService {
 		}
 	}
 
+	/**
+	 * Updates the cached user profile and notifies listeners only if the
+	 * profile actually changed.
+	 * @param user - The freshly fetched user profile.
+	 */
 	private async updateCurrentUser(user: AuthenticatedUser): Promise<void> {
 		const previousUser = this.user;
 		if (!this.usersDiffer(previousUser, user)) return;
@@ -348,6 +449,11 @@ export class AuthService {
 		this.onSessionChanged(previousUser, user);
 	}
 
+	/**
+	 * Wipes tokens and user profile from memory, secret storage, and
+	 * config, cancels the refresh timer, and notifies listeners if there
+	 * was actually a session to clear.
+	 */
 	private async clearLocalSession(): Promise<void> {
 		const previousUser = this.user;
 		const hadSession = Boolean(
@@ -371,6 +477,11 @@ export class AuthService {
 		this.onSessionChanged(previousUser, null);
 	}
 
+	/**
+	 * (Re)schedules a timer that proactively refreshes the access token
+	 * shortly before it expires, so most requests never have to react to a
+	 * 401.
+	 */
 	private scheduleAccessRefresh(): void {
 		if (this.accessRefreshTimer !== null) {
 			window.clearTimeout(this.accessRefreshTimer);
@@ -394,6 +505,7 @@ export class AuthService {
 		});
 	}
 
+	/** Sends a change-password request to the backend. */
 	private requestChangePassword(currentPassword: string, newPassword: string) {
 		return requestUrl({
 			url: `${getApiBaseUrl()}/auth/change-password`,
@@ -404,6 +516,7 @@ export class AuthService {
 		});
 	}
 
+	/** Requests a WebSocket authentication ticket for the given channel. */
 	private requestWebSocketTicket(channel: WebSocketChannel) {
 		return requestUrl({
 			url: `${getApiBaseUrl()}/auth/ws-ticket`,
@@ -414,6 +527,12 @@ export class AuthService {
 		});
 	}
 
+	/**
+	 * Type guard verifying a parsed response body has all the fields
+	 * required to be treated as a valid {@link AuthSession}.
+	 * @param session - The partially-typed, untrusted response payload.
+	 * @returns Whether `session` is a complete, well-formed session.
+	 */
 	private isValidSession(session: Partial<AuthSession>): session is AuthSession {
 		return (
 			typeof session.token === 'string' &&
@@ -426,6 +545,13 @@ export class AuthService {
 		);
 	}
 
+	/**
+	 * Compares two user profiles field-by-field to decide whether a
+	 * session-changed notification is warranted.
+	 * @param left - The previously known user, or `null`.
+	 * @param right - The newly fetched user, or `null`.
+	 * @returns Whether any user-visible field differs.
+	 */
 	private usersDiffer(
 		left: AuthenticatedUser | null,
 		right: AuthenticatedUser | null,

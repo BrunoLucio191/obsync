@@ -11,6 +11,12 @@ import { BackendConnectionSection } from './BackendConnectionSection.ts';
 import type { SettingsController } from './SettingsController.ts';
 import { UserManagementSection } from './UserManagementSection.ts';
 
+/**
+ * Top-level Obsidian settings tab for the obSync plugin. Composes the
+ * backend-connection, account, and user-management sections into the list of
+ * setting-definitions the framework renders, adjusting what's shown based on
+ * whether a backend is configured and whether a user is signed in.
+ */
 export class ObSyncSettingTab extends PluginSettingTab {
 	private readonly backend: BackendConnectionSection;
 	private readonly users: UserManagementSection;
@@ -32,6 +38,7 @@ export class ObSyncSettingTab extends PluginSettingTab {
 		);
 	}
 
+	/** @returns The setting groups for the current state: backend-only, disconnected, or authenticated. */
 	public getSettingDefinitions(): SettingDefinitionItem[] {
 		const backendSection = this.backend.definition();
 
@@ -56,6 +63,7 @@ export class ObSyncSettingTab extends PluginSettingTab {
 		return definitions;
 	}
 
+	/** Obsidian lifecycle hook: tears down the user-management section's pending timers/state when the tab closes. */
 	public hide(): void {
 		this.users.destroy();
 	}

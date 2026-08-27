@@ -8,11 +8,29 @@ import type { YjsAwarenessEntry, YjsConnectionState } from "./yjs.types.ts";
 import {
   getAwarenessPresenceIdentity,
   normalizePresenceIdentity,
-} from "./presence.utils.ts";
-import { ensureDecoderConsumed } from "./wsTransport.utils.ts";
+} from "./yjsUtils/presence.utils.ts";
+import { ensureDecoderConsumed } from "./yjsUtils/wsTransport.utils.ts";
 import type { YjsRoom } from "./YjsRoom.ts";
 
+/**
+ * Validates and filters incoming `y-protocols/awareness` updates before they are applied to a
+ * room's shared {@link awarenessProtocol.Awareness} instance. Enforces that a connection can
+ * only claim/remove awareness client ids that match its own authenticated identity, preventing
+ * one user from spoofing or evicting another user's cursor/presence state.
+ */
 export class AwarenessOwnershipGuard {
+  /**
+   * Parses a raw awareness update, drops entries that fail ownership/identity checks (logging
+   * them as warnings), and applies the remaining entries to the room's awareness instance while
+   * updating ownership bookkeeping.
+   * @param room - Room whose awareness state is being updated.
+   * @param connection - Connection that sent the update.
+   * @param connectionState - Per-connection state, used for identity checks and to track
+   * which awareness client ids this connection controls.
+   * @param update - Raw encoded awareness update payload.
+   * @throws If the payload has more entries than {@link MAX_AWARENESS_ENTRIES_PER_MESSAGE},
+   * contains invalid JSON state, or has trailing bytes.
+   */
   public applyUpdate(
     room: YjsRoom,
     connection: WebSocket,
@@ -34,9 +52,7 @@ export class AwarenessOwnershipGuard {
           ignoredEntries.push({
             clientId: entry.clientId,
             reason: "foreign-removal-echo",
-            currentOwner: currentOwner
-              ? this.describeConnection(currentOwner)
-              : null,
+            currentOwner: currentOwner ? this.describeConnection(currentOwner) : null,
           });
           continue;
         }
@@ -66,9 +82,7 @@ export class AwarenessOwnershipGuard {
 
       if (currentOwner && currentOwner !== connection) {
         const currentOwnerContext = getYjsDebugConnection(currentOwner);
-        const currentOwnerPresenceId = normalizePresenceIdentity(
-          currentOwnerContext.userEmail,
-        );
+        const currentOwnerPresenceId = normalizePresenceIdentity(currentOwnerContext.userEmail);
 
         if (currentOwnerPresenceId !== authenticatedPresenceId) {
           // A real collision between different users must not drop any
@@ -85,29 +99,20 @@ export class AwarenessOwnershipGuard {
         // Reconnection of the same user. Ownership can move to the new
         // socket, but the old socket is not closed: this avoids a
         // connection ping-pong.
-        room.connections
-          .get(currentOwner)
-          ?.controlledAwarenessIds.delete(entry.clientId);
+        room.connections.get(currentOwner)?.controlledAwarenessIds.delete(entry.clientId);
       }
 
       acceptedEntries.push(entry);
     }
 
     if (ignoredEntries.length > 0) {
-      console.warn(
-        `[Yjs] Ignored awareness entries in ${room.filePath}:`,
-        ignoredEntries,
-      );
+      console.warn(`[Yjs] Ignored awareness entries in ${room.filePath}:`, ignoredEntries);
     }
 
     if (acceptedEntries.length === 0) return;
 
     const filteredUpdate = this.encodeEntries(acceptedEntries);
-    awarenessProtocol.applyAwarenessUpdate(
-      room.awareness,
-      filteredUpdate,
-      connection,
-    );
+    awarenessProtocol.applyAwarenessUpdate(room.awareness, filteredUpdate, connection);
 
     for (const entry of acceptedEntries) {
       if (entry.state === null) {
@@ -121,6 +126,7 @@ export class AwarenessOwnershipGuard {
     }
   }
 
+  /** Builds a small serializable summary of a connection's identity, for diagnostic logging. */
   private describeConnection(connection: WebSocket): unknown {
     const context = getYjsDebugConnection(connection);
 
@@ -132,6 +138,13 @@ export class AwarenessOwnershipGuard {
     };
   }
 
+  /**
+   * Decodes the raw wire format of an awareness update into structured entries.
+   * @param update - Raw encoded awareness update payload.
+   * @returns The decoded entries.
+   * @throws If the entry count exceeds the allowed maximum, the state JSON is invalid, or the
+   * payload has trailing bytes.
+   */
   private parseEntries(update: Uint8Array): YjsAwarenessEntry[] {
     const decoder = decoding.createDecoder(update);
     const count = decoding.readVarUint(decoder);
@@ -142,7 +155,7 @@ export class AwarenessOwnershipGuard {
 
     const entries: YjsAwarenessEntry[] = [];
 
-    for (let index = 0; index < count; index += 1) {
+    for (let index = 0; index < count; index++) {
       const clientId = decoding.readVarUint(decoder);
       const clock = decoding.readVarUint(decoder);
       const stateJson = decoding.readVarString(decoder);
@@ -161,6 +174,12 @@ export class AwarenessOwnershipGuard {
     return entries;
   }
 
+  /**
+   * Re-encodes a filtered list of awareness entries back into the wire format expected by
+   * `awarenessProtocol.applyAwarenessUpdate`.
+   * @param entries - Entries that passed ownership/identity validation.
+   * @returns The re-encoded update payload.
+   */
   private encodeEntries(entries: readonly YjsAwarenessEntry[]): Uint8Array {
     const encoder = encoding.createEncoder();
     encoding.writeVarUint(encoder, entries.length);

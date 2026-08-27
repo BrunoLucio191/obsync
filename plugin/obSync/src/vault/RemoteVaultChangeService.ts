@@ -4,6 +4,12 @@ import type { AuthService } from '../auth/AuthService.ts';
 import type { CollaborationController } from '../collab/CollaborationController.ts';
 import { PathMuteRegistry } from './PathMuteRegistry.ts';
 
+/**
+ * Applies vault changes received from other clients (via {@link SystemChannel})
+ * to the local Obsidian vault: writing/creating/deleting/renaming files and
+ * folders. Every affected path is muted first so applying the change doesn't
+ * trigger a local vault event that gets re-published back to the server.
+ */
 export class RemoteVaultChangeService {
 	public constructor(
 		private readonly app: App,
@@ -12,6 +18,15 @@ export class RemoteVaultChangeService {
 		private readonly collaboration: CollaborationController,
 	) {}
 
+	/**
+	 * Applies a single remote vault change to the local vault. For read-only
+	 * users, `create`/`modify` are skipped when the local file already exists,
+	 * so their local edits aren't clobbered by remote history. Deletes trash
+	 * the file when Obsidian is tracking it (so it can be recovered), falling
+	 * back to a raw adapter removal otherwise. Renames create any missing
+	 * parent folders before moving the file.
+	 * @param change - The remote change to apply.
+	 */
 	public async apply(change: VaultChange): Promise<void> {
 		const adapter = this.app.vault.adapter;
 
@@ -70,6 +85,12 @@ export class RemoteVaultChangeService {
 		}
 	}
 
+	/**
+	 * Creates any missing folders in the path leading up to (but not
+	 * including) a file, muting each one created so the resulting vault
+	 * events aren't republished.
+	 * @param filePath - Vault-relative file path whose parent folders should exist.
+	 */
 	private async ensureParentFolder(filePath: string): Promise<void> {
 		const parent = filePath.substring(0, filePath.lastIndexOf('/'));
 		if (!parent) return;

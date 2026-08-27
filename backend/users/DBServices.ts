@@ -14,18 +14,35 @@ import {
 } from "./userNormalization.ts";
 import { dbEvents } from "./DBEvents.ts";
 
+/**
+ * Application-level service layer over {@link UserDB}: implements user
+ * CRUD, authentication-adjacent lookups, and business rules (e.g. never
+ * allow the last active administrator to be demoted/deactivated/deleted),
+ * wrapping mutations in transactions and emitting authorization-change
+ * events when relevant.
+ */
 export class DBServices {
+  /** Facade for emitting/subscribing to authorization-change notifications. */
   private readonly event;
+  /** Underlying SQLite-backed user store. */
   private readonly userDB: UserDB;
+
   constructor(userDB: UserDB) {
     this.userDB = userDB;
     this.event = dbEvents();
   }
 
+  /** Type guard checking whether a value is a valid {@link UserRole}. */
   public isUserRole(value: unknown): value is UserRole {
     return value === "admin" || value === "user";
   }
 
+  /**
+   * Fetches a single user row by id, excluding the password hash.
+   *
+   * @param userId - id of the user to look up.
+   * @returns The row, or `null` if no user with that id exists.
+   */
   private getUserRow(
     userId: number,
   ): Omit<StoredUserRow, "password_hash"> | null {
@@ -35,6 +52,12 @@ export class DBServices {
     return row ?? null;
   }
 
+  /**
+   * Counts how many users currently hold the `admin` role and are active,
+   * used to guard against removing the last administrator.
+   *
+   * @returns The number of active administrators.
+   */
   private activeAdminCount(): number {
     const row = this.userDB
       .prepare(
@@ -44,6 +67,14 @@ export class DBServices {
     return Number(row.count);
   }
 
+  /**
+   * Runs `operation` inside a SQLite `BEGIN IMMEDIATE` transaction,
+   * committing on success and rolling back if it throws.
+   *
+   * @param operation - Synchronous unit of work to run transactionally.
+   * @returns Whatever `operation` returns.
+   * @throws Re-throws any error from `operation` after rolling back.
+   */
   public runImmediateTransaction<T>(operation: () => T): T {
     this.userDB.exec("BEGIN IMMEDIATE");
     try {
@@ -56,6 +87,14 @@ export class DBServices {
     }
   }
 
+  /**
+   * Converts a raw database row into the public {@link AuthenticatedUser}
+   * shape, validating the stored role and coercing `active` to a boolean.
+   *
+   * @param row - Row as read from the `users` table (without the password hash).
+   * @returns The corresponding {@link AuthenticatedUser}.
+   * @throws If the row's `role` column holds an invalid value.
+   */
   public rowToUser(
     row: Omit<StoredUserRow, "password_hash">,
   ): AuthenticatedUser {
@@ -72,6 +111,13 @@ export class DBServices {
     };
   }
 
+  /**
+   * Looks up a user by id.
+   *
+   * @param userId - id of the user to fetch.
+   * @param includeInactive - When `false` (default), a deactivated user is treated as not found.
+   * @returns The matching user, or `null` if not found (or inactive and `includeInactive` is `false`).
+   */
   public async getUserById(
     userId: number,
     includeInactive = false,
@@ -81,6 +127,11 @@ export class DBServices {
     return this.rowToUser(row);
   }
 
+  /**
+   * Lists every user in the database (active and inactive), ordered by id.
+   *
+   * @returns All users.
+   */
   public async listUsers(): Promise<AuthenticatedUser[]> {
     const rows = this.userDB
       .prepare(
@@ -92,6 +143,17 @@ export class DBServices {
     return rows.map((row) => this.rowToUser(row));
   }
 
+  /**
+   * Creates a new user account, rejecting the operation if the email or
+   * the case-insensitive name is already taken. The whole check-then-insert
+   * sequence runs inside a transaction to avoid race conditions.
+   *
+   * @param name - Display name for the new user.
+   * @param email - Login email for the new user.
+   * @param password - Plaintext password to hash and store.
+   * @param role - Role to assign (defaults to `"user"`).
+   * @returns `{ ok: true, user }` on success, or `{ ok: false, reason }` if the email or name is already in use.
+   */
   public async createUser(
     name: string,
     email: string,
@@ -135,6 +197,15 @@ export class DBServices {
     return result;
   }
 
+  /**
+   * Renames a user, rejecting the change if another user already has the
+   * same case-insensitive name. Emits an authorization-changed event on
+   * success (the name is part of the authenticated user's identity data).
+   *
+   * @param userId - id of the user to rename.
+   * @param name - New display name.
+   * @returns `{ ok: true, user }` on success, or `{ ok: false, reason }` if the user doesn't exist or the name is taken.
+   */
   public async updateUserName(
     userId: number,
     name: string,
@@ -163,6 +234,15 @@ export class DBServices {
     return result;
   }
 
+  /**
+   * Changes a user's role, refusing to demote the last remaining active
+   * administrator (to avoid locking everyone out of admin capabilities).
+   * Emits an authorization-changed event on success.
+   *
+   * @param userId - id of the user whose role should change.
+   * @param role - New role to assign.
+   * @returns `{ ok: true, user }` on success, or `{ ok: false, reason }` if `role` is invalid, the user doesn't exist, or this would remove the last active admin.
+   */
   public async updateUserRole(
     userId: number,
     role: UserRole,
@@ -196,6 +276,15 @@ export class DBServices {
     return result;
   }
 
+  /**
+   * Activates or deactivates a user, refusing to deactivate the last
+   * remaining active administrator. Emits an authorization-changed event
+   * on success.
+   *
+   * @param userId - id of the user to activate/deactivate.
+   * @param active - Desired active status.
+   * @returns `{ ok: true, user }` on success, or `{ ok: false, reason }` if the user doesn't exist or this would remove the last active admin.
+   */
   public async updateUserStatus(
     userId: number,
     active: boolean,
@@ -224,6 +313,15 @@ export class DBServices {
     return result;
   }
 
+  /**
+   * Self-service password change: verifies the caller's current password
+   * before setting the new one.
+   *
+   * @param userId - id of the user changing their own password.
+   * @param currentPassword - The user's current plaintext password, for verification.
+   * @param newPassword - New plaintext password to hash and store.
+   * @returns `{ ok: true, user }` on success, or `{ ok: false, reason }` if the user doesn't exist or `currentPassword` doesn't match.
+   */
   public async updateUserPassword(
     userId: number,
     currentPassword: string,
@@ -254,6 +352,14 @@ export class DBServices {
     });
   }
 
+  /**
+   * Administrative password reset: sets a user's password without
+   * requiring their current password (for use by an administrator).
+   *
+   * @param userId - id of the user whose password is being reset.
+   * @param newPassword - New plaintext password to hash and store.
+   * @returns `{ ok: true, user }` on success, or `{ ok: false, reason: "not_found" }` if the user doesn't exist.
+   */
   public async adminSetUserPassword(
     userId: number,
     newPassword: string,
@@ -272,6 +378,13 @@ export class DBServices {
     });
   }
 
+  /**
+   * Permanently deletes a user, refusing to delete the last remaining
+   * active administrator. Emits an authorization-changed event on success.
+   *
+   * @param userId - id of the user to delete.
+   * @returns `{ ok: true, user }` (the deleted user) on success, or `{ ok: false, reason }` if the user doesn't exist or this would remove the last active admin.
+   */
   public async deleteUser(userId: number): Promise<UserMutationResult> {
     const result = this.runImmediateTransaction<UserMutationResult>(() => {
       const row = this.getUserRow(userId);

@@ -8,10 +8,16 @@ import { t } from '../i18n/i18n.ts';
 import type { SettingsController } from './SettingsController.ts';
 import type { UserManagementSection } from './UserManagementSection.ts';
 
+/**
+ * Renders the "Account" group of the plugin settings tab: the connected
+ * user's identity/role, their editable display name (or a read-only view for
+ * non-admins), the change-password form, and the sign-out action.
+ */
 export class AccountSettingsSection {
 	private currentPassword = '';
 	private newPassword = '';
 
+	/** @param users - Shared user-management section, used here to render the editable name field for admins. */
 	public constructor(
 		private readonly controller: SettingsController,
 		private readonly users: UserManagementSection,

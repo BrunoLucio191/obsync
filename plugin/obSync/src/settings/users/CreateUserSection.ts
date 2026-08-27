@@ -4,6 +4,11 @@ import { t } from '../../i18n/i18n.ts';
 import type { SettingsController } from '../SettingsController.ts';
 import type { UserDirectory } from './UserDirectory.ts';
 
+/**
+ * Renders the "Add user" form: name/email/password/role inputs plus a create
+ * button that validates against the cached `UserDirectory` for
+ * name/email duplicates before calling the backend.
+ */
 export class CreateUserSection {
 	private name = '';
 	private email = '';
@@ -128,6 +133,7 @@ export class CreateUserSection {
 		};
 	}
 
+	/** Clears the form fields back to their defaults after a successful create. */
 	private reset(): void {
 		this.name = '';
 		this.email = '';

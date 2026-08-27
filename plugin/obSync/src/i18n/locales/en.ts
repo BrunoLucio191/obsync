@@ -1,3 +1,9 @@
+/**
+ * English translation strings for the ObSync plugin UI, keyed by feature
+ * area (auth, userAdmin, settings, sync, collab, plugin,
+ * offlinePersistence). Consumed via {@link t} in `i18n.ts`. Serves as the
+ * i18next `fallbackLng` bundle.
+ */
 export default {
 	common: {
 		save: 'Save',

@@ -1,9 +1,4 @@
-import express, {
-  type Express,
-  type NextFunction,
-  type Request,
-  type Response,
-} from "express";
+import express, { type Express, type NextFunction, type Request, type Response } from "express";
 import { type Server } from "node:http";
 import { createServer } from "node:http";
 import fs from "node:fs/promises";
@@ -22,8 +17,14 @@ import { AuthService } from "../auth/authService.ts";
 import type { TokenService } from "../auth/TokenService.ts";
 import type { DBServices } from "../users/DBServices.ts";
 
+/**
+ * Maps a failed {@link UserMutationResult} to the appropriate HTTP status code.
+ * @param result - The mutation result to inspect.
+ * @returns `200` if `result.ok` is `true`, otherwise a status code matching `result.reason`.
+ */
 function mutationErrorStatus(result: UserMutationResult): number {
   if (result.ok) return 200;
+
   switch (result.reason) {
     case "not_found":
       return 404;
@@ -42,6 +43,11 @@ function mutationErrorStatus(result: UserMutationResult): number {
   }
 }
 
+/**
+ * Maps a failed {@link UserMutationResult} to a human-readable error message.
+ * @param result - The mutation result to inspect.
+ * @returns An empty string if `result.ok` is `true`, otherwise a message describing `result.reason`.
+ */
 function mutationErrorMessage(result: UserMutationResult): string {
   if (result.ok) return "";
 
@@ -63,10 +69,13 @@ function mutationErrorMessage(result: UserMutationResult): string {
   }
 }
 
+/** Constructor options for {@link ExpressServer}. */
 type ExpressServerConstructorOptions = {
   port: number;
   host: string;
+  /** When `true`, rejects any non-HTTPS request instead of terminating TLS itself (expects a trusted TLS-terminating proxy in front). */
   requireTls: boolean;
+  /** When `true`, trusts `X-Forwarded-*` headers from upstream proxies (e.g. for detecting HTTPS and client IP). */
   trustProxy: boolean;
   fileManager: FileManager;
   tokenService: TokenService;
@@ -75,6 +84,12 @@ type ExpressServerConstructorOptions = {
   collaborationServer: YjsCollaborationServer;
 };
 
+/**
+ * The application's HTTP API: authentication endpoints, user management endpoints, vault
+ * sync endpoints, and a vault-zip download endpoint. Wraps an Express app plus the raw
+ * Node HTTP server it listens on (the latter is also used by {@link WebSocketServer} to
+ * handle `upgrade` requests).
+ */
 export class ExpressServer {
   private readonly app: Express;
   private readonly port: number;
@@ -96,6 +111,11 @@ export class ExpressServer {
     maxFailedAttempts: 5,
   });
 
+  /**
+   * Creates the Express app and underlying HTTP server, then wires up middleware and routes.
+   * Does not start listening — call {@link serverStart} for that.
+   * @param options - Server configuration and the collaborator services used by its routes.
+   */
   constructor({
     port,
     host,
@@ -122,6 +142,7 @@ export class ExpressServer {
     this.initializeRoutes();
   }
 
+  /** Registers global middleware: TLS enforcement, JSON body parsing (16mb limit), and no-store caching for `/auth` responses. */
   public initializeMiddleware(): void {
     this.app.use((req: Request, res: Response, next: NextFunction) => {
       if (this.requireTls && !req.secure) {
@@ -139,18 +160,23 @@ export class ExpressServer {
     });
   }
 
+  /**
+   * Registers every HTTP route: health check, auth endpoints (`/auth/*`), admin-only user
+   * management endpoints (`/api/users/*`), the vault zip download (`/api/syncfiles`), and the
+   * global vault mutation endpoints (`/sync/*`, admin-only). Also defines the `requireAuth` and
+   * `requireAdmin` middlewares used throughout these routes.
+   */
   private initializeRoutes(): void {
-    const requireAuth = async (
-      req: Request,
-      res: Response,
-      next: NextFunction,
-    ): Promise<void> => {
+    /** Middleware: resolves the bearer access token and rejects the request with 401 if it's
+     * missing/invalid. */
+    const requireAuth = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
       const token = req.header("Authorization")?.replace(/^Bearer\s+/i, "");
 
       const authenticatedUser = await this.tokenService.verifyToken(token);
 
       if (!authenticatedUser) {
         res.status(401).json({ error: "Unauthorized." });
+
         return;
       }
 
@@ -159,18 +185,15 @@ export class ExpressServer {
       next();
     };
 
-    const requireAdmin = (
-      req: Request,
-      res: Response,
-      next: NextFunction,
-    ): void => {
+    /** Middleware: rejects the request with 403 (and logs an audit entry) unless the authenticated
+     * user is an admin. Must run after `requireAuth`. */
+    const requireAdmin = (req: Request, res: Response, next: NextFunction): void => {
       const user = this.currentUser(res);
 
       if (user.role !== "admin") {
         this.auditDenied(user, req.method, req.path, this.requestPath(req));
-        res
-          .status(403)
-          .json({ error: "Only administrators can perform this action." });
+        res.status(403).json({ error: "Only administrators can perform this action." });
+
         return;
       }
 
@@ -181,101 +204,95 @@ export class ExpressServer {
       res.json({ status: "ok", service: "obsync" });
     });
 
-    this.app.post(
-      "/auth/login",
-      async (req: Request, res: Response): Promise<void> => {
-        const { email, password } = req.body ?? {};
+    this.app.post("/auth/login", async (req: Request, res: Response): Promise<void> => {
+      const { email, password } = req.body ?? {};
 
-        if (!email.includes("@")) {
-          res.status(400).json({ error: "E-mail is not valid" });
-          return;
-        }
+      if (!email.includes("@")) {
+        res.status(400).json({ error: "E-mail is not valid" });
 
-        if (typeof email !== "string" || typeof password !== "string") {
-          res.status(400).json({ error: "E-mail and password are required." });
+        return;
+      }
 
-          return;
-        }
+      if (typeof email !== "string" || typeof password !== "string") {
+        res.status(400).json({ error: "E-mail and password are required." });
 
-        if (email.length > 254 || password.length > 128) {
-          res.status(400).json({ error: "Invalid credentials." });
-          return;
-        }
+        return;
+      }
 
-        const { accountKey, ipKey } = this.loginRateLimitKeys(req, email);
-        const accountLimit = this.accountLoginRateLimiter.check(accountKey);
-        const ipLimit = this.ipLoginRateLimiter.check(ipKey);
+      if (email.length > 254 || password.length > 128) {
+        res.status(400).json({ error: "Invalid credentials." });
 
-        if (!accountLimit.allowed || !ipLimit.allowed) {
+        return;
+      }
+
+      const { accountKey, ipKey } = this.loginRateLimitKeys(req, email);
+      const accountLimit = this.accountLoginRateLimiter.check(accountKey);
+      const ipLimit = this.ipLoginRateLimiter.check(ipKey);
+
+      if (!accountLimit.allowed || !ipLimit.allowed) {
+        res.setHeader(
+          "Retry-After",
+          Math.max(accountLimit.retryAfterSeconds, ipLimit.retryAfterSeconds),
+        );
+        res.status(429).json({
+          error: "Too many login attempts. Try again later.",
+        });
+
+        return;
+      }
+
+      const session = await this.authService.login(email, password);
+
+      if (!session) {
+        const updatedAccountLimit = this.accountLoginRateLimiter.recordFailure(accountKey);
+        const updatedIpLimit = this.ipLoginRateLimiter.recordFailure(ipKey);
+
+        if (!updatedAccountLimit.allowed || !updatedIpLimit.allowed) {
           res.setHeader(
             "Retry-After",
-            Math.max(accountLimit.retryAfterSeconds, ipLimit.retryAfterSeconds),
+            Math.max(updatedAccountLimit.retryAfterSeconds, updatedIpLimit.retryAfterSeconds),
           );
           res.status(429).json({
             error: "Too many login attempts. Try again later.",
           });
-          return;
-        }
-
-        const session = await this.authService.login(email, password);
-
-        if (!session) {
-          const updatedAccountLimit =
-            this.accountLoginRateLimiter.recordFailure(accountKey);
-          const updatedIpLimit = this.ipLoginRateLimiter.recordFailure(ipKey);
-          if (!updatedAccountLimit.allowed || !updatedIpLimit.allowed) {
-            res.setHeader(
-              "Retry-After",
-              Math.max(
-                updatedAccountLimit.retryAfterSeconds,
-                updatedIpLimit.retryAfterSeconds,
-              ),
-            );
-            res.status(429).json({
-              error: "Too many login attempts. Try again later.",
-            });
-            return;
-          }
-          res.status(401).json({ error: "Invalid e-mail or password." });
 
           return;
         }
-        this.accountLoginRateLimiter.reset(accountKey);
-        res.json(session);
-      },
-    );
+        res.status(401).json({ error: "Invalid e-mail or password." });
 
-    this.app.post(
-      "/auth/refresh",
-      async (req: Request, res: Response): Promise<void> => {
-        const refreshToken = req.body?.refreshToken;
-        const session = await this.tokenService.refreshSession(
-          typeof refreshToken === "string" ? refreshToken : null,
-        );
-        if (!session) {
-          res.status(401).json({ error: "Invalid or expired session." });
-          return;
-        }
+        return;
+      }
+      this.accountLoginRateLimiter.reset(accountKey);
+      res.json(session);
+    });
 
-        res.json(session);
-      },
-    );
+    this.app.post("/auth/refresh", async (req: Request, res: Response): Promise<void> => {
+      const refreshToken = req.body?.refreshToken;
+
+      const session = await this.tokenService.refreshSession(
+        typeof refreshToken === "string" ? refreshToken : null,
+      );
+
+      if (!session) {
+        res.status(401).json({ error: "Invalid or expired session." });
+
+        return;
+      }
+
+      res.json(session);
+    });
 
     this.app.post("/auth/logout", (req: Request, res: Response): void => {
       const refreshToken = req.body?.refreshToken;
-      this.tokenService.revokeSession(
-        typeof refreshToken === "string" ? refreshToken : null,
-      );
+
+      this.tokenService.revokeSession(typeof refreshToken === "string" ? refreshToken : null);
+
       res.sendStatus(204);
     });
 
-    this.app.get(
-      "/auth/me",
-      requireAuth,
-      (_req: Request, res: Response): void => {
-        res.json({ user: this.currentUser(res) });
-      },
-    );
+    this.app.get("/auth/me", requireAuth, (_req: Request, res: Response): void => {
+      res.json({ user: this.currentUser(res) });
+    });
 
     this.app.post(
       "/auth/ws-ticket",
@@ -356,8 +373,7 @@ export class ExpressServer {
       requireAdmin,
       async (req: Request, res: Response): Promise<void> => {
         const userId = this.parseUserId(req.params.id);
-        const normalizedName =
-          typeof req.body?.name === "string" ? req.body.name.trim() : "";
+        const normalizedName = typeof req.body?.name === "string" ? req.body.name.trim() : "";
 
         if (!userId) {
           res.status(400).json({ error: "Invalid user." });
@@ -383,10 +399,7 @@ export class ExpressServer {
           return;
         }
 
-        const result = await this.dbService.updateUserName(
-          userId,
-          normalizedName,
-        );
+        const result = await this.dbService.updateUserName(userId, normalizedName);
         if (!result.ok) {
           res.status(mutationErrorStatus(result)).json({
             error: mutationErrorMessage(result),
@@ -410,11 +423,7 @@ export class ExpressServer {
           res.status(400).json({ error: "Invalid user." });
           return;
         }
-        if (
-          typeof newPassword !== "string" ||
-          newPassword.length < 6 ||
-          newPassword.length > 128
-        ) {
+        if (typeof newPassword !== "string" || newPassword.length < 6 || newPassword.length > 128) {
           res.status(400).json({
             error: "The new password must be between 6 and 128 characters.",
           });
@@ -434,10 +443,7 @@ export class ExpressServer {
           return;
         }
 
-        const result = await this.dbService.adminSetUserPassword(
-          userId,
-          newPassword,
-        );
+        const result = await this.dbService.adminSetUserPassword(userId, newPassword);
         if (!result.ok) {
           res.status(mutationErrorStatus(result)).json({
             error: mutationErrorMessage(result),
@@ -465,30 +471,21 @@ export class ExpressServer {
       async (req: Request, res: Response): Promise<void> => {
         const { name, email, password, role } = req.body ?? {};
         const normalizedName = typeof name === "string" ? name.trim() : "";
-        const normalizedEmail =
-          typeof email === "string" ? email.trim().toLowerCase() : "";
-        const normalizedRole: UserRole = this.dbService.isUserRole(role)
-          ? role
-          : "user";
+        const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
+        const normalizedRole: UserRole = this.dbService.isUserRole(role) ? role : "user";
 
         if (normalizedName.length < 2 || normalizedName.length > 64) {
-          res
-            .status(400)
-            .json({ error: "The name must be between 2 and 64 characters." });
+          res.status(400).json({ error: "The name must be between 2 and 64 characters." });
           return;
         }
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
           res.status(400).json({ error: "Enter a valid e-mail address." });
           return;
         }
-        if (
-          typeof password !== "string" ||
-          password.length < 6 ||
-          password.length > 128
-        ) {
-          res
-            .status(400)
-            .json({ error: "The password must be between 6 and 128 characters." });
+        if (typeof password !== "string" || password.length < 6 || password.length > 128) {
+          res.status(400).json({
+            error: "The password must be between 6 and 128 characters.",
+          });
           return;
         }
 
@@ -609,10 +606,7 @@ export class ExpressServer {
                 "code" in unlinkError &&
                 (unlinkError as NodeJS.ErrnoException).code !== "ENOENT"
               ) {
-                console.error(
-                  "[ZIP] Error cleaning up temporary file:",
-                  unlinkError,
-                );
+                console.error("[ZIP] Error cleaning up temporary file:", unlinkError);
               }
             });
           });
@@ -730,10 +724,7 @@ export class ExpressServer {
         }
 
         await this.fileManager.rename(oldPath, newPath);
-        await this.collaborationServer.renamePersistedStatePath(
-          oldPath,
-          newPath,
-        );
+        await this.collaborationServer.renamePersistedStatePath(oldPath, newPath);
         publishVaultChange({
           type: "rename",
           oldPath,
@@ -748,18 +739,25 @@ export class ExpressServer {
     });
   }
 
+  /** Reads the authenticated user previously attached to the request by the `requireAuth` middleware. */
   private currentUser(res: Response): AuthenticatedUser {
     return res.locals.authenticatedUser as AuthenticatedUser;
   }
 
+  /** Type guard narrowing an arbitrary value to a valid {@link WebSocketChannel}. */
   private isWebSocketChannel(value: unknown): value is WebSocketChannel {
     return value === "system" || value === "yjs";
   }
 
-  private loginRateLimitKeys(
-    req: Request,
-    email: string,
-  ): { accountKey: string; ipKey: string } {
+  /**
+   * Builds the two rate-limit keys used to throttle a login attempt: one per account (by normalized
+   * email) and one per source IP, so an attacker can't bypass the account limit by spraying across
+   * many emails from one IP, or vice versa.
+   * @param req - The incoming login request (used to read the client IP).
+   * @param email - The email address supplied in the login attempt.
+   * @returns The `accountKey` and `ipKey` to pass to the rate limiters.
+   */
+  private loginRateLimitKeys(req: Request, email: string): { accountKey: string; ipKey: string } {
     const normalizedEmail = email.normalize("NFKC").trim().toLowerCase();
     const address = req.ip ?? req.socket.remoteAddress ?? "unknown";
     return {
@@ -768,17 +766,24 @@ export class ExpressServer {
     };
   }
 
+  /**
+   * Parses and validates a route param as a positive user id.
+   * @param value - The raw `:id` route param.
+   * @returns The parsed id, or `null` if it's missing, an array, non-numeric, or not positive.
+   */
   private parseUserId(value: string | string[] | undefined): number | null {
     if (Array.isArray(value)) return null;
     const userId = Number(value);
     return userId > 0 ? userId : null;
   }
 
+  /** Extracts the vault path targeted by a sync request body (`path`, `oldPath`, or `newPath`), normalizing slashes. */
   private requestPath(req: Request): string | undefined {
     const value = req.body?.path ?? req.body?.oldPath ?? req.body?.newPath;
     return typeof value === "string" ? value.replace(/\\/g, "/") : undefined;
   }
 
+  /** Logs an audit warning for an operation denied by `requireAdmin`. */
   private auditDenied(
     user: AuthenticatedUser,
     operation: string,
@@ -796,24 +801,24 @@ export class ExpressServer {
     });
   }
 
+  /**
+   * Starts the HTTP server listening for connections.
+   * @param port - Port to listen on; defaults to the port passed to the constructor.
+   */
   public serverStart(port = this.port): void {
     this.server.once("error", (error) => {
-      console.error(
-        `Could not start the server on port ${port}:`,
-        error,
-      );
+      console.error(`Could not start the server on port ${port}:`, error);
     });
     this.server.listen(port, this.host, () => {
       if (this.requireTls) {
-        console.log(
-          `Server running behind a trusted TLS proxy on ${this.host}:${port}`,
-        );
+        console.log(`Server running behind a trusted TLS proxy on ${this.host}:${port}`);
         return;
       }
       console.log(`Server running on http://${this.host}:${port}`);
     });
   }
 
+  /** The underlying Node HTTP server, exposed so other components (e.g. the WebSocket server) can attach to its `upgrade` event. */
   get getHttpServer(): Server {
     return this.server;
   }

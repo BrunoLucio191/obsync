@@ -5,10 +5,17 @@ import type { DBServices } from "../users/DBServices.ts";
 import type { UserDB } from "../users/UserDB.ts";
 import type { TokenService } from "./TokenService.ts";
 
+/** Handles credential-based login, turning an email/password pair into an {@link AuthSession}. */
 export class AuthService {
   private readonly dbService: DBServices;
   private readonly userDB: UserDB;
   private readonly tokenService: TokenService;
+
+  /**
+   * @param userDB - Raw database handle used to look up the user row by email.
+   * @param dbService - Service used to convert a raw DB row into an {@link AuthenticatedUser}.
+   * @param tokenService - Service used to mint the session's tokens once credentials are verified.
+   */
   constructor(
     userDB: UserDB,
     dbService: DBServices,
@@ -19,6 +26,12 @@ export class AuthService {
     this.tokenService = tokenService;
   }
 
+  /**
+   * Verifies an email/password pair against the stored, active user and issues a new session on success.
+   * @param email - The email address supplied by the client (matched case-insensitively via normalization).
+   * @param password - The plaintext password supplied by the client.
+   * @returns A new {@link AuthSession} if the credentials match an active user, otherwise `null`.
+   */
   public async login(
     email: string,
     password: string,

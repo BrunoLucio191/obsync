@@ -4,6 +4,11 @@ import type { AuthService } from '../auth/AuthService.ts';
 import type { CollaborationController } from '../collab/CollaborationController.ts';
 import { PathMuteRegistry } from '../vault/PathMuteRegistry.ts';
 
+/**
+ * Listens for local Obsidian vault events (create/delete/modify/rename) made
+ * by an admin and publishes them to the backend so other clients receive the
+ * change. Non-admin edits are never published (admins own the shared vault).
+ */
 export class SyncVaultChanges {
 	public constructor(
 		private readonly plugin: Plugin,
@@ -12,6 +17,12 @@ export class SyncVaultChanges {
 		private readonly collaboration: CollaborationController,
 	) {}
 
+	/**
+	 * Registers the vault event listeners (`create`, `delete`, `modify`,
+	 * `rename`) that forward local changes to the corresponding `/sync/*`
+	 * backend endpoints. Muted paths (changes caused by applying a remote
+	 * update) are skipped to avoid echoing changes back to their origin.
+	 */
 	public initialize(): void {
 		this.plugin.registerEvent(
 			this.plugin.app.vault.on('create', async (file) => {
@@ -93,6 +104,13 @@ export class SyncVaultChanges {
 		);
 	}
 
+	/**
+	 * Determines whether a vault change should be published to the backend:
+	 * only admins publish, muted paths (from applying a remote change) are
+	 * excluded, and the current session must still be authenticated.
+	 * @param paths - One or more vault paths involved in the change (e.g. old and new path for a rename).
+	 * @returns `true` if the change should be published.
+	 */
 	private async canPublish(...paths: string[]): Promise<boolean> {
 		if (
 			!this.auth.isAdmin() ||

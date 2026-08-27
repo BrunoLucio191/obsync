@@ -13,6 +13,13 @@ const REASON_KEYS: Record<string, string> = {
 	invalid_current_password: 'auth.invalidCurrentPassword',
 };
 
+/**
+ * Translates a backend-provided stable `reason` code into a localized,
+ * user-facing message.
+ * @param reason - The `reason` field from a backend error payload (untyped since the payload is untrusted JSON).
+ * @param fallback - The message to use when `reason` isn't a recognized code (e.g. the server's raw English error text).
+ * @returns The localized message, or `fallback` if `reason` is unrecognized.
+ */
 export function localizeBackendError(reason: unknown, fallback: string): string {
 	if (typeof reason === 'string' && reason in REASON_KEYS) {
 		return t(REASON_KEYS[reason] as string);

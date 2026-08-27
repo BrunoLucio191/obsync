@@ -7,6 +7,13 @@ import { UserDirectory } from './users/UserDirectory.ts';
 import { UserListSection } from './users/UserListSection.ts';
 import { UserNameEditor } from './users/UserNameEditor.ts';
 
+/**
+ * Coordinates the admin-only user-management UI: owns the shared
+ * `UserDirectory` cache and wires it into the user-list, name-editing, and
+ * create-user sub-sections. Also exposes the name editor for reuse by the
+ * "Account" section, so a user's own name is edited through the same
+ * debounced-save logic.
+ */
 export class UserManagementSection {
 	private readonly directory: UserDirectory;
 	private readonly nameEditor: UserNameEditor;
@@ -36,6 +43,7 @@ export class UserManagementSection {
 		return [...this.list.definitions(), this.createForm.definition()];
 	}
 
+	/** Renders an editable display-name field, delegating to the shared `UserNameEditor` (debounced autosave, duplicate checks). */
 	public renderEditableName(
 		setting: Setting,
 		user: AuthenticatedUser,
@@ -48,6 +56,7 @@ export class UserManagementSection {
 		);
 	}
 
+	/** Tears down pending timers/state in the list and name-editor sub-sections. */
 	public destroy(): void {
 		this.list.destroy();
 		this.nameEditor.destroy();

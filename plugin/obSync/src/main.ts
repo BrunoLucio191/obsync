@@ -24,6 +24,11 @@ import type {
 import { PathMuteRegistry } from './vault/PathMuteRegistry.ts';
 import { RemoteVaultChangeService } from './vault/RemoteVaultChangeService.ts';
 
+/**
+ * ObSync's Obsidian plugin entry point. Wires together authentication,
+ * collaborative editing, and vault-change synchronization, and exposes the
+ * account/user-management operations the settings UI calls into.
+ */
 export default class ObSync extends Plugin {
 	public config!: ObSyncConfig;
 	private auth!: AuthService;
@@ -37,6 +42,12 @@ export default class ObSync extends Plugin {
 	private settingTab: ObSyncSettingTab | null = null;
 	private synchronizationStarted = false;
 
+	/**
+	 * Obsidian lifecycle hook: loads persisted config, applies the saved
+	 * backend URL, constructs all services, and registers the settings
+	 * tab. Synchronization itself is deferred until the workspace layout
+	 * is ready.
+	 */
 	public async onload(): Promise<void> {
 		initI18n();
 		await this.loadConfig();
@@ -56,6 +67,7 @@ export default class ObSync extends Plugin {
 		});
 	}
 
+	/** Obsidian lifecycle hook: tears down active connections and timers when the plugin is disabled/unloaded. */
 	public onunload(): void {
 		this.systemChannel.disconnect();
 		this.collaboration.destroy();
@@ -63,6 +75,12 @@ export default class ObSync extends Plugin {
 		this.mutedPaths.clear();
 	}
 
+	/**
+	 * Prompts the user to log in (if not already authenticated) and starts
+	 * synchronization if this is the first successful login, or
+	 * reconnects/resyncs if synchronization had already started.
+	 * @returns Whether the user ended up authenticated.
+	 */
 	public async openLogin(): Promise<boolean> {
 		const authenticated = await this.auth.ensureAuthenticated();
 		if (!authenticated) return false;
@@ -85,6 +103,10 @@ export default class ObSync extends Plugin {
 		return true;
 	}
 
+	/**
+	 * Signs the current user out and, if the user chooses to sign back in
+	 * immediately, reconnects synchronization for the new session.
+	 */
 	public async logout(): Promise<void> {
 		await this.auth.logout();
 		this.app.workspace.updateOptions();
@@ -156,6 +178,14 @@ export default class ObSync extends Plugin {
 		return this.auth.changePassword(currentPassword, newPassword);
 	}
 
+	/**
+	 * Validates and applies a new backend URL, persists it, and — if it
+	 * actually changed from a previously configured backend — clears the
+	 * local session, since tokens issued by the old backend aren't valid
+	 * for the new one.
+	 * @param url - The backend URL entered by the user.
+	 * @returns Success, or a localized error if the URL is invalid.
+	 */
 	public async setBackendUrl(url: string): Promise<UserActionResult<null>> {
 		const previousUrl = this.config.backendUrl;
 		const wasConfigured = isApiEndpointConfigured();
@@ -181,6 +211,12 @@ export default class ObSync extends Plugin {
 		return { ok: true, value: null };
 	}
 
+	/**
+	 * Configures (or clears, if blank) the global API endpoint used by all
+	 * backend requests.
+	 * @param url - The backend URL to apply.
+	 * @throws Whatever {@link configureApiEndpoint} throws on an invalid URL.
+	 */
 	private applyBackendUrl(url: string): void {
 		if (!url.trim()) {
 			clearApiEndpoint();
@@ -189,6 +225,7 @@ export default class ObSync extends Plugin {
 		configureApiEndpoint(url);
 	}
 
+	/** Constructs and wires together all of the plugin's services, in dependency order. */
 	private composeServices(): void {
 		this.auth = new AuthService({
 			app: this.app,
@@ -220,6 +257,11 @@ export default class ObSync extends Plugin {
 		);
 	}
 
+	/**
+	 * Starts synchronization on plugin load if a backend is configured and
+	 * a session can be established silently; otherwise leaves it to the
+	 * user to configure the backend or sign in explicitly.
+	 */
 	private async initializeSynchronization(): Promise<void> {
 		if (this.synchronizationStarted) return;
 		// Without a configured backend, ensureAuthenticated() would pop the
@@ -235,6 +277,11 @@ export default class ObSync extends Plugin {
 		this.startSynchronization();
 	}
 
+	/**
+	 * Connects the system channel, registers collaborative editor
+	 * extensions and vault-change listeners, and kicks off the initial
+	 * full-vault sync.
+	 */
 	private startSynchronization(): void {
 		this.systemChannel.connect();
 		this.registerEditorExtension(this.collaboration.editorExtensions);
@@ -253,6 +300,13 @@ export default class ObSync extends Plugin {
 		void this.initialVaultSync.sync();
 	}
 
+	/**
+	 * Reacts to the signed-in user changing (login, logout, or a profile
+	 * update): refreshes the settings tab, and connects/disconnects
+	 * collaboration and the system channel as appropriate.
+	 * @param previousUser - The user before the change, or `null` if there wasn't one.
+	 * @param currentUser - The user after the change, or `null` if now signed out.
+	 */
 	private handleSessionChanged(
 		previousUser: AuthenticatedUser | null,
 		currentUser: AuthenticatedUser | null,
@@ -270,12 +324,18 @@ export default class ObSync extends Plugin {
 		this.collaboration.refreshAfterProfileChange();
 	}
 
+	/** Re-renders the settings tab if it's currently mounted in the DOM. */
 	private refreshSettingsTab(): void {
 		if (this.settingTab?.containerEl.isConnected) {
 			this.settingTab.update();
 		}
 	}
 
+	/**
+	 * Loads persisted config, merging it over {@link DEFAULT_CONFIG} and
+	 * discarding a legacy `token` field from older plugin versions (which
+	 * used a different auth storage scheme).
+	 */
 	private async loadConfig(): Promise<void> {
 		const storedConfig = (await this.loadData()) as
 			| (Partial<ObSyncConfig> & { token?: unknown })

@@ -21,8 +21,17 @@ import {
 	webSocketTicketProtocol,
 } from '../config/ApiConfig.ts';
 
+/** The single collaboration room currently open, or `null` if none is active. Only one room can be open at a time. */
 let activeRoom: ActiveRoom | null = null;
 
+/**
+ * Computes the IndexedDB namespace used for offline persistence of a user's documents.
+ * Admins share one global namespace (their edits apply to the shared vault); regular
+ * users get a private namespace keyed by their own identity, so their offline copies
+ * of read-only documents don't leak into or collide with anyone else's.
+ * @param user - The collaboration user whose namespace is being computed.
+ * @returns The offline persistence namespace string.
+ */
 function getOfflineNamespace(user: CollaborationUser): string {
 	if (user.role === 'admin') return `${OFFLINE_NAMESPACE_VERSION}:global`;
 
@@ -30,6 +39,13 @@ function getOfflineNamespace(user: CollaborationUser): string {
 	return `${OFFLINE_NAMESPACE_VERSION}:private:${identity}`;
 }
 
+/**
+ * Reads and validates the presence info a remote awareness client has published.
+ * @param provider - The websocket provider whose awareness states are inspected.
+ * @param clientId - The awareness client ID to look up.
+ * @returns The remote user's normalized presence, or `null` if the client has no
+ * (or malformed) presence data.
+ */
 function getRemotePresence(
 	provider: WebsocketProvider,
 	clientId: number,
@@ -52,6 +68,12 @@ function getRemotePresence(
 	};
 }
 
+/**
+ * Cancels a pending "user left" timer for a given user, if one is scheduled.
+ * @param room - The room whose pending-leave timers are checked.
+ * @param userId - Normalized ID of the user whose leave timer should be cancelled.
+ * @returns `true` if a pending timer was found and cancelled, `false` otherwise.
+ */
 function cancelPendingLeave(room: ActiveRoom, userId: string): boolean {
 	const timer = room.pendingLeaveTimers.get(userId);
 	if (timer === undefined) return false;
@@ -61,6 +83,15 @@ function cancelPendingLeave(room: ActiveRoom, userId: string): boolean {
 	return true;
 }
 
+/**
+ * Schedules a delayed "user left" notification for a presence, after cancelling
+ * any previous pending leave for the same user. The delay ({@link PRESENCE_LEAVE_GRACE_MS})
+ * absorbs the brief window where a user's awareness client flickers during a
+ * reconnect, so they aren't announced as leaving and rejoining.
+ * @param room - The room the presence belongs to.
+ * @param presence - The remote user who may have left.
+ * @param onUserLeft - Callback invoked with the user's name if they are confirmed gone.
+ */
 function scheduleUserLeft(
 	room: ActiveRoom,
 	presence: RemotePresence,
@@ -82,6 +113,13 @@ function scheduleUserLeft(
 	room.pendingLeaveTimers.set(presence.id, timer);
 }
 
+/**
+ * Removes a disconnected awareness client from a room's tracking maps, and, if
+ * it was the user's last active client, schedules a "user left" notification.
+ * @param room - The room to update.
+ * @param clientId - The awareness client ID that disconnected.
+ * @param onUserLeft - Callback eventually invoked if the user has no clients left.
+ */
 function removeRemoteClient(
 	room: ActiveRoom,
 	clientId: number,
@@ -103,6 +141,15 @@ function removeRemoteClient(
 	scheduleUserLeft(room, presence, onUserLeft);
 }
 
+/**
+ * Registers (or updates) an awareness client as belonging to a remote user, and
+ * fires the "user joined" callback the first time that user becomes present.
+ * @param room - The room to update.
+ * @param clientId - The awareness client ID that changed.
+ * @param presence - The remote user's presence info for this client.
+ * @param onUserJoined - Callback invoked with the user's name the first time they join.
+ * @param onUserLeft - Callback passed through in case the client previously belonged to a different user.
+ */
 function addRemoteClient(
 	room: ActiveRoom,
 	clientId: number,
@@ -138,6 +185,12 @@ function addRemoteClient(
 	}
 }
 
+/**
+ * Requests a fresh authentication ticket and (re)connects the room's websocket
+ * provider with it. Guards against reconnecting a stale/closing/already-connecting
+ * room, and against overlapping ticket requests.
+ * @param room - The room to reconnect.
+ */
 async function reconnectWithFreshTicket(room: ActiveRoom): Promise<void> {
 	if (
 		activeRoom !== room ||
@@ -171,6 +224,11 @@ async function reconnectWithFreshTicket(room: ActiveRoom): Promise<void> {
 	}
 }
 
+/**
+ * Schedules a single retry of {@link reconnectWithFreshTicket} after a short
+ * delay, used when a ticket could not be obtained (e.g. session expired).
+ * @param room - The room to retry connecting for.
+ */
 function scheduleTicketReconnect(room: ActiveRoom): void {
 	if (
 		activeRoom !== room ||
@@ -187,6 +245,24 @@ function scheduleTicketReconnect(room: ActiveRoom): void {
 	}, 1_000);
 }
 
+/**
+ * Opens a new collaboration room for a file, closing any previously active room
+ * first (only one room may be open at a time). Sets up the Yjs document(s),
+ * offline (IndexedDB) persistence, the websocket provider, and awareness
+ * listeners for remote presence, but does not connect to the network yet —
+ * call {@link PreparedCollabRoom.connect} once the caller has confirmed the
+ * editor view is still showing this file.
+ *
+ * For non-admin users, edits are made on a private in-memory doc and only
+ * applied to the shared doc via incoming network updates, so their local doc
+ * never leaks writes upstream (read-only collaboration).
+ * @param fileName - Vault-relative path of the file to open a room for; also used as the room name.
+ * @param user - The local user opening the room.
+ * @param requestWebSocketTicket - Callback that obtains a fresh auth ticket for the websocket handshake.
+ * @param onUserJoined - Callback invoked with a user's name when they join the room.
+ * @param onUserLeft - Callback invoked with a user's name when they leave the room.
+ * @returns The prepared room (editor extension + initial text + `connect()`), or `null` if setup failed.
+ */
 export async function setupCollabRoom(
 	fileName: string,
 	user: CollaborationUser,
@@ -313,6 +389,12 @@ export async function setupCollabRoom(
 	};
 }
 
+/**
+ * Tears down the currently active collaboration room, if any: cancels timers,
+ * removes DOM/awareness listeners, destroys the websocket provider and network
+ * doc, and clears local presence. The offline (IndexedDB) database itself is
+ * left intact so history is available the next time the same document is opened.
+ */
 export function closeCollabRoom(): void {
 	const room = activeRoom;
 	if (!room) return;
@@ -349,6 +431,11 @@ export function closeCollabRoom(): void {
 	void room.persistence.destroy().finally(() => room.ydoc.destroy());
 }
 
+/**
+ * Returns the vault-relative path of the file whose collaboration room is
+ * currently open.
+ * @returns The active room's file path, or `null` if no room is open.
+ */
 export function getCurrentCollabRoomPath(): string | null {
 	return activeRoom?.fileName ?? null;
 }

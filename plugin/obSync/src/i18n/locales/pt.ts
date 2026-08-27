@@ -1,3 +1,9 @@
+/**
+ * Portuguese translation strings for the ObSync plugin UI, keyed by
+ * feature area (auth, userAdmin, settings, sync, collab, plugin,
+ * offlinePersistence). Consumed via {@link t} in `i18n.ts`. Selected when
+ * Obsidian's configured display language starts with `pt`.
+ */
 export default {
 	common: {
 		save: 'Salvar',
