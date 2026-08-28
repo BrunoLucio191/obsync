@@ -3,7 +3,7 @@ import { WebSocket } from "ws";
 import * as awarenessProtocol from "y-protocols/awareness";
 import * as syncProtocol from "y-protocols/sync";
 import * as Y from "yjs";
-import { MESSAGE_AWARENESS, MESSAGE_SYNC } from "./yjs.cons.ts";
+import { MESSAGE_AWARENESS, MESSAGE_SYNC } from "./yjs.const.ts";
 import type { YjsConnectionState } from "./yjs.types.ts";
 import { sendBinaryMessage } from "./yjsUtils/wsTransport.utils.ts";
 

@@ -3,7 +3,7 @@ import { type Duplex } from "node:stream";
 import { WebSocket, WebSocketServer as WsServer } from "ws";
 import { YjsPersistence } from "./YjsPersistence.ts";
 import type { YjsCollaborationServer } from "../yjs/YjsCollaborationServer.ts";
-import { MAX_WS_MESSAGE_BYTES } from "../yjs/yjs.cons.ts";
+import { MAX_WS_MESSAGE_BYTES } from "../yjs/yjs.const.ts";
 import { vaultEvents, type VaultChange } from "../syncEvents.ts";
 import { dbEvents } from "../users/DBEvents.ts";
 import type { TokenService } from "../auth/TokenService.ts";
@@ -28,10 +28,7 @@ export class WebSocketServer {
   private readonly tokenService: TokenService;
   private readonly collaborationServer: YjsCollaborationServer;
   /** Maps each live socket to the authorization it was upgraded with. */
-  private readonly authenticatedConnections = new Map<
-    WebSocket,
-    WebSocketAuthorization
-  >();
+  private readonly authenticatedConnections = new Map<WebSocket, WebSocketAuthorization>();
   /** Tracks which sockets have responded to the most recent heartbeat ping. */
   private readonly aliveConnections = new WeakSet<WebSocket>();
   private readonly unsubscribeAuthorizationChanges: () => void;
@@ -73,11 +70,11 @@ export class WebSocketServer {
     this.requireTls = requireTls;
     this.trustProxy = trustProxy;
 
-    this.unsubscribeAuthorizationChanges = this.event.onAuthorizationChanged(
-      (userId) => this.closeUserConnections(userId),
+    this.unsubscribeAuthorizationChanges = this.event.onAuthorizationChanged((userId) =>
+      this.closeUserConnections(userId),
     );
-    this.unsubscribeSessionRevocations = tokenService.onSessionRevoked(
-      (sessionId) => this.closeSessionConnections(sessionId),
+    this.unsubscribeSessionRevocations = tokenService.onSessionRevoked((sessionId) =>
+      this.closeSessionConnections(sessionId),
     );
 
     server.on("upgrade", (request, socket, head) => {
@@ -123,13 +120,9 @@ export class WebSocketServer {
       return;
     }
 
-    const channel: WebSocketChannel =
-      url.pathname === "/system" ? "system" : "yjs";
+    const channel: WebSocketChannel = url.pathname === "/system" ? "system" : "yjs";
     const ticket = this.readTicketProtocol(request);
-    const authorization = await this.tokenService.consumeWebSocketTicket(
-      ticket,
-      channel,
-    );
+    const authorization = await this.tokenService.consumeWebSocketTicket(ticket, channel);
     if (!authorization) {
       socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
       socket.destroy();
@@ -172,12 +165,9 @@ export class WebSocketServer {
     this.collaborationServer.setPersistence({
       bindState: (docName, ydoc) => yjsPersistence.bindState(docName, ydoc),
       writeState: (docName, ydoc) => yjsPersistence.writeState(docName, ydoc),
-      destroyState: (docName, ydoc) =>
-        yjsPersistence.destroyState(docName, ydoc),
-      deleteStateUnderPath: (targetPath) =>
-        yjsPersistence.deleteStateUnderPath(targetPath),
-      renameStatePath: (oldPath, newPath) =>
-        yjsPersistence.renameStatePath(oldPath, newPath),
+      destroyState: (docName, ydoc) => yjsPersistence.destroyState(docName, ydoc),
+      deleteStateUnderPath: (targetPath) => yjsPersistence.deleteStateUnderPath(targetPath),
+      renameStatePath: (oldPath, newPath) => yjsPersistence.renameStatePath(oldPath, newPath),
     });
 
     this.wssYjs.on("connection", (webSocket, request) => {
@@ -289,9 +279,7 @@ export class WebSocketServer {
     if (!this.trustProxy) return false;
 
     const forwardedProtocol = request.headers["x-forwarded-proto"];
-    const value = Array.isArray(forwardedProtocol)
-      ? forwardedProtocol[0]
-      : forwardedProtocol;
+    const value = Array.isArray(forwardedProtocol) ? forwardedProtocol[0] : forwardedProtocol;
     return value?.split(",")[0]?.trim().toLowerCase() === "https";
   }
 

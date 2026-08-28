@@ -326,6 +326,7 @@ export class TokenService {
   /** Sweeps expired sessions (revoking them) and expired WebSocket tickets. Called lazily before mutating state. */
   private removeExpiredState(): void {
     const now = Date.now();
+
     for (const [sessionId, session] of this.sessions) {
       if (session.refreshExpiresAt <= now) this.revokeSessionId(sessionId);
     }

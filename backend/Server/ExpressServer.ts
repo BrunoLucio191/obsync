@@ -16,7 +16,7 @@ import { FileManager } from "./FileManager.ts";
 import { AuthService } from "../auth/authService.ts";
 import type { TokenService } from "../auth/TokenService.ts";
 import type { DBServices } from "../users/DBServices.ts";
-
+import type { Archiver } from "archiver";
 /**
  * Maps a failed {@link UserMutationResult} to the appropriate HTTP status code.
  * @param result - The mutation result to inspect.
@@ -207,22 +207,26 @@ export class ExpressServer {
     this.app.post("/auth/login", async (req: Request, res: Response): Promise<void> => {
       const { email, password } = req.body ?? {};
 
-      if (!email.includes("@")) {
-        res.status(400).json({ error: "E-mail is not valid" });
+      switch (true) {
+        case !email.includes("@") || email.length < 10 || email.trim().length === 0:
+          res.status(400).json({ error: "E-mail is not valid" });
 
-        return;
-      }
+          return;
 
-      if (typeof email !== "string" || typeof password !== "string") {
-        res.status(400).json({ error: "E-mail and password are required." });
+        case password.trim().length === 0:
+          res.status(400).json({ error: "password is not valid" });
 
-        return;
-      }
+          return;
 
-      if (email.length > 254 || password.length > 128) {
-        res.status(400).json({ error: "Invalid credentials." });
+        case typeof email !== "string" || typeof password !== "string":
+          res.status(400).json({ error: "E-mail and password are required" });
 
-        return;
+          return;
+
+        case email.length > 254 || password.length > 128:
+          res.status(400).json({ error: "Invalid credentials" });
+
+          return;
       }
 
       const { accountKey, ipKey } = this.loginRateLimitKeys(req, email);
@@ -234,9 +238,7 @@ export class ExpressServer {
           "Retry-After",
           Math.max(accountLimit.retryAfterSeconds, ipLimit.retryAfterSeconds),
         );
-        res.status(429).json({
-          error: "Too many login attempts. Try again later.",
-        });
+        res.status(429).json({ error: "Too many login attempts. Try again later." });
 
         return;
       }
@@ -252,9 +254,7 @@ export class ExpressServer {
             "Retry-After",
             Math.max(updatedAccountLimit.retryAfterSeconds, updatedIpLimit.retryAfterSeconds),
           );
-          res.status(429).json({
-            error: "Too many login attempts. Try again later.",
-          });
+          res.status(429).json({ error: "Too many login attempts. Try again later." });
 
           return;
         }
@@ -284,7 +284,6 @@ export class ExpressServer {
 
     this.app.post("/auth/logout", (req: Request, res: Response): void => {
       const refreshToken = req.body?.refreshToken;
-
       this.tokenService.revokeSession(typeof refreshToken === "string" ? refreshToken : null);
 
       res.sendStatus(204);
@@ -299,20 +298,22 @@ export class ExpressServer {
       requireAuth,
       async (req: Request, res: Response): Promise<void> => {
         const channel = req.body?.channel;
+
         if (!this.isWebSocketChannel(channel)) {
           res.status(400).json({ error: "Invalid WebSocket channel." });
+
           return;
         }
 
         const ticket = await this.tokenService.issueWebSocketTicket(
-          res.locals.accessToken as string,
+          res.locals.accessToken,
           channel,
         );
         if (!ticket) {
           res.status(401).json({ error: "Invalid or expired session." });
+
           return;
         }
-
         res.json(ticket);
       },
     );
@@ -331,22 +332,24 @@ export class ExpressServer {
           res.status(400).json({
             error: "The new password must be between 6 and 128 characters.",
           });
+
           return;
         }
 
-        const actor = this.currentUser(res);
-        const rateLimitKey = String(actor.id);
+        const currentAuthenticatedUser = this.currentUser(res);
+        const rateLimitKey = String(currentAuthenticatedUser.id);
         const limit = this.passwordChangeRateLimiter.check(rateLimitKey);
         if (!limit.allowed) {
           res.setHeader("Retry-After", limit.retryAfterSeconds);
           res.status(429).json({
             error: "Too many attempts. Try again later.",
           });
+
           return;
         }
 
         const result = await this.dbService.updateUserPassword(
-          actor.id,
+          currentAuthenticatedUser.id,
           currentPassword,
           newPassword,
         );
@@ -600,15 +603,11 @@ export class ExpressServer {
               console.log("[ZIP] Sent successfully.");
             }
 
-            await fs.unlink(zipPath).catch((unlinkError: unknown) => {
-              if (
-                unlinkError instanceof Error &&
-                "code" in unlinkError &&
-                (unlinkError as NodeJS.ErrnoException).code !== "ENOENT"
-              ) {
-                console.error("[ZIP] Error cleaning up temporary file:", unlinkError);
-              }
-            });
+            try {
+              await fs.unlink(zipPath);
+            } catch (error) {
+              console.error("[ZIP] Error cleaning up temporary file:", error);
+            }
           });
         } catch (error) {
           console.error("[ZIP] General error:", error);
@@ -709,7 +708,7 @@ export class ExpressServer {
         res.status(500).send("Error modifying file");
       }
     });
-    //TODO: fix bug when dealing with Tfolders
+
     this.app.put("/sync/rename", async (req: Request, res: Response) => {
       try {
         const { oldPath, newPath } = req.body;

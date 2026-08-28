@@ -3,7 +3,7 @@ import * as encoding from "lib0/encoding";
 import { WebSocket } from "ws";
 import * as syncProtocol from "y-protocols/sync";
 import * as Y from "yjs";
-import { MESSAGE_SYNC } from "./yjs.cons.ts";
+import { MESSAGE_SYNC } from "./yjs.const.ts";
 import type { YjsConnectionState } from "./yjs.types.ts";
 import {
   ensureDecoderConsumed,

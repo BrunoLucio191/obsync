@@ -44,12 +44,9 @@ export class LoginRateLimiter {
    * @param options - Optional overrides for window size, block duration, failure threshold, and tracked-key cap.
    */
   public constructor(options: LoginRateLimiterOptions = {}) {
-    this.attemptWindowMs =
-      options.attemptWindowMs ?? DEFAULT_ATTEMPT_WINDOW_MS;
-    this.blockDurationMs =
-      options.blockDurationMs ?? DEFAULT_BLOCK_DURATION_MS;
-    this.maxFailedAttempts =
-      options.maxFailedAttempts ?? DEFAULT_MAX_FAILED_ATTEMPTS;
+    this.attemptWindowMs = options.attemptWindowMs ?? DEFAULT_ATTEMPT_WINDOW_MS;
+    this.blockDurationMs = options.blockDurationMs ?? DEFAULT_BLOCK_DURATION_MS;
+    this.maxFailedAttempts = options.maxFailedAttempts ?? DEFAULT_MAX_FAILED_ATTEMPTS;
     this.maxTrackedKeys = options.maxTrackedKeys ?? DEFAULT_MAX_TRACKED_KEYS;
   }
 

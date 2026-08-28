@@ -1,11 +1,11 @@
 import "./env.ts";
-import { ExpressServer } from "./Classes/ExpressServer.ts";
-import { WebSocketServer } from "./Classes/WebSocketServer.ts";
+import { ExpressServer } from "./Server/ExpressServer.ts";
+import { WebSocketServer } from "./Server/WebSocketServer.ts";
 import { DBServices } from "./users/DBServices.ts";
 import { TokenService } from "./auth/TokenService.ts";
 import { systemPaths } from "./paths.ts";
 import { AuthService } from "./auth/authService.ts";
-import { FileManager } from "./Classes/FileManager.ts";
+import { FileManager } from "./Server/FileManager.ts";
 import { openUserDatabase } from "./users/databaseLifecycle.ts";
 import { loadServerConfig } from "./serverConfig.ts";
 import { YjsCollaborationServer } from "./yjs/YjsCollaborationServer.ts";

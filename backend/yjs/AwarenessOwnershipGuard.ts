@@ -3,7 +3,7 @@ import * as encoding from "lib0/encoding";
 import { WebSocket } from "ws";
 import * as awarenessProtocol from "y-protocols/awareness";
 import { getYjsDebugConnection } from "../yjsDebug.ts";
-import { MAX_AWARENESS_ENTRIES_PER_MESSAGE } from "./yjs.cons.ts";
+import { MAX_AWARENESS_ENTRIES_PER_MESSAGE } from "./yjs.const.ts";
 import type { YjsAwarenessEntry, YjsConnectionState } from "./yjs.types.ts";
 import {
   getAwarenessPresenceIdentity,

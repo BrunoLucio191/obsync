@@ -37,6 +37,7 @@ export function parseDocumentIdentity(request: IncomingMessage): YjsDocumentIden
   }
 
   let decodedPath: string;
+
   try {
     decodedPath = decodeURIComponent(encodedPath);
   } catch {

@@ -1,6 +1,6 @@
 import * as decoding from "lib0/decoding";
 import { WebSocket, type RawData } from "ws";
-import { MAX_WS_MESSAGE_BYTES } from "./yjs.cons.ts";
+import { MAX_WS_MESSAGE_BYTES } from "../yjs.const.ts";
 
 /**
  * Coerces a raw `ws` message payload (which may be a Buffer, an array of Buffers, or an ArrayBuffer)
@@ -27,10 +27,7 @@ export function toUint8Array(data: RawData): Uint8Array {
  * @param connection - Target WebSocket connection.
  * @param message - Encoded message bytes to send.
  */
-export function sendBinaryMessage(
-  connection: WebSocket,
-  message: Uint8Array,
-): void {
+export function sendBinaryMessage(connection: WebSocket, message: Uint8Array): void {
   if (connection.readyState !== WebSocket.OPEN) return;
 
   try {
@@ -48,15 +45,8 @@ export function sendBinaryMessage(
  * @param code - WebSocket close code (e.g. 1008 for policy violation).
  * @param reason - Human-readable close reason; truncated to the 123-byte protocol limit.
  */
-export function closeConnection(
-  connection: WebSocket,
-  code: number,
-  reason: string,
-): void {
-  if (
-    connection.readyState === WebSocket.CLOSING ||
-    connection.readyState === WebSocket.CLOSED
-  ) {
+export function closeConnection(connection: WebSocket, code: number, reason: string): void {
+  if (connection.readyState === WebSocket.CLOSING || connection.readyState === WebSocket.CLOSED) {
     return;
   }
 
@@ -87,10 +77,7 @@ export function ensureDecoderConsumed(decoder: decoding.Decoder): void {
  * @returns The decoded byte array.
  * @throws If the decoded array is larger than {@link MAX_WS_MESSAGE_BYTES}.
  */
-export function readBoundedByteArray(
-  decoder: decoding.Decoder,
-  label: string,
-): Uint8Array {
+export function readBoundedByteArray(decoder: decoding.Decoder, label: string): Uint8Array {
   const value = decoding.readVarUint8Array(decoder);
 
   if (value.byteLength > MAX_WS_MESSAGE_BYTES) {

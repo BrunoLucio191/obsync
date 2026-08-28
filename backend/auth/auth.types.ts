@@ -27,7 +27,6 @@ export type WebSocketChannel = "system" | "yjs";
 /** A short-lived, single-use ticket that authorizes a WebSocket upgrade for a given channel. */
 export type WebSocketTicket = {
   ticket: string;
-  /** Number of seconds until the ticket expires. */
   expiresIn: number;
 };
 

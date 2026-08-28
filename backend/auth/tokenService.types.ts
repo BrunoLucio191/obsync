@@ -17,9 +17,7 @@ export type TokenHeader = {
 /** Server-side record tracking a login session, keyed by session id, used to validate and rotate refresh tokens. */
 export type SessionRecord = {
   readonly userId: number;
-  /** HMAC hash of the current refresh token, stored instead of the raw token. */
   refreshTokenHash: string;
-  /** Timestamp (ms since epoch) after which the session's refresh token is no longer valid. */
   readonly refreshExpiresAt: number;
 };
 

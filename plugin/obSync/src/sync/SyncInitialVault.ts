@@ -45,14 +45,13 @@ export class SyncInitialVault {
 			});
 
 			if (response.status !== 200) {
-				throw new Error(
-					t('sync.serverReturnedError', { status: response.status }),
-				);
+				throw new Error(t('sync.serverReturnedError', { status: response.status }));
 			}
 			const zip = await JSZip.loadAsync(response.arrayBuffer);
 			const adapter = this.app.vault.adapter;
 
 			for (const relativePath of Object.keys(zip.files)) {
+				//entry is the obj value for the respect key relativepath
 				const entry = zip.files[relativePath];
 				if (!entry) continue;
 
@@ -63,19 +62,13 @@ export class SyncInitialVault {
 					}
 				} else {
 					const content = await entry.async('arraybuffer');
-					const parentPath = relativePath.substring(
-						0,
-						relativePath.lastIndexOf('/'),
-					);
+					const parentPath = relativePath.substring(0, relativePath.lastIndexOf('/'));
 
 					if (parentPath && !(await adapter.exists(parentPath))) {
 						this.mutedPaths.mute(parentPath);
 						await adapter.mkdir(parentPath);
 					}
-					if (
-						this.auth.isAdmin() ||
-						!(await adapter.exists(relativePath))
-					) {
+					if (this.auth.isAdmin() || !(await adapter.exists(relativePath))) {
 						this.mutedPaths.mute(relativePath);
 						await adapter.writeBinary(relativePath, content);
 					}

@@ -7,7 +7,7 @@ import {
   MESSAGE_AWARENESS,
   MESSAGE_QUERY_AWARENESS,
   MESSAGE_SYNC,
-} from "./yjs.cons.ts";
+} from "./yjs.const.ts";
 import type { YjsConnectionState } from "./yjs.types.ts";
 import {
   closeConnection,

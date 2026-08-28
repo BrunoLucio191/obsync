@@ -16,11 +16,7 @@ export class AuthService {
    * @param dbService - Service used to convert a raw DB row into an {@link AuthenticatedUser}.
    * @param tokenService - Service used to mint the session's tokens once credentials are verified.
    */
-  constructor(
-    userDB: UserDB,
-    dbService: DBServices,
-    tokenService: TokenService,
-  ) {
+  constructor(userDB: UserDB, dbService: DBServices, tokenService: TokenService) {
     this.dbService = dbService;
     this.userDB = userDB;
     this.tokenService = tokenService;
@@ -32,10 +28,7 @@ export class AuthService {
    * @param password - The plaintext password supplied by the client.
    * @returns A new {@link AuthSession} if the credentials match an active user, otherwise `null`.
    */
-  public async login(
-    email: string,
-    password: string,
-  ): Promise<AuthSession | null> {
+  public async login(email: string, password: string): Promise<AuthSession | null | undefined> {
     const row = this.userDB
       .prepare(
         `SELECT id, email, name, password_hash, role, active
