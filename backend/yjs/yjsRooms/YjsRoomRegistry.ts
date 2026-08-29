@@ -1,8 +1,8 @@
 import { WebSocket } from "ws";
-import { closeConnection } from "./yjsUtils/wsTransport.utils.ts";
-import { isSamePathOrChild } from "./yjsUtils/vaultPath.utils.ts";
-import { DeletedPathRegistry } from "./DeletedPathRegistry.ts";
-import { YjsPersistenceGateway } from "./YjsPersistenceGateway.ts";
+import { closeConnection } from "../yjsUtils/wsTransport.utils.ts";
+import { isSamePathOrChild } from "../yjsUtils/vaultPath.utils.ts";
+import { DeletedPathRegistry } from "../DeletedPathRegistry.ts";
+import { YjsPersistenceGateway } from "../YjsPersistenceGateway.ts";
 import { YjsRoom } from "./YjsRoom.ts";
 
 /**

@@ -6,15 +6,16 @@ import { normalizeVaultPath, parseDocumentIdentity } from "./yjsUtils/vaultPath.
 import { closeConnection } from "./yjsUtils/wsTransport.utils.ts";
 import { AwarenessOwnershipGuard } from "./AwarenessOwnershipGuard.ts";
 import { DeletedPathRegistry } from "./DeletedPathRegistry.ts";
-import { SyncMessageHandler } from "./SyncMessageHandler.ts";
+import type { SyncMessageHandlerFn } from "./SyncMessageHandler.ts";
 import { YjsConnectionSession } from "./YjsConnectionSession.ts";
 import { YjsPersistenceGateway } from "./YjsPersistenceGateway.ts";
-import { YjsRoomRegistry } from "./YjsRoomRegistry.ts";
+import { YjsRoomRegistry } from "./yjsRooms/YjsRoomRegistry.ts";
 import type {
   YjsAuthenticatedConnection,
   YjsConnectionState,
   YjsPersistenceAdapter,
 } from "./yjs.types.ts";
+import { syncMessageHandler } from "./SyncMessageHandler.ts";
 
 /**
  * Top-level facade for the Yjs real-time collaboration backend. Wires together the room
@@ -23,15 +24,10 @@ import type {
  * events (delete/rename), and accepting new authenticated WebSocket connections.
  */
 export class YjsCollaborationServer {
-  /** Tracks deleted vault paths and invalidated documents. */
   private readonly deletedPaths = new DeletedPathRegistry();
-  /** Persistence backend indirection, configured via {@link setPersistence}. */
   private readonly persistence = new YjsPersistenceGateway();
-  /** Manages the lifecycle of all active rooms. */
   private readonly rooms = new YjsRoomRegistry(this.deletedPaths, this.persistence);
-  /** Shared handler for `y-protocols/sync` sub-messages, reused across all rooms/connections. */
-  private readonly syncHandler = new SyncMessageHandler();
-  /** Shared guard enforcing awareness ownership rules, reused across all rooms/connections. */
+  private readonly syncHandler: SyncMessageHandlerFn = syncMessageHandler;
   private readonly awarenessGuard = new AwarenessOwnershipGuard();
 
   /**
@@ -152,7 +148,6 @@ export class YjsCollaborationServer {
     room.connections.set(connection, connectionState);
     room.reservations -= 1;
     connection.binaryType = "arraybuffer";
-
     const session = new YjsConnectionSession(
       room,
       connection,

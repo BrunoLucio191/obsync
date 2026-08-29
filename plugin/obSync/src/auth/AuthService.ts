@@ -57,10 +57,8 @@ export class AuthService {
 		this.getConfig = dependencies.getConfig;
 		this.saveConfig = dependencies.saveConfig;
 		this.onSessionChanged = dependencies.onSessionChanged;
-		this.accessToken =
-			this.app.secretStorage.getSecret(ACCESS_TOKEN_SECRET_ID) ?? '';
-		this.refreshToken =
-			this.app.secretStorage.getSecret(REFRESH_TOKEN_SECRET_ID) ?? '';
+		this.accessToken = this.app.secretStorage.getSecret(ACCESS_TOKEN_SECRET_ID) ?? '';
+		this.refreshToken = this.app.secretStorage.getSecret(REFRESH_TOKEN_SECRET_ID) ?? '';
 		this.scheduleAccessRefresh();
 	}
 
@@ -73,7 +71,7 @@ export class AuthService {
 	public isAuthenticated(): boolean {
 		return Boolean(this.accessToken && this.refreshToken && this.user);
 	}
-
+	/** @returns true if the user is an admin */
 	public isAdmin(): boolean {
 		return this.user?.role === 'admin';
 	}
@@ -124,9 +122,7 @@ export class AuthService {
 	 * @param channel - Which WebSocket channel the ticket is scoped to.
 	 * @returns The ticket string, or `null` if it couldn't be obtained.
 	 */
-	public async createWebSocketTicket(
-		channel: WebSocketChannel,
-	): Promise<string | null> {
+	public async createWebSocketTicket(channel: WebSocketChannel): Promise<string | null> {
 		if (!(await this.ensureFreshAccessToken())) return null;
 
 		let response = await this.requestWebSocketTicket(channel);
@@ -136,9 +132,7 @@ export class AuthService {
 		if (response.status !== 200) return null;
 
 		const payload = response.json as Partial<WebSocketTicket>;
-		return typeof payload.ticket === 'string' && payload.ticket
-			? payload.ticket
-			: null;
+		return typeof payload.ticket === 'string' && payload.ticket ? payload.ticket : null;
 	}
 
 	/**
@@ -156,15 +150,9 @@ export class AuthService {
 		}
 
 		try {
-			let response = await this.requestChangePassword(
-				currentPassword,
-				newPassword,
-			);
+			let response = await this.requestChangePassword(currentPassword, newPassword);
 			if (response.status === 401 && (await this.refreshAccessToken())) {
-				response = await this.requestChangePassword(
-					currentPassword,
-					newPassword,
-				);
+				response = await this.requestChangePassword(currentPassword, newPassword);
 			}
 
 			if (response.status === 200) return { ok: true, value: null };
@@ -228,10 +216,7 @@ export class AuthService {
 			const payload = response.json as { user?: AuthenticatedUser };
 			if (payload.user) await this.updateCurrentUser(payload.user);
 		} catch (error) {
-			console.error(
-				t('auth.sessionRefreshFailed'),
-				error,
-			);
+			console.error(t('auth.sessionRefreshFailed'), error);
 		}
 	}
 
@@ -415,14 +400,8 @@ export class AuthService {
 		const previousUser = this.user;
 		this.accessToken = session.token;
 		this.refreshToken = session.refreshToken;
-		this.app.secretStorage.setSecret(
-			ACCESS_TOKEN_SECRET_ID,
-			this.accessToken,
-		);
-		this.app.secretStorage.setSecret(
-			REFRESH_TOKEN_SECRET_ID,
-			this.refreshToken,
-		);
+		this.app.secretStorage.setSecret(ACCESS_TOKEN_SECRET_ID, this.accessToken);
+		this.app.secretStorage.setSecret(REFRESH_TOKEN_SECRET_ID, this.refreshToken);
 
 		const config = this.getConfig();
 		config.accessTokenExpiresAt = Date.now() + session.expiresIn * 1_000;
@@ -456,9 +435,7 @@ export class AuthService {
 	 */
 	private async clearLocalSession(): Promise<void> {
 		const previousUser = this.user;
-		const hadSession = Boolean(
-			this.accessToken || this.refreshToken || previousUser,
-		);
+		const hadSession = Boolean(this.accessToken || this.refreshToken || previousUser);
 		this.accessToken = '';
 		this.refreshToken = '';
 		this.app.secretStorage.setSecret(ACCESS_TOKEN_SECRET_ID, '');
@@ -552,10 +529,7 @@ export class AuthService {
 	 * @param right - The newly fetched user, or `null`.
 	 * @returns Whether any user-visible field differs.
 	 */
-	private usersDiffer(
-		left: AuthenticatedUser | null,
-		right: AuthenticatedUser | null,
-	): boolean {
+	private usersDiffer(left: AuthenticatedUser | null, right: AuthenticatedUser | null): boolean {
 		return (
 			left?.id !== right?.id ||
 			left?.name !== right?.name ||

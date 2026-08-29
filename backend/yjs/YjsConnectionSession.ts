@@ -16,9 +16,9 @@ import {
   toUint8Array,
 } from "./yjsUtils/wsTransport.utils.ts";
 import type { DeletedPathRegistry } from "./DeletedPathRegistry.ts";
-import type { SyncMessageHandler } from "./SyncMessageHandler.ts";
+import type { SyncMessageHandlerFn } from "./SyncMessageHandler.ts";
 import type { AwarenessOwnershipGuard } from "./AwarenessOwnershipGuard.ts";
-import type { YjsRoom } from "./YjsRoom.ts";
+import type { YjsRoom } from "./yjsRooms/YjsRoom.ts";
 
 /**
  * Owns message handling for a single connection joined to a single {@link YjsRoom}: validates
@@ -35,7 +35,7 @@ export class YjsConnectionSession {
   /** Shared registry used to check whether the room's document/path has been invalidated. */
   private readonly deletedPaths: DeletedPathRegistry;
   /** Shared handler for `y-protocols/sync` sub-messages. */
-  private readonly syncHandler: SyncMessageHandler;
+  private readonly syncHandler: SyncMessageHandlerFn;
   /** Shared guard enforcing awareness ownership rules. */
   private readonly awarenessGuard: AwarenessOwnershipGuard;
 
@@ -44,7 +44,7 @@ export class YjsConnectionSession {
     connection: WebSocket,
     connectionState: YjsConnectionState,
     deletedPaths: DeletedPathRegistry,
-    syncHandler: SyncMessageHandler,
+    syncHandler: SyncMessageHandlerFn,
     awarenessGuard: AwarenessOwnershipGuard,
   ) {
     this.room = room;
@@ -133,7 +133,12 @@ export class YjsConnectionSession {
 
     switch (messageType) {
       case MESSAGE_SYNC:
-        this.syncHandler.handle(this.room, this.connection, this.connectionState, decoder);
+        this.syncHandler({
+          room: this.room,
+          connection: this.connection,
+          connectionState: this.connectionState,
+          decoder,
+        });
         return;
 
       case MESSAGE_AWARENESS: {

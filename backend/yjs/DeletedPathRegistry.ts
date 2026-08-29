@@ -7,9 +7,7 @@ import { isSamePathOrChild, normalizeVaultPath } from "./yjsUtils/vaultPath.util
  * a race with an in-flight room creation or persistence flush is still resolving.
  */
 export class DeletedPathRegistry {
-  /** Normalized paths (files or folder roots) currently considered deleted. */
   private readonly deletedRoots = new Set<string>();
-  /** Yjs documents that were live when their path was deleted, so message handling can be short-circuited for them. */
   private readonly invalidatedDocuments = new WeakSet<Y.Doc>();
 
   /**

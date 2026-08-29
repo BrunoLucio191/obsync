@@ -16,7 +16,7 @@ import { FileManager } from "./FileManager.ts";
 import { AuthService } from "../auth/authService.ts";
 import type { TokenService } from "../auth/TokenService.ts";
 import type { DBServices } from "../users/DBServices.ts";
-import type { Archiver } from "archiver";
+
 /**
  * Maps a failed {@link UserMutationResult} to the appropriate HTTP status code.
  * @param result - The mutation result to inspect.
@@ -632,13 +632,16 @@ export class ExpressServer {
         }
         this.collaborationServer.clearPathDeleted(path);
 
-        if (isFolder) await this.fileManager.createFolder(path);
-        else
+        if (isFolder) {
+          await this.fileManager.createFolder(path);
+        } else {
           await this.fileManager.createOrModifyFile(
             path,
             typeof content === "string" ? content : "",
           );
+        }
 
+        //spread vault changes to the WebSocket
         publishVaultChange({
           type: "create",
           path,
@@ -646,6 +649,7 @@ export class ExpressServer {
           content: typeof content === "string" ? content : "",
           originClientId: req.header("x-obsync-client") ?? undefined,
         });
+
         res.sendStatus(200);
       } catch (error) {
         console.error("[Sync] Error in Create:", error);

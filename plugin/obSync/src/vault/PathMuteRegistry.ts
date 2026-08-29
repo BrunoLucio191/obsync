@@ -6,9 +6,7 @@
  */
 export class PathMuteRegistry {
 	private readonly mutedPaths = new Map<string, number>();
-
-	public constructor(private readonly muteDurationMs = 2_000) {}
-
+	constructor(private readonly muteDurationMs = 2_000) {}
 	/**
 	 * Marks a path as muted for {@link muteDurationMs}.
 	 * @param path - Vault-relative path to mute.
@@ -44,10 +42,7 @@ export class PathMuteRegistry {
 	 * @returns `true` if `candidatePath` equals `rootPath` or is a descendant of it.
 	 */
 	public static contains(rootPath: string, candidatePath: string): boolean {
-		return (
-			candidatePath === rootPath ||
-			candidatePath.startsWith(`${rootPath}/`)
-		);
+		return candidatePath === rootPath || candidatePath.startsWith(`${rootPath}/`);
 	}
 
 	/** Purges muted paths whose expiry timestamp has passed. */

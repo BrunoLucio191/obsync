@@ -8,19 +8,12 @@ import {
 	configureApiEndpoint,
 	isApiEndpointConfigured,
 } from './config/ApiConfig.ts';
-import {
-	DEFAULT_CONFIG,
-	type ObSyncConfig,
-} from './config/ObSyncConfig.ts';
+import { DEFAULT_CONFIG, type ObSyncConfig } from './config/ObSyncConfig.ts';
 import { ObSyncSettingTab } from './settings/ObSyncSettingTab.ts';
 import { SyncInitialVault } from './sync/SyncInitialVault.ts';
 import { SystemChannel } from './sync/SystemChannel.ts';
 import { SyncVaultChanges } from './sync/SyncVaultChanges.ts';
-import type {
-	AuthenticatedUser,
-	UserActionResult,
-	UserRole,
-} from './auth/auth.types.ts';
+import type { AuthenticatedUser, UserActionResult, UserRole } from './auth/auth.types.ts';
 import { PathMuteRegistry } from './vault/PathMuteRegistry.ts';
 import { RemoteVaultChangeService } from './vault/RemoteVaultChangeService.ts';
 
@@ -151,9 +144,7 @@ export default class ObSync extends Plugin {
 		return this.userAdmin.updateUserStatus(userId, active);
 	}
 
-	public deleteUser(
-		userId: number,
-	): Promise<UserActionResult<AuthenticatedUser>> {
+	public deleteUser(userId: number): Promise<UserActionResult<AuthenticatedUser>> {
 		return this.userAdmin.deleteUser(userId);
 	}
 
@@ -244,11 +235,7 @@ export default class ObSync extends Plugin {
 			this.collaboration,
 		);
 		this.systemChannel = new SystemChannel(this.auth, this.remoteChanges);
-		this.initialVaultSync = new SyncInitialVault(
-			this.app,
-			this.auth,
-			this.mutedPaths,
-		);
+		this.initialVaultSync = new SyncInitialVault(this.app, this.auth, this.mutedPaths);
 		this.vaultChangeSync = new SyncVaultChanges(
 			this,
 			this.auth,
@@ -341,11 +328,7 @@ export default class ObSync extends Plugin {
 			| (Partial<ObSyncConfig> & { token?: unknown })
 			| null;
 		const { token: legacyToken, ...safeConfig } = storedConfig ?? {};
-		this.config = Object.assign(
-			{},
-			DEFAULT_CONFIG,
-			safeConfig,
-		);
+		this.config = Object.assign({}, DEFAULT_CONFIG, safeConfig);
 
 		if (legacyToken !== undefined) {
 			await this.saveConfig();

@@ -10,7 +10,7 @@ import {
   normalizePresenceIdentity,
 } from "./yjsUtils/presence.utils.ts";
 import { ensureDecoderConsumed } from "./yjsUtils/wsTransport.utils.ts";
-import type { YjsRoom } from "./YjsRoom.ts";
+import type { YjsRoom } from "./yjsRooms/YjsRoom.ts";
 
 /**
  * Validates and filters incoming `y-protocols/awareness` updates before they are applied to a

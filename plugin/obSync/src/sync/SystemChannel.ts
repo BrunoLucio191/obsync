@@ -1,14 +1,11 @@
-import {
-	getWebSocketBaseUrl,
-	webSocketTicketProtocol,
-} from '../config/ApiConfig.ts';
+import { getWebSocketBaseUrl, webSocketTicketProtocol } from '../config/ApiConfig.ts';
 import { t } from '../i18n/i18n.ts';
 import type { AuthService } from '../auth/AuthService.ts';
 import type { RemoteVaultChangeService } from '../vault/RemoteVaultChangeService.ts';
 import type { VaultChange } from '../vault/VaultChange.ts';
 
 /** Delay (ms) before retrying a dropped or failed system-channel connection. */
-const RECONNECT_DELAY_MS = 1_000;
+//const RECONNECT_DELAY_MS = 1_000;
 
 /**
  * Maintains a persistent websocket to the backend's `/system` channel, which
@@ -16,11 +13,16 @@ const RECONNECT_DELAY_MS = 1_000;
  * clients. Reconnects automatically on disconnect or auth expiry, using a
  * generation counter to discard stale reconnect attempts after `disconnect()`.
  */
+type backOff = {
+	next: () => number;
+	reset: () => void;
+};
 export class SystemChannel {
 	private socket: WebSocket | null = null;
 	private reconnectTimer: number | null = null;
 	/** Incremented on every connect/disconnect to invalidate callbacks from a superseded connection attempt. */
-	private generation = 0;
+	private generation: number = 0;
+	private reconnectDelayMs = this.creatBackoff();
 
 	public constructor(
 		private readonly auth: AuthService,
@@ -103,7 +105,7 @@ export class SystemChannel {
 			if (generation === this.generation) {
 				void this.openWithTicket(generation);
 			}
-		}, RECONNECT_DELAY_MS);
+		}, this.reconnectDelayMs.next());
 	}
 
 	/** Cancels any pending reconnect timer and closes the active socket, if any. */
@@ -115,5 +117,21 @@ export class SystemChannel {
 		const socket = this.socket;
 		this.socket = null;
 		if (socket) socket.close();
+		this.reconnectDelayMs.reset();
+	}
+	/** Creates a backoff that increases after a reconnection */
+	private creatBackoff({ base = 500, max = 30000, jitter = true } = {}): backOff {
+		let localGeneration = (this.generation = 0);
+		return {
+			next() {
+				const exponential = Math.min(base * Math.pow(2, localGeneration), max);
+				const delay = jitter ? exponential * (0.5 + Math.random() * 0.5) : exponential;
+				localGeneration++;
+				return Math.floor(delay);
+			},
+			reset() {
+				localGeneration = 0;
+			},
+		};
 	}
 }

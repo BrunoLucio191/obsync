@@ -3,9 +3,9 @@ import { WebSocket } from "ws";
 import * as awarenessProtocol from "y-protocols/awareness";
 import * as syncProtocol from "y-protocols/sync";
 import * as Y from "yjs";
-import { MESSAGE_AWARENESS, MESSAGE_SYNC } from "./yjs.const.ts";
-import type { YjsConnectionState } from "./yjs.types.ts";
-import { sendBinaryMessage } from "./yjsUtils/wsTransport.utils.ts";
+import { MESSAGE_AWARENESS, MESSAGE_SYNC } from "../yjs.const.ts";
+import type { YjsConnectionState } from "../yjs.types.ts";
+import { sendBinaryMessage } from "../yjsUtils/wsTransport.utils.ts";
 
 /**
  * Represents a single collaborative document ("room"): its Yjs CRDT document, its awareness
@@ -13,19 +13,12 @@ import { sendBinaryMessage } from "./yjsUtils/wsTransport.utils.ts";
  * by {@link YjsRoomRegistry}; connections are attached/detached by {@link YjsCollaborationServer}.
  */
 export class YjsRoom {
-  /** URI-encoded document identifier, used as the persistence storage key. */
   public readonly docName: string;
-  /** Normalized vault-relative file path this room represents. */
   public readonly filePath: string;
-  /** The in-memory Yjs CRDT document holding the file's content. */
   public readonly doc = new Y.Doc();
-  /** Awareness instance tracking ephemeral per-client state (cursors, presence) for this document. */
   public readonly awareness: awarenessProtocol.Awareness;
-  /** Connections currently joined to this room, keyed by socket, with their per-connection state. */
   public readonly connections = new Map<WebSocket, YjsConnectionState>();
-  /** Maps an awareness client id to the connection currently allowed to update/clear it. */
   public readonly awarenessOwners = new Map<number, WebSocket>();
-
   /** Resolves once persistence has finished binding state and listeners are attached; awaited before serving traffic. */
   public ready: Promise<void> = Promise.resolve();
   /** Chained promise used to process incoming messages for this room strictly in order. */
