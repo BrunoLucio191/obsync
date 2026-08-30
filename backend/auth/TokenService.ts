@@ -32,9 +32,7 @@ const TOKEN_AUDIENCE = "obsync-api";
 export class TokenService {
   private readonly secret: string;
   private readonly dbService: DBServices;
-  /** Active login sessions, keyed by session id. */
   private readonly sessions = new Map<string, SessionRecord>();
-  /** Pending single-use WebSocket tickets, keyed by the HMAC hash of the ticket value. */
   private readonly webSocketTickets = new Map<string, WebSocketTicketRecord>();
   /** Callbacks notified whenever a session is revoked (e.g. so open WebSocket connections can be closed). */
   private readonly revocationListeners = new Set<(sessionId: string) => void>();

@@ -142,7 +142,8 @@ export class ExpressServer {
     this.initializeRoutes();
   }
 
-  /** Registers global middleware: TLS enforcement, JSON body parsing (16mb limit), and no-store caching for `/auth` responses. */
+  /** Registers global middleware: TLS enforcement, JSON body parsing (16mb limit),
+   * and no-store caching for `/auth` responses. */
   public initializeMiddleware(): void {
     this.app.use((req: Request, res: Response, next: NextFunction) => {
       if (this.requireTls && !req.secure) {

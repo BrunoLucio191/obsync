@@ -22,6 +22,9 @@ import { RemoteVaultChangeService } from './vault/RemoteVaultChangeService.ts';
  * collaborative editing, and vault-change synchronization, and exposes the
  * account/user-management operations the settings UI calls into.
  */
+
+type StorageConfig = (Partial<ObSyncConfig> & { token?: unknown }) | null;
+
 export default class ObSync extends Plugin {
 	public config!: ObSyncConfig;
 	private auth!: AuthService;
@@ -43,7 +46,7 @@ export default class ObSync extends Plugin {
 	 */
 	public async onload(): Promise<void> {
 		initI18n();
-		await this.loadConfig();
+		await this.loadSettings();
 		try {
 			this.applyBackendUrl(this.config.backendUrl);
 		} catch (error) {
@@ -191,7 +194,7 @@ export default class ObSync extends Plugin {
 		}
 
 		this.config.backendUrl = url.trim();
-		await this.saveConfig();
+		await this.saveSettings();
 
 		// Switching to a different backend invalidates any session tied to the
 		// previous one; drop it instead of sending its tokens somewhere new.
@@ -221,7 +224,7 @@ export default class ObSync extends Plugin {
 		this.auth = new AuthService({
 			app: this.app,
 			getConfig: () => this.config,
-			saveConfig: () => this.saveConfig(),
+			saveConfig: () => this.saveSettings(),
 			onSessionChanged: (previousUser, currentUser) =>
 				this.handleSessionChanged(previousUser, currentUser),
 		});
@@ -312,6 +315,7 @@ export default class ObSync extends Plugin {
 	}
 
 	/** Re-renders the settings tab if it's currently mounted in the DOM. */
+
 	private refreshSettingsTab(): void {
 		if (this.settingTab?.containerEl.isConnected) {
 			this.settingTab.update();
@@ -323,19 +327,13 @@ export default class ObSync extends Plugin {
 	 * discarding a legacy `token` field from older plugin versions (which
 	 * used a different auth storage scheme).
 	 */
-	private async loadConfig(): Promise<void> {
-		const storedConfig = (await this.loadData()) as
-			| (Partial<ObSyncConfig> & { token?: unknown })
-			| null;
-		const { token: legacyToken, ...safeConfig } = storedConfig ?? {};
-		this.config = Object.assign({}, DEFAULT_CONFIG, safeConfig);
 
-		if (legacyToken !== undefined) {
-			await this.saveConfig();
-		}
+	private async loadSettings(): Promise<void> {
+		const storedConfig = (await this.loadData()) as StorageConfig;
+		this.config = Object.assign({}, DEFAULT_CONFIG, storedConfig ?? {});
 	}
 
-	private async saveConfig(): Promise<void> {
+	private async saveSettings(): Promise<void> {
 		await this.saveData(this.config);
 	}
 }
