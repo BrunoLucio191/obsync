@@ -444,7 +444,7 @@ export class ExpressServer {
         }
 
         const target = await this.dbService.getUserById(userId, true);
-        const queue = this.queueManager.creatQueueOrReturn(String(target));
+        const queue = this.queueManager.creatQueueOrReturn(String(userId));
 
         queue.addTask(async () => {
           try {
