@@ -18,11 +18,6 @@ export class BackendConnectionSection {
 	}
 
 	public definition(): SettingDefinitionGroup {
-		const currentUser = this.controller.config.user;
-		// Nobody is authenticated yet on first-time setup, so editing must stay
-		// open until then; once a role is known, only an admin may repoint the
-		// client at a different server.
-		// const canEdit = !currentUser || currentUser.role === 'admin';
 		const canEdit = true;
 
 		return {
