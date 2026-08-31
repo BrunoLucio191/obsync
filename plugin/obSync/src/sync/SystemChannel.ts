@@ -121,7 +121,7 @@ export class SystemChannel {
 	}
 	/** Creates a backoff that increases after a reconnection */
 	private creatBackoff({ base = 500, max = 30000, jitter = true } = {}): backOff {
-		let localGeneration = (this.generation = 0);
+		let localGeneration = this.generation;
 		return {
 			next() {
 				const exponential = Math.min(base * Math.pow(2, localGeneration), max);

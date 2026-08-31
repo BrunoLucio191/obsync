@@ -36,6 +36,12 @@ export type AwarenessChange = {
  * Tracks the Yjs docs, the websocket provider, offline persistence, connected remote
  * clients, and the event handlers/timers needed to manage reconnects and presence.
  */
+
+export type Backoff = {
+	next: () => number;
+	reset: () => void;
+};
+
 export type ActiveRoom = {
 	fileName: string;
 	provider: WebsocketProvider;
@@ -56,6 +62,7 @@ export type ActiveRoom = {
 	closing: boolean;
 	persistenceReady: boolean;
 	networkEnabled: boolean;
+	reconnectDelayMs: Backoff;
 };
 
 /** Result of {@link setupCollabRoom}, handed to the editor once offline persistence has loaded. */

@@ -11,7 +11,6 @@ export interface CollaborationAuth {
 	isReadOnlyUser(): boolean;
 	createWebSocketTicket(channel: 'yjs'): Promise<string | null>;
 }
-
 /**
  * Orchestrates live collaboration for the currently active Markdown file: joins
  * a Yjs room when the active editor changes, tears it down when the file
@@ -26,7 +25,6 @@ export class CollaborationController {
 	private roomGeneration = 0;
 	private roomSyncTimer: number | null = null;
 	private readonly privateModeNotices = new Set<string>();
-
 	public constructor(
 		private readonly app: App,
 		private readonly auth: CollaborationAuth,
@@ -86,10 +84,7 @@ export class CollaborationController {
 	 * @param path - The vault path that changed.
 	 */
 	public disconnectIfAffected(path: string): void {
-		if (
-			this.activePath &&
-			PathMuteRegistry.contains(path, this.activePath)
-		) {
+		if (this.activePath && PathMuteRegistry.contains(path, this.activePath)) {
 			this.disconnect();
 		}
 	}
@@ -112,8 +107,7 @@ export class CollaborationController {
 		try {
 			this.showPrivateModeNotice(filePath);
 
-			const initialView =
-				this.app.workspace.getActiveViewOfType(MarkdownView);
+			const initialView = this.app.workspace.getActiveViewOfType(MarkdownView);
 			if (!initialView || initialView.file?.path !== filePath) {
 				this.disconnect();
 				return;
@@ -143,8 +137,7 @@ export class CollaborationController {
 				return;
 			}
 
-			const activeView =
-				this.app.workspace.getActiveViewOfType(MarkdownView);
+			const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
 			if (!activeView || activeView.file?.path !== filePath) {
 				this.disconnect();
 				return;
@@ -157,10 +150,7 @@ export class CollaborationController {
 		} catch (error) {
 			if (generation !== this.roomGeneration) return;
 
-			console.error(
-				t('collab.couldNotInitializeCollaboration', { filePath }),
-				error,
-			);
+			console.error(t('collab.couldNotInitializeCollaboration', { filePath }), error);
 			this.disconnect();
 			new Notice(t('collab.couldNotRestoreOfflineHistory'));
 		}
@@ -202,10 +192,7 @@ export class CollaborationController {
 	 * @param filePath - The file being opened, used to dedupe repeat notices.
 	 */
 	private showPrivateModeNotice(filePath: string): void {
-		if (
-			!this.auth.isReadOnlyUser() ||
-			this.privateModeNotices.has(filePath)
-		) {
+		if (!this.auth.isReadOnlyUser() || this.privateModeNotices.has(filePath)) {
 			return;
 		}
 
@@ -219,16 +206,11 @@ export class CollaborationController {
 	 * @param view - The Markdown view whose editor content is being restored.
 	 * @param initialText - Text to restore into the editor.
 	 */
-	private restoreEditorText(
-		view: MarkdownView,
-		initialText: string,
-	): void {
+	private restoreEditorText(view: MarkdownView, initialText: string): void {
 		if (view.editor.getValue() === initialText) return;
 
 		const cursorOffset = view.editor.posToOffset(view.editor.getCursor());
 		view.editor.setValue(initialText);
-		view.editor.setCursor(
-			view.editor.offsetToPos(Math.min(cursorOffset, initialText.length)),
-		);
+		view.editor.setCursor(view.editor.offsetToPos(Math.min(cursorOffset, initialText.length)));
 	}
 }

@@ -2,9 +2,7 @@ import { yCollab } from 'y-codemirror.next';
 import { WebsocketProvider } from 'y-websocket';
 import * as Y from 'yjs';
 import { ActiveRoom } from './collab.types.ts';
-import {
-	initializeOfflinePersistence,
-} from './OfflinePersistence.ts';
+import { initializeOfflinePersistence } from './OfflinePersistence.ts';
 import { CollaborationUser } from './collab.types.ts';
 import { RemotePresence } from './collab.types.ts';
 import { PresenceUser } from './collab.types.ts';
@@ -16,13 +14,14 @@ import {
 	PERIODIC_STATE_VECTOR_SYNC_MS,
 	OFFLINE_NAMESPACE_VERSION,
 } from './collab.cons.ts';
-import {
-	getWebSocketBaseUrl,
-	webSocketTicketProtocol,
-} from '../config/ApiConfig.ts';
+import { getWebSocketBaseUrl, webSocketTicketProtocol } from '../config/ApiConfig.ts';
 
 /** The single collaboration room currently open, or `null` if none is active. Only one room can be open at a time. */
 let activeRoom: ActiveRoom | null = null;
+type backOff = {
+	next: () => number;
+	reset: () => void;
+};
 
 /**
  * Computes the IndexedDB namespace used for offline persistence of a user's documents.
@@ -46,10 +45,7 @@ function getOfflineNamespace(user: CollaborationUser): string {
  * @returns The remote user's normalized presence, or `null` if the client has no
  * (or malformed) presence data.
  */
-function getRemotePresence(
-	provider: WebsocketProvider,
-	clientId: number,
-): RemotePresence | null {
+function getRemotePresence(provider: WebsocketProvider, clientId: number): RemotePresence | null {
 	const state = provider.awareness.getStates().get(clientId);
 	const user = state?.user as Partial<PresenceUser> | undefined;
 
@@ -207,12 +203,7 @@ async function reconnectWithFreshTicket(room: ActiveRoom): Promise<void> {
 	room.ticketRequestInFlight = true;
 	try {
 		const ticket = await room.requestWebSocketTicket();
-		if (
-			!ticket ||
-			activeRoom !== room ||
-			room.closing ||
-			!room.networkEnabled
-		) {
+		if (!ticket || activeRoom !== room || room.closing || !room.networkEnabled) {
 			if (!ticket) scheduleTicketReconnect(room);
 			return;
 		}
@@ -242,7 +233,7 @@ function scheduleTicketReconnect(room: ActiveRoom): void {
 	room.ticketReconnectTimer = window.setTimeout(() => {
 		room.ticketReconnectTimer = null;
 		void reconnectWithFreshTicket(room);
-	}, 1_000);
+	}, room.reconnectDelayMs.next());
 }
 
 /**
@@ -283,18 +274,13 @@ export async function setupCollabRoom(
 		namespace: getOfflineNamespace(user),
 	});
 
-	const provider = new WebsocketProvider(
-		getWebSocketBaseUrl(),
-		roomName,
-		networkDoc,
-		{
-			connect: false,
-			protocols: [],
-			maxBackoffTime: MAX_RECONNECT_BACKOFF_MS,
-			resyncInterval: PERIODIC_STATE_VECTOR_SYNC_MS,
-			disableBc: true,
-		},
-	);
+	const provider = new WebsocketProvider(getWebSocketBaseUrl(), roomName, networkDoc, {
+		connect: false,
+		protocols: [],
+		maxBackoffTime: MAX_RECONNECT_BACKOFF_MS,
+		resyncInterval: PERIODIC_STATE_VECTOR_SYNC_MS,
+		disableBc: true,
+	});
 
 	const onNetworkUpdate =
 		user.role === 'user'
@@ -323,6 +309,7 @@ export async function setupCollabRoom(
 		ticketRequestInFlight: false,
 		closing: false,
 		persistenceReady: false,
+		reconnectDelayMs: creatBackoff(),
 		networkEnabled: false,
 	};
 
@@ -354,14 +341,15 @@ export async function setupCollabRoom(
 	room.onConnectionClose = () => {
 		if (activeRoom !== room || room.closing || !room.networkEnabled) return;
 		room.provider.shouldConnect = false;
-		window.setTimeout(() => {
-			void reconnectWithFreshTicket(room);
-		}, 0);
+		scheduleTicketReconnect(room);
 	};
 
 	activeRoom = room;
 	provider.awareness.on('change', room.onAwarenessChange);
 	provider.on('connection-close', room.onConnectionClose);
+	provider.on('sync', (isSynced) => {
+		if (isSynced) room.reconnectDelayMs.reset();
+	});
 	provider.awareness.setLocalStateField('user', getPresenceUser(user));
 	window.addEventListener('online', room.onBrowserOnline);
 	document.addEventListener('visibilitychange', room.onVisibilityChange);
@@ -438,4 +426,19 @@ export function closeCollabRoom(): void {
  */
 export function getCurrentCollabRoomPath(): string | null {
 	return activeRoom?.fileName ?? null;
+}
+
+function creatBackoff({ base = 500, max = 30000, jitter = true } = {}): backOff {
+	let localGeneration = 0;
+	return {
+		next() {
+			const exponential = Math.min(base * Math.pow(2, localGeneration), max);
+			const delay = jitter ? exponential * (0.5 + Math.random() * 0.5) : exponential;
+			localGeneration++;
+			return Math.floor(delay);
+		},
+		reset() {
+			localGeneration = 0;
+		},
+	};
 }
