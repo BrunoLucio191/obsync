@@ -9,7 +9,7 @@ import { FileManager } from "./Server/FileManager.ts";
 import { openUserDatabase } from "./users/databaseLifecycle.ts";
 import { loadServerConfig } from "./serverConfig.ts";
 import { YjsCollaborationServer } from "./yjs/YjsCollaborationServer.ts";
-
+import { QueueManager } from "./queue/QueueManager.ts";
 /**
  * Backend entry point. Loads configuration and shared services (database,
  * auth, tokens, file management, Yjs collaboration), then wires them into
@@ -33,6 +33,7 @@ const main = () => {
 
   const authService = new AuthService(userDB, dbService, tokenService);
   const collaborationServer = new YjsCollaborationServer();
+  const queueManager = new QueueManager();
 
   const server = new ExpressServer({
     port: config.port,
@@ -44,6 +45,7 @@ const main = () => {
     dbService,
     authService,
     collaborationServer,
+    queueManager,
   });
   server.serverStart();
 

@@ -11,11 +11,12 @@ import type {
 } from "../auth/auth.types.ts";
 import { LoginRateLimiter } from "../auth/LoginRateLimiter.ts";
 import { publishVaultChange } from "../syncEvents.ts";
-import type { YjsCollaborationServer } from "../yjs/YjsCollaborationServer.ts";
+import type { YjsCollaborationServer as YjsCollaborationGateway } from "../yjs/YjsCollaborationServer.ts";
 import { FileManager } from "./FileManager.ts";
 import { AuthService } from "../auth/authService.ts";
 import type { TokenService } from "../auth/TokenService.ts";
 import type { DBServices } from "../users/DBServices.ts";
+import type { QueueManager } from "../queue/QueueManager.ts";
 
 /**
  * Maps a failed {@link UserMutationResult} to the appropriate HTTP status code.
@@ -81,7 +82,8 @@ type ExpressServerConstructorOptions = {
   tokenService: TokenService;
   dbService: DBServices;
   authService: AuthService;
-  collaborationServer: YjsCollaborationServer;
+  collaborationServer: YjsCollaborationGateway;
+  queueManager: QueueManager;
 };
 
 /**
@@ -100,7 +102,7 @@ export class ExpressServer {
   private readonly dbService: DBServices;
   private readonly tokenService: TokenService;
   private readonly authService: AuthService;
-  private readonly collaborationServer: YjsCollaborationServer;
+  private readonly collaborationServer: YjsCollaborationGateway;
   private readonly accountLoginRateLimiter = new LoginRateLimiter({
     maxFailedAttempts: 5,
   });
@@ -110,6 +112,7 @@ export class ExpressServer {
   private readonly passwordChangeRateLimiter = new LoginRateLimiter({
     maxFailedAttempts: 5,
   });
+  private readonly queueManager: QueueManager;
 
   /**
    * Creates the Express app and underlying HTTP server, then wires up middleware and routes.
@@ -126,6 +129,7 @@ export class ExpressServer {
     dbService,
     authService,
     collaborationServer,
+    queueManager,
   }: ExpressServerConstructorOptions) {
     this.port = port;
     this.host = host;
@@ -138,6 +142,7 @@ export class ExpressServer {
     this.dbService = dbService;
     this.authService = authService;
     this.collaborationServer = collaborationServer;
+    this.queueManager = queueManager;
     this.initializeMiddleware();
     this.initializeRoutes();
   }
@@ -209,24 +214,17 @@ export class ExpressServer {
       const { email, password } = req.body ?? {};
 
       switch (true) {
-        case !email.includes("@") || email.length < 10 || email.trim().length === 0:
-          res.status(400).json({ error: "E-mail is not valid" });
-
-          return;
-
-        case password.trim().length === 0:
-          res.status(400).json({ error: "password is not valid" });
-
-          return;
-
         case typeof email !== "string" || typeof password !== "string":
           res.status(400).json({ error: "E-mail and password are required" });
-
           return;
-
+        case !email.includes("@") || email.length < 10 || email.trim().length === 0:
+          res.status(400).json({ error: "E-mail is not valid" });
+          return;
+        case password.trim().length === 0:
+          res.status(400).json({ error: "password is not valid" });
+          return;
         case email.length > 254 || password.length > 128:
           res.status(400).json({ error: "Invalid credentials" });
-
           return;
       }
 
@@ -391,27 +389,38 @@ export class ExpressServer {
         }
 
         const actor = this.currentUser(res);
-        const target = await this.dbService.getUserById(userId, true);
-        if (!target) {
-          res.status(404).json({ error: "User not found." });
-          return;
-        }
-        if (target.role === "admin" && target.id !== actor.id) {
-          res.status(403).json({
-            error: "Administrators can only change their own name.",
-          });
-          return;
-        }
+        const queue = this.queueManager.creatQueueOrReturn(String(userId));
 
-        const result = await this.dbService.updateUserName(userId, normalizedName);
-        if (!result.ok) {
-          res.status(mutationErrorStatus(result)).json({
-            error: mutationErrorMessage(result),
-            reason: result.reason,
-          });
-          return;
-        }
-        res.json({ user: result.user });
+        queue.addTask(async () => {
+          try {
+            const target = await this.dbService.getUserById(userId, true);
+            if (!target) {
+              res.status(404).json({ error: "User not found." });
+              return;
+            }
+            if (target.role === "admin" && target.id !== actor.id) {
+              res.status(403).json({
+                error: "Administrators can only change their own name.",
+              });
+              return;
+            }
+
+            const result = await this.dbService.updateUserName(userId, normalizedName);
+            if (!result.ok) {
+              res.status(mutationErrorStatus(result)).json({
+                error: mutationErrorMessage(result),
+                reason: result.reason,
+              });
+              return;
+            }
+            res.json({ user: result.user });
+          } catch (error) {
+            console.error(`Something happened while changing ${userId} name`);
+            res.status(400).json({
+              error: "Something happened while changing some user name",
+            });
+          }
+        });
       },
     );
 

@@ -104,11 +104,11 @@ export class AwarenessOwnershipGuard {
 
       acceptedEntries.push(entry);
     }
-
+    /*
     if (ignoredEntries.length > 0) {
       console.warn(`[Yjs] Ignored awareness entries in ${room.filePath}:`, ignoredEntries);
     }
-
+    */
     if (acceptedEntries.length === 0) return;
 
     const filteredUpdate = this.encodeEntries(acceptedEntries);

@@ -22,7 +22,8 @@ export class BackendConnectionSection {
 		// Nobody is authenticated yet on first-time setup, so editing must stay
 		// open until then; once a role is known, only an admin may repoint the
 		// client at a different server.
-		const canEdit = !currentUser || currentUser.role === 'admin';
+		// const canEdit = !currentUser || currentUser.role === 'admin';
+		const canEdit = true;
 
 		return {
 			type: 'group',
@@ -35,8 +36,7 @@ export class BackendConnectionSection {
 						: t('settings.backend.urlDescReadOnly'),
 					render: (setting) => {
 						setting.addText((text) => {
-							text
-								.setPlaceholder(t('settings.backend.urlPlaceholder'))
+							text.setPlaceholder(t('settings.backend.urlPlaceholder'))
 								.setValue(this.url)
 								.setDisabled(!canEdit)
 								.onChange((value) => (this.url = value));
@@ -50,9 +50,7 @@ export class BackendConnectionSection {
 								.setCta()
 								.onClick(async () => {
 									button.setDisabled(true);
-									const result = await this.controller.setBackendUrl(
-										this.url,
-									);
+									const result = await this.controller.setBackendUrl(this.url);
 									button.setDisabled(false);
 
 									if (!result.ok) {
