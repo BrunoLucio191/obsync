@@ -17,7 +17,6 @@ import { AuthService } from "../auth/authService.ts";
 import type { TokenService } from "../auth/TokenService.ts";
 import type { DBServices } from "../users/DBServices.ts";
 import type { QueueManager } from "../queue/QueueManager.ts";
-import { log } from "node:console";
 
 /**
  * Maps a failed {@link UserMutationResult} to the appropriate HTTP status code.

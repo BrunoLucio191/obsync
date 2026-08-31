@@ -1,3 +1,6 @@
-const string = 12312312312;
+const array = [];
+let algo = array.push(function () {
+  console.log("hello");
+});
 
-console.log(typeof string.toString());
+array[1]();

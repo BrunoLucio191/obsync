@@ -348,6 +348,7 @@ export class AuthService {
 	 */
 	private refreshAccessToken(): Promise<boolean> {
 		if (this.refreshPromise) return this.refreshPromise;
+
 		this.refreshPromise = this.exchangeRefreshToken().finally(() => {
 			this.refreshPromise = null;
 		});
