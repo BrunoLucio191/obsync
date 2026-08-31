@@ -2,6 +2,11 @@
  * A minimal FIFO queue of async tasks. Tasks run one at a time, in the order
  * they were added; a task that throws is logged and does not stop later
  * tasks from running.
+ *
+ * TODO: this only implements plain FIFO ordering. Other queue routes may
+ * need different strategies later (e.g. priority ordering, per-task retry,
+ * or a concurrency limit greater than one), so factor those out into their
+ * own queue types instead of growing this one once that need shows up.
  */
 export class DbQueue {
   private queue: Array<() => Promise<void>> = [];
