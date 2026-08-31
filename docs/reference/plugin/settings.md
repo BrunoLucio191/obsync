@@ -69,9 +69,10 @@ Renders the **Backend server URL** field that every other section depends on.
 The field was originally role-gated after sign-in (editable pre-setup, then
 admin-only), but that gate is currently disabled: `canEdit` is hardcoded to
 `true`, so the field stays editable for every signed-in role, not just admins.
-The original role check is left commented out in the source rather than
-removed. Saving calls `SettingsController.setBackendUrl()` and shows its
-`UserActionResult` error inline through a `Notice` on failure.
+The original role-check logic was removed rather than left as a comment; only
+the dead `canEdit` variable remains. Saving calls
+`SettingsController.setBackendUrl()` and shows its `UserActionResult` error
+inline through a `Notice` on failure.
 
 ## `AccountSettingsSection`
 

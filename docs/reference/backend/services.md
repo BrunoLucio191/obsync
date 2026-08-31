@@ -54,9 +54,9 @@ new ExpressServer({
 | `serverStart(port?)` | Starts the Node HTTP server on the configured host |
 | `getHttpServer` | Returns the underlying `node:http` server for WebSocket upgrades |
 
-Routes are documented in [HTTP API](http.md). Mutations that target a
-specific user (currently `PATCH /api/users/:id/name`) run through a
-per-user queue instead of directly; see [QueueManager](#queuemanager) below.
+Routes are documented in [HTTP API](http.md). Every route that creates,
+updates, or deletes a user runs through a per-user queue instead of
+directly; see [QueueManager](#queuemanager) below.
 
 ## WebSocketServer
 
@@ -145,8 +145,12 @@ queue from processing the next one.
 | `addTask(task)` | Appends `task` to the queue and starts processing if idle |
 | `numberOfTaks()` | Returns the number of tasks still waiting (not counting the one in flight) |
 
-`ExpressServer` currently uses this only for `PATCH /api/users/:id/name`,
-keyed by the target user's id — see [HTTP API](http.md#user-administration).
+`ExpressServer` uses this for every user-mutating route — `POST /api/users`,
+`PATCH /api/users/:id/name`, `PATCH /api/users/:id/password`,
+`PATCH /api/users/:id/role`, `PATCH /api/users/:id/status`, and
+`DELETE /api/users/:id` — each keyed by the target user's id.
+`POST /api/users` has no id yet, so it queues by the submitted email
+instead. See [HTTP API](http.md#user-administration).
 
 ## FileManager
 

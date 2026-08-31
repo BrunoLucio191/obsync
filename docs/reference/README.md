@@ -22,7 +22,7 @@ backend.
 | --- | --- |
 | [Backend API index](backend/README.md) | Composition and service map |
 | [Authentication](backend/authentication.md) | `TokenService`, `LoginRateLimiter` |
-| [Services](backend/services.md) | Database, filesystem, Yjs, HTTP, and WebSocket services |
+| [Services](backend/services.md) | Database, filesystem, Yjs, HTTP, WebSocket, and per-user queue services |
 | [HTTP API](backend/http.md) | Routes, request bodies, responses, and authorization |
 | [WebSocket API](backend/websocket.md) | Ticket handshake, channels, close codes, and messages |
 | [Data types](backend/types.md) | Backend authentication and mutation objects |

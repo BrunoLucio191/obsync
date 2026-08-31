@@ -127,11 +127,14 @@ composes its own services.
 method; it is now a plain function (`syncMessageHandler`) taking a params
 object, since it held no state of its own between calls.
 
-`ExpressServer` is also constructor-injected with a `QueueManager`. Routes
-that mutate a specific user's row — currently only
-`PATCH /api/users/:id/name` — enqueue their work on that user's `DbQueue`
-instead of running it inline, so concurrent requests targeting the same user
-never race each other. Other routes are unaffected.
+`ExpressServer` is also constructor-injected with a `QueueManager`. Every
+route that mutates a user's row (`POST /api/users`,
+`PATCH /api/users/:id/name`, `PATCH /api/users/:id/password`,
+`PATCH /api/users/:id/role`, `PATCH /api/users/:id/status`,
+`DELETE /api/users/:id`) enqueues its work on that user's `DbQueue` instead
+of running it inline, so concurrent requests targeting the same user never
+race each other. `POST /api/users` queues by the submitted email since no id
+exists yet. `GET /api/users` is a read and is unaffected.
 
 ## Communication channels
 
