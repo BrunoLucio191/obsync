@@ -31,7 +31,7 @@ new DBServices(userDB: UserDB)
 
 `ExpressServer` configures middleware and exposes the HTTP API.
 
-Source: [`backend/Classes/ExpressServer.ts`](../../../backend/Classes/ExpressServer.ts)
+Source: [`backend/Server/ExpressServer.ts`](../../../backend/Server/ExpressServer.ts)
 
 ```ts
 new ExpressServer({
@@ -44,6 +44,7 @@ new ExpressServer({
 	dbService,
 	authService,
 	collaborationServer,
+	queueManager,
 })
 ```
 
@@ -53,7 +54,9 @@ new ExpressServer({
 | `serverStart(port?)` | Starts the Node HTTP server on the configured host |
 | `getHttpServer` | Returns the underlying `node:http` server for WebSocket upgrades |
 
-Routes are documented in [HTTP API](http.md).
+Routes are documented in [HTTP API](http.md). Mutations that target a
+specific user (currently `PATCH /api/users/:id/name`) run through a
+per-user queue instead of directly; see [QueueManager](#queuemanager) below.
 
 ## WebSocketServer
 
@@ -61,7 +64,7 @@ Routes are documented in [HTTP API](http.md).
 package also exports a class named `WebSocketServer`; this file imports it
 under the alias `WsServer` to avoid the collision.
 
-Source: [`backend/Classes/WebSocketServer.ts`](../../../backend/Classes/WebSocketServer.ts)
+Source: [`backend/Server/WebSocketServer.ts`](../../../backend/Server/WebSocketServer.ts)
 
 ```ts
 new WebSocketServer(
@@ -86,9 +89,9 @@ Upgrade behavior and close codes are documented in
 
 `YjsCollaborationServer` is the composition root and public API for the Yjs
 backend. It owns a `YjsRoomRegistry`, `YjsPersistenceGateway`,
-`DeletedPathRegistry`, `SyncMessageHandler`, and `AwarenessOwnershipGuard`,
-and is constructor-injected into both `ExpressServer` and `WebSocketServer` so
-REST mutations and live rooms share the same state.
+`DeletedPathRegistry`, `AwarenessOwnershipGuard`, and the `syncMessageHandler`
+function, and is constructor-injected into both `ExpressServer` and
+`WebSocketServer` so REST mutations and live rooms share the same state.
 
 Source: [`backend/yjs/YjsCollaborationServer.ts`](../../../backend/yjs/YjsCollaborationServer.ts)
 
@@ -107,12 +110,43 @@ new YjsCollaborationServer()
 | `deletePersistedStateUnderPath(targetPath)` | Removes on-disk Yjs state for a note or folder subtree |
 | `renamePersistedStatePath(oldPath, newPath)` | Moves on-disk Yjs state to match a vault rename |
 
-The finer-grained collaborator classes (`YjsRoom`, `YjsRoomRegistry`,
-`YjsConnectionSession`, `SyncMessageHandler`, `AwarenessOwnershipGuard`,
+The finer-grained collaborators (`YjsRoom`, `YjsRoomRegistry`,
+`YjsConnectionSession`, `syncMessageHandler`, `AwarenessOwnershipGuard`,
 `DeletedPathRegistry`, `YjsPersistenceGateway`) are internal to
 `backend/yjs/` and are not constructed directly outside it; see
 [Architecture](../../architecture.md#backend-modules) for their individual
 responsibilities.
+
+## QueueManager
+
+`QueueManager` creates and looks up one `DbQueue` per user id, so mutations
+targeting the same user never run concurrently against each other.
+
+Source: [`backend/queue/QueueManager.ts`](../../../backend/queue/QueueManager.ts)
+
+```ts
+new QueueManager()
+```
+
+| Method | Description |
+| --- | --- |
+| `creatQueueOrReturn(userId)` | Returns the existing `DbQueue` for `userId`, creating one on first use |
+
+### DbQueue
+
+Source: [`backend/queue/dbQueue.ts`](../../../backend/queue/dbQueue.ts)
+
+A minimal FIFO queue of async tasks. Tasks are run one at a time, in the
+order they were added; a task that throws is logged and does not stop the
+queue from processing the next one.
+
+| Method | Description |
+| --- | --- |
+| `addTask(task)` | Appends `task` to the queue and starts processing if idle |
+| `numberOfTaks()` | Returns the number of tasks still waiting (not counting the one in flight) |
+
+`ExpressServer` currently uses this only for `PATCH /api/users/:id/name`,
+keyed by the target user's id — see [HTTP API](http.md#user-administration).
 
 ## FileManager
 
@@ -120,7 +154,7 @@ responsibilities.
 is resolved under the configured vault root; absolute paths and traversal
 outside that root are rejected.
 
-Source: [`backend/Classes/FileManager.ts`](../../../backend/Classes/FileManager.ts)
+Source: [`backend/Server/FileManager.ts`](../../../backend/Server/FileManager.ts)
 
 | Method | Description |
 | --- | --- |
@@ -136,7 +170,7 @@ Source: [`backend/Classes/FileManager.ts`](../../../backend/Classes/FileManager.
 `YjsPersistence` keeps each shared Yjs document and its Markdown snapshot in
 sync.
 
-Source: [`backend/Classes/YjsPersistence.ts`](../../../backend/Classes/YjsPersistence.ts)
+Source: [`backend/Server/YjsPersistence.ts`](../../../backend/Server/YjsPersistence.ts)
 
 ```ts
 new YjsPersistence(vaultPath: string, statePath: string)

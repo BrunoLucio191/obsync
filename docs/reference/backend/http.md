@@ -123,6 +123,11 @@ accepts a `user`-role target — an admin resets their own password through
 [`POST /auth/change-password`](#post-authchange-password) instead, which
 requires the current password.
 
+`PATCH /api/users/:id/name` runs its work on a per-target-user `DbQueue`
+(see [QueueManager](services.md#queuemanager)) instead of inline, so two
+concurrent renames of the same user are serialized rather than racing. Other
+user-administration routes are not queued.
+
 ## Initial vault download
 
 ### `POST /api/syncfiles`

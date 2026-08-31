@@ -66,12 +66,12 @@ closes.
 Source: [`BackendConnectionSection.ts`](../../../plugin/obSync/src/settings/BackendConnectionSection.ts)
 
 Renders the **Backend server URL** field that every other section depends on.
-Editability is role-gated: the field stays editable whenever no account is
-connected yet (so first-time setup is possible at all), and afterward only an
-admin can repoint the plugin at a different backend, and a `user` account sees
-the same value but cannot change it. Saving calls
-`SettingsController.setBackendUrl()` and shows its `UserActionResult` error
-inline through a `Notice` on failure.
+The field was originally role-gated after sign-in (editable pre-setup, then
+admin-only), but that gate is currently disabled: `canEdit` is hardcoded to
+`true`, so the field stays editable for every signed-in role, not just admins.
+The original role check is left commented out in the source rather than
+removed. Saving calls `SettingsController.setBackendUrl()` and shows its
+`UserActionResult` error inline through a `Notice` on failure.
 
 ## `AccountSettingsSection`
 

@@ -136,5 +136,5 @@ type YjsAuthenticatedConnection = {
 ```
 
 `YjsCollaborationServer.setupConnection()` converts this authenticated context
-into the internal `YjsConnectionState` used by `SyncMessageHandler` and
+into the internal `YjsConnectionState` used by `syncMessageHandler()` and
 `AwarenessOwnershipGuard`.

@@ -1,15 +1,16 @@
 # Backend API
 
-The backend composes its services in `server.ts`. HTTP and WebSocket transports
+The backend composes its services in `main.ts`. HTTP and WebSocket transports
 share `TokenService`, `DBServices`, filesystem storage, and authorization rules.
 
 ```text
-server.ts
+main.ts
 ├── loadServerConfig()
 ├── openUserDatabase()
 ├── DBServices
 ├── TokenService ── AuthService
 ├── YjsCollaborationServer
+├── QueueManager
 ├── FileManager ── ExpressServer
 └── WebSocketServer ── YjsPersistence
 ```
@@ -28,6 +29,7 @@ and live WebSocket rooms observe the same deleted-path and room state.
 | `ExpressServer` | Middleware, HTTP routes, and route authorization | [Services](services.md#expressserver) |
 | `WebSocketServer` | Upgrade authentication and channel routing | [Services](services.md#websocketserver) |
 | `YjsCollaborationServer` | Yjs room lifecycle, sync, and awareness | [Services](services.md#yjscollaborationserver) |
+| `QueueManager` | Per-user task queues, used to serialize same-user mutations | [Services](services.md#queuemanager) |
 | `FileManager` | Shared-vault filesystem operations | [Services](services.md#filemanager) |
 | `YjsPersistence` | Binary Yjs state and Markdown snapshots | [Services](services.md#yjspersistence) |
 
