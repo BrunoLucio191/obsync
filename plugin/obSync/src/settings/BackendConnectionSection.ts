@@ -26,14 +26,11 @@ export class BackendConnectionSection {
 			items: [
 				{
 					name: t('settings.backend.url'),
-					desc: canEdit
-						? t('settings.backend.urlDesc')
-						: t('settings.backend.urlDescReadOnly'),
+					desc: t('settings.backend.urlDesc'),
 					render: (setting) => {
 						setting.addText((text) => {
 							text.setPlaceholder(t('settings.backend.urlPlaceholder'))
 								.setValue(this.url)
-								.setDisabled(!canEdit)
 								.onChange((value) => (this.url = value));
 						});
 
