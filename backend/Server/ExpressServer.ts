@@ -17,6 +17,7 @@ import { AuthService } from "../auth/authService.ts";
 import type { TokenService } from "../auth/TokenService.ts";
 import type { DBServices } from "../users/DBServices.ts";
 import type { QueueManager } from "../queue/QueueManager.ts";
+import { log } from "node:console";
 
 /**
  * Maps a failed {@link UserMutationResult} to the appropriate HTTP status code.
@@ -387,13 +388,12 @@ export class ExpressServer {
           });
           return;
         }
-
         const actor = this.currentUser(res);
+        const target = await this.dbService.getUserById(userId, true);
         const queue = this.queueManager.creatQueueOrReturn(String(userId));
 
         queue.addTask(async () => {
           try {
-            const target = await this.dbService.getUserById(userId, true);
             if (!target) {
               res.status(404).json({ error: "User not found." });
               return;
@@ -416,7 +416,7 @@ export class ExpressServer {
             res.json({ user: result.user });
           } catch (error) {
             console.error(`Something happened while changing ${userId} name`);
-            res.status(400).json({
+            res.status(500).json({
               error: "Something happened while changing some user name",
             });
           }
@@ -444,27 +444,40 @@ export class ExpressServer {
         }
 
         const target = await this.dbService.getUserById(userId, true);
-        if (!target) {
-          res.status(404).json({ error: "User not found." });
-          return;
-        }
-        if (target.role !== "user") {
-          res.status(403).json({
-            error:
-              "Administrators can only reset a regular user's password. Use the self-service password change for your own account.",
-          });
-          return;
-        }
+        const queue = this.queueManager.creatQueueOrReturn(String(target));
 
-        const result = await this.dbService.adminSetUserPassword(userId, newPassword);
-        if (!result.ok) {
-          res.status(mutationErrorStatus(result)).json({
-            error: mutationErrorMessage(result),
-            reason: result.reason,
-          });
-          return;
-        }
-        res.json({ user: result.user });
+        queue.addTask(async () => {
+          try {
+            if (!target) {
+              res.status(404).json({ error: "User not found." });
+              return;
+            }
+            if (target.role !== "user") {
+              res.status(403).json({
+                error:
+                  "Administrators can only reset a regular user's password. " +
+                  "Use the self-service password change for your own account.",
+              });
+              return;
+            }
+
+            const result = await this.dbService.adminSetUserPassword(userId, newPassword);
+            if (!result.ok) {
+              res.status(mutationErrorStatus(result)).json({
+                error: mutationErrorMessage(result),
+                reason: result.reason,
+              });
+              return;
+            }
+            res.json({ user: result.user });
+          } catch (error) {
+            console.error(`Something happened while changing ${userId} name`);
+
+            res.status(500).json({
+              error: "Something happened while changing some user password",
+            });
+          }
+        });
       },
     );
 
@@ -501,24 +514,35 @@ export class ExpressServer {
           });
           return;
         }
+        const queue = this.queueManager.creatQueueOrReturn(email);
 
-        const result = await this.dbService.createUser(
-          normalizedName,
-          normalizedEmail,
-          password,
-          normalizedRole,
-        );
-        if (!result.ok) {
-          res.status(409).json({
-            error:
-              result.reason === "email_exists"
-                ? "A user with that e-mail already exists."
-                : "A user with that name already exists.",
-            reason: result.reason,
-          });
-          return;
-        }
-        res.status(201).json({ user: result.user });
+        queue.addTask(async () => {
+          try {
+            const result = await this.dbService.createUser(
+              normalizedName,
+              normalizedEmail,
+              password,
+              normalizedRole,
+            );
+            if (!result.ok) {
+              res.status(409).json({
+                error:
+                  result.reason === "email_exists"
+                    ? "A user with that e-mail already exists."
+                    : "A user with that name already exists.",
+                reason: result.reason,
+              });
+              return;
+            }
+            res.status(201).json({ user: result.user });
+          } catch (error) {
+            console.error(`Something happened while creating a new user`);
+
+            res.status(500).json({
+              error: "Something happened while creating a new user",
+            });
+          }
+        });
       },
     );
 
@@ -534,15 +558,26 @@ export class ExpressServer {
           return;
         }
 
-        const result = await this.dbService.updateUserRole(userId, role);
-        if (!result.ok) {
-          res.status(mutationErrorStatus(result)).json({
-            error: mutationErrorMessage(result),
-            reason: result.reason,
-          });
-          return;
-        }
-        res.json({ user: result.user });
+        const queue = this.queueManager.creatQueueOrReturn(String(userId));
+        queue.addTask(async () => {
+          try {
+            const result = await this.dbService.updateUserRole(userId, role);
+            if (!result.ok) {
+              res.status(mutationErrorStatus(result)).json({
+                error: mutationErrorMessage(result),
+                reason: result.reason,
+              });
+              return;
+            }
+            res.json({ user: result.user });
+          } catch (error) {
+            console.error("Something happened while updating a user role");
+
+            res.status(500).json({
+              error: "Something happened while updating a user role",
+            });
+          }
+        });
       },
     );
 
@@ -559,15 +594,26 @@ export class ExpressServer {
           return;
         }
 
-        const result = await this.dbService.updateUserStatus(userId, active);
-        if (!result.ok) {
-          res.status(mutationErrorStatus(result)).json({
-            error: mutationErrorMessage(result),
-            reason: result.reason,
-          });
-          return;
-        }
-        res.json({ user: result.user });
+        const queue = this.queueManager.creatQueueOrReturn(String(userId));
+        queue.addTask(async () => {
+          try {
+            const result = await this.dbService.updateUserStatus(userId, active);
+            if (!result.ok) {
+              res.status(mutationErrorStatus(result)).json({
+                error: mutationErrorMessage(result),
+                reason: result.reason,
+              });
+              return;
+            }
+            res.json({ user: result.user });
+          } catch (error) {
+            console.error("Something happened while updating a user status");
+
+            res.status(500).json({
+              error: "Something happened while updating a user status",
+            });
+          }
+        });
       },
     );
 
@@ -582,15 +628,27 @@ export class ExpressServer {
           return;
         }
 
-        const result = await this.dbService.deleteUser(userId);
-        if (!result.ok) {
-          res.status(mutationErrorStatus(result)).json({
-            error: mutationErrorMessage(result),
-            reason: result.reason,
-          });
-          return;
-        }
-        res.json({ user: result.user });
+        const queue = this.queueManager.creatQueueOrReturn(String(userId));
+
+        queue.addTask(async () => {
+          try {
+            const result = await this.dbService.deleteUser(userId);
+            if (!result.ok) {
+              res.status(mutationErrorStatus(result)).json({
+                error: mutationErrorMessage(result),
+                reason: result.reason,
+              });
+              return;
+            }
+            res.json({ user: result.user });
+          } catch (error) {
+            console.error("Something happened while deleting a user ");
+
+            res.status(500).json({
+              error: "Something happened while deleting a user ",
+            });
+          }
+        });
       },
     );
 
