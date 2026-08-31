@@ -1,7 +1,7 @@
 import { yCollab } from 'y-codemirror.next';
 import { WebsocketProvider } from 'y-websocket';
 import * as Y from 'yjs';
-import { ActiveRoom } from './collab.types.ts';
+import { ActiveRoom, Backoff } from './collab.types.ts';
 import { initializeOfflinePersistence } from './OfflinePersistence.ts';
 import { CollaborationUser } from './collab.types.ts';
 import { RemotePresence } from './collab.types.ts';
@@ -15,14 +15,8 @@ import {
 	OFFLINE_NAMESPACE_VERSION,
 } from './collab.cons.ts';
 import { getWebSocketBaseUrl, webSocketTicketProtocol } from '../config/ApiConfig.ts';
-
 /** The single collaboration room currently open, or `null` if none is active. Only one room can be open at a time. */
 let activeRoom: ActiveRoom | null = null;
-type backOff = {
-	next: () => number;
-	reset: () => void;
-};
-
 /**
  * Computes the IndexedDB namespace used for offline persistence of a user's documents.
  * Admins share one global namespace (their edits apply to the shared vault); regular
@@ -428,7 +422,7 @@ export function getCurrentCollabRoomPath(): string | null {
 	return activeRoom?.fileName ?? null;
 }
 
-function creatBackoff({ base = 500, max = 30000, jitter = true } = {}): backOff {
+function creatBackoff({ base = 500, max = 30000, jitter = true } = {}): Backoff {
 	let localGeneration = 0;
 	return {
 		next() {

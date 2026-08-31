@@ -17,6 +17,8 @@ build/
 # SQLite databases
 *.sqlite
 *.sqlite3
+*.sqlite-shm
+*.sqlite-wal
 *.db
 *.db-shm
 *.db-wal
