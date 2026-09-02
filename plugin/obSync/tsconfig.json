@@ -14,6 +14,7 @@
 		"isolatedModules": true,
 		"skipLibCheck": true,
 		"noEmit": true,
+		"resolveJsonModule": true,
 		"forceConsistentCasingInFileNames": true,
 		"allowSyntheticDefaultImports": true,
 		"lib": ["ES2021", "DOM"]

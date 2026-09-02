@@ -5,8 +5,11 @@ import { t } from '../i18n/i18n.ts';
 import type { App } from 'obsidian';
 import type { AuthService } from '../auth/AuthService.ts';
 import type { PathMuteRegistry } from '../vault/PathMuteRegistry.ts';
+import { ZipWorker } from '../Workers/ZipWorker.ts';
+import type { ZipWorkerParams } from '../Workers/ZipWorker.ts';
 
 /** Fixed request body sent to the sync-files endpoint (server-side marker, not currently parameterized). */
+
 const payload = {
 	myFlag: true,
 	name: 'obsidian ready to sync',
@@ -18,6 +21,7 @@ const payload = {
  * a vault to the backend (or needs to re-baseline it).
  */
 export class SyncInitialVault {
+	private zipWorker!: ZipWorker;
 	public constructor(
 		private readonly app: App,
 		private readonly auth: AuthService,
@@ -33,10 +37,17 @@ export class SyncInitialVault {
 	 * re-published back to the server. Shows a success or failure Notice.
 	 */
 	public async sync(): Promise<void> {
+		//worker call
+		this.zipWorker = new ZipWorker({
+			app: this.app,
+			path: this.mutedPaths,
+		});
+
 		try {
 			if (!(await this.auth.prepareAuthenticatedRequest())) {
 				throw new Error(t('sync.invalidOrExpiredSession'));
 			}
+
 			const response = await requestUrl({
 				url: `${getApiBaseUrl()}/api/syncfiles`,
 				method: 'POST',
@@ -47,6 +58,7 @@ export class SyncInitialVault {
 			if (response.status !== 200) {
 				throw new Error(t('sync.serverReturnedError', { status: response.status }));
 			}
+
 			const zip = await JSZip.loadAsync(response.arrayBuffer);
 			const adapter = this.app.vault.adapter;
 
