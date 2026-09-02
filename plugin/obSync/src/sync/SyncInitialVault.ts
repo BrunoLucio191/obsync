@@ -5,8 +5,8 @@ import { t } from '../i18n/i18n.ts';
 import type { App } from 'obsidian';
 import type { AuthService } from '../auth/AuthService.ts';
 import type { PathMuteRegistry } from '../vault/PathMuteRegistry.ts';
-import { ZipWorker } from '../Workers/ZipWorker.ts';
-import type { ZipWorkerParams } from '../Workers/ZipWorker.ts';
+import { ZipWorker } from '../Workers/ZipWorkerFather.ts';
+import type { ZipWorkerParams } from '../Workers/ZipWorkerFather.ts';
 
 /** Fixed request body sent to the sync-files endpoint (server-side marker, not currently parameterized). */
 

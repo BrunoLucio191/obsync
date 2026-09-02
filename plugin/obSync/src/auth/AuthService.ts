@@ -14,6 +14,7 @@ import type {
 
 const ACCESS_TOKEN_SECRET_ID = 'obsync-access-token';
 const REFRESH_TOKEN_SECRET_ID = 'obsync-refresh-token';
+const ACCESS_ACTUAL_USER_ID = 'actual-user-id';
 const REFRESH_EARLY_MS = 60_000;
 
 /** Collaborators {@link AuthService} needs, injected instead of imported directly so it stays testable and decoupled from the plugin's own storage/lifecycle. */
@@ -405,6 +406,7 @@ export class AuthService {
 		this.refreshToken = session.refreshToken;
 		this.app.secretStorage.setSecret(ACCESS_TOKEN_SECRET_ID, this.accessToken);
 		this.app.secretStorage.setSecret(REFRESH_TOKEN_SECRET_ID, this.refreshToken);
+		this.app.secretStorage.setSecret(ACCESS_ACTUAL_USER_ID, this.clientId);
 
 		const config = this.getConfig();
 		config.accessTokenExpiresAt = Date.now() + session.expiresIn * 1_000;
@@ -443,6 +445,7 @@ export class AuthService {
 		this.refreshToken = '';
 		this.app.secretStorage.setSecret(ACCESS_TOKEN_SECRET_ID, '');
 		this.app.secretStorage.setSecret(REFRESH_TOKEN_SECRET_ID, '');
+		this.app.secretStorage.setSecret(ACCESS_ACTUAL_USER_ID, '');
 
 		if (this.accessRefreshTimer !== null) {
 			window.clearTimeout(this.accessRefreshTimer);
@@ -540,5 +543,15 @@ export class AuthService {
 			left?.role !== right?.role ||
 			left?.active !== right?.active
 		);
+	}
+	static headers() {
+		const accesTokenUtil = new App().secretStorage.getSecret(ACCESS_TOKEN_SECRET_ID) ?? '';
+		const accessUserID = new App().secretStorage.getSecret(ACCESS_ACTUAL_USER_ID) ?? '';
+
+		return {
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${accesTokenUtil}`,
+			'X-ObSync-Client': accessUserID,
+		};
 	}
 }
