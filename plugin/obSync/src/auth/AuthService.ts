@@ -12,9 +12,10 @@ import type {
 	WebSocketTicket,
 } from './auth.types.ts';
 
-const ACCESS_TOKEN_SECRET_ID = 'obsync-access-token';
+export const ACCESS_TOKEN_SECRET_ID = 'obsync-access-token';
 const REFRESH_TOKEN_SECRET_ID = 'obsync-refresh-token';
-const ACCESS_ACTUAL_USER_ID = 'actual-user-id';
+export const ACCESS_ACTUAL_USER_ID = 'actual-user-id';
+export const ACCESS_ACTUAL_USER_ROlE = 'actual-user-role';
 const REFRESH_EARLY_MS = 60_000;
 
 /** Collaborators {@link AuthService} needs, injected instead of imported directly so it stays testable and decoupled from the plugin's own storage/lifecycle. */
@@ -36,6 +37,7 @@ type AuthServiceDependencies = {
  * changes.
  */
 export class AuthService {
+	private static readonly appUtil = new App();
 	private readonly app: App;
 	private readonly getConfig: () => ObSyncConfig;
 	private readonly saveConfig: () => Promise<void>;
@@ -408,6 +410,10 @@ export class AuthService {
 		this.app.secretStorage.setSecret(REFRESH_TOKEN_SECRET_ID, this.refreshToken);
 		this.app.secretStorage.setSecret(ACCESS_ACTUAL_USER_ID, this.clientId);
 
+		if (this.isAuthenticated()) {
+			this.app.secretStorage.setSecret(ACCESS_ACTUAL_USER_ROlE, this.user!.role);
+		}
+
 		const config = this.getConfig();
 		config.accessTokenExpiresAt = Date.now() + session.expiresIn * 1_000;
 		config.user = session.user;
@@ -446,6 +452,7 @@ export class AuthService {
 		this.app.secretStorage.setSecret(ACCESS_TOKEN_SECRET_ID, '');
 		this.app.secretStorage.setSecret(REFRESH_TOKEN_SECRET_ID, '');
 		this.app.secretStorage.setSecret(ACCESS_ACTUAL_USER_ID, '');
+		this.app.secretStorage.setSecret(ACCESS_ACTUAL_USER_ROlE, this.user!.role);
 
 		if (this.accessRefreshTimer !== null) {
 			window.clearTimeout(this.accessRefreshTimer);
@@ -544,14 +551,17 @@ export class AuthService {
 			left?.active !== right?.active
 		);
 	}
-	static headers() {
-		const accesTokenUtil = new App().secretStorage.getSecret(ACCESS_TOKEN_SECRET_ID) ?? '';
-		const accessUserID = new App().secretStorage.getSecret(ACCESS_ACTUAL_USER_ID) ?? '';
-
+	static headersUtil(): Record<string, string> {
+		const accesTokenUtil = this.appUtil.secretStorage.getSecret(ACCESS_TOKEN_SECRET_ID) ?? '';
+		const accessUserID = this.appUtil.secretStorage.getSecret(ACCESS_ACTUAL_USER_ID) ?? '';
 		return {
 			'Content-Type': 'application/json',
 			Authorization: `Bearer ${accesTokenUtil}`,
 			'X-ObSync-Client': accessUserID,
 		};
+	}
+	static userClassUtil(): string {
+		const role = this.appUtil.secretStorage.getSecret(ACCESS_ACTUAL_USER_ROlE) ?? '';
+		return role;
 	}
 }

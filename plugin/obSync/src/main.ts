@@ -16,7 +16,7 @@ import { SyncVaultChanges } from './sync/SyncVaultChanges.ts';
 import type { AuthenticatedUser, UserActionResult, UserRole } from './auth/auth.types.ts';
 import { PathMuteRegistry } from './vault/PathMuteRegistry.ts';
 import { RemoteVaultChangeService } from './vault/RemoteVaultChangeService.ts';
-
+import { WorkerFather } from './Workers/WorkerFather.ts';
 /**
  * ObSync's Obsidian plugin entry point. Wires together authentication,
  * collaborative editing, and vault-change synchronization, and exposes the
@@ -27,6 +27,7 @@ type StorageConfig = (Partial<ObSyncConfig> & { token?: unknown }) | null;
 
 export default class ObSync extends Plugin {
 	public config!: ObSyncConfig;
+	static obsyncApp: ObSync;
 	private auth!: AuthService;
 	private userAdmin!: UserAdminService;
 	private collaboration!: CollaborationController;
@@ -35,6 +36,7 @@ export default class ObSync extends Plugin {
 	private systemChannel!: SystemChannel;
 	private initialVaultSync!: SyncInitialVault;
 	private vaultChangeSync!: SyncVaultChanges;
+	private workerFather!: WorkerFather;
 	private settingTab: ObSyncSettingTab | null = null;
 	private synchronizationStarted = false;
 
@@ -45,6 +47,7 @@ export default class ObSync extends Plugin {
 	 * is ready.
 	 */
 	public async onload(): Promise<void> {
+		ObSync.obsyncApp = this;
 		initI18n();
 		await this.loadSettings();
 		try {
@@ -335,5 +338,8 @@ export default class ObSync extends Plugin {
 
 	private async saveSettings(): Promise<void> {
 		await this.saveData(this.config);
+	}
+	static sameAppIntance() {
+		return ObSync.obsyncApp;
 	}
 }
