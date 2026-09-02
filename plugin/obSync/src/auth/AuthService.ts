@@ -47,7 +47,7 @@ export class AuthService {
 	private refreshPromise: Promise<boolean> | null = null;
 
 	/** Unique id for this plugin instance, sent to the backend to distinguish this client's own**
-	 * broadcasted changes from other clients'. */
+	 * broadcasted changes from other clients. */
 	public readonly clientId = crypto.randomUUID();
 
 	/**
