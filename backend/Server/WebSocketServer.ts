@@ -23,13 +23,10 @@ const TICKET_PROTOCOL_PREFIX = "obsync-ticket.";
 export class WebSocketServer {
   public readonly wssSystem: WsServer;
   public readonly wssYjs: WsServer;
-  /** Emitter for cross-cutting DB events (currently used for authorization-changed notifications). */
   private readonly event;
   private readonly tokenService: TokenService;
   private readonly collaborationServer: YjsCollaborationServer;
-  /** Maps each live socket to the authorization it was upgraded with. */
   private readonly authenticatedConnections = new Map<WebSocket, WebSocketAuthorization>();
-  /** Tracks which sockets have responded to the most recent heartbeat ping. */
   private readonly aliveConnections = new WeakSet<WebSocket>();
   private readonly unsubscribeAuthorizationChanges: () => void;
   private readonly unsubscribeSessionRevocations: () => void;
@@ -47,7 +44,7 @@ export class WebSocketServer {
    * @param trustProxy - When `true`, trusts `X-Forwarded-Proto` to determine if a proxied request is secure.
    * @param collaborationServer - Handles the actual Yjs protocol traffic for `/yjs` connections.
    */
-  public constructor(
+  constructor(
     server: Server,
     tokenService: TokenService,
     requireTls: boolean,

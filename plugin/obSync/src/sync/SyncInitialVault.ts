@@ -1,18 +1,15 @@
-import { requestUrl, Notice } from 'obsidian';
-import { getApiBaseUrl } from '../config/ApiConfig.ts';
-import JSZip from 'jszip';
-import { t } from '../i18n/i18n.ts';
 import type { App } from 'obsidian';
 import { AuthService } from '../auth/AuthService.ts';
 import type { PathMuteRegistry } from '../vault/PathMuteRegistry.ts';
 import { ZipWorkerSon } from '../Workers/zipWorker/ZipWorkerSon.ts';
+import { Boss } from '../Workers/Boss.ts';
 /**
  * Performs the one-time bulk sync that downloads the remote vault as a zip and
  * writes it into the local Obsidian vault, used when the plugin first connects
  * a vault to the backend (or needs to re-baseline it).
  */
 export class SyncInitialVault {
-	private zipWorkerSon!: ZipWorkerSon;
+	private boss!: Boss;
 	constructor(
 		private readonly app: App,
 		private readonly auth: AuthService,
@@ -28,8 +25,7 @@ export class SyncInitialVault {
 	 * re-published back to the server. Shows a success or failure Notice.
 	 */
 	public async sync(): Promise<void> {
-		//worker call
-		this.zipWorkerSon = new ZipWorkerSon(this.app, this.mutedPaths, this.auth);
-		await this.zipWorkerSon.startWorking();
+		this.boss = new Boss(new ZipWorkerSon(this.app, this.mutedPaths, this.auth));
+		await this.boss.startWorking();
 	}
 }

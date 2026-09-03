@@ -18,8 +18,6 @@ export class BackendConnectionSection {
 	}
 
 	public definition(): SettingDefinitionGroup {
-		const canEdit = true;
-
 		return {
 			type: 'group',
 			heading: t('settings.backend.heading'),
@@ -33,8 +31,6 @@ export class BackendConnectionSection {
 								.setValue(this.url)
 								.onChange((value) => (this.url = value));
 						});
-
-						if (!canEdit) return;
 
 						setting.addButton((button) =>
 							button
@@ -51,7 +47,7 @@ export class BackendConnectionSection {
 									}
 
 									new Notice(t('settings.backend.saved'));
-									this.refresh();
+									window.setTimeout(() => this.refresh(), 1);
 								}),
 						);
 					},

@@ -19,15 +19,10 @@ export class YjsRoom {
   public readonly awareness: awarenessProtocol.Awareness;
   public readonly connections = new Map<WebSocket, YjsConnectionState>();
   public readonly awarenessOwners = new Map<number, WebSocket>();
-  /** Resolves once persistence has finished binding state and listeners are attached; awaited before serving traffic. */
   public ready: Promise<void> = Promise.resolve();
-  /** Chained promise used to process incoming messages for this room strictly in order. */
   public messageQueue: Promise<void> = Promise.resolve();
-  /** Count of messages currently queued/in-flight, used to enforce {@link MAX_PENDING_MESSAGES_PER_DOCUMENT}. */
   public pendingMessages = 0;
-  /** Count of in-progress "reserve" calls (registry lookups that haven't yet attached a connection), keeping the room alive during setup races. */
   public reservations = 1;
-  /** Set while the room is being torn down (flushed and destroyed); non-null blocks new reservations. */
   public closingPromise: Promise<void> | null = null;
 
   /** Guards {@link attachListeners} so document/awareness listeners are only wired once per room. */

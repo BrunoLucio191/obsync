@@ -12,13 +12,9 @@ const MARKDOWN_HYDRATION_ORIGIN = Symbol("markdown-bootstrap");
 type DocumentWriteState = {
   readonly fileName: string;
   readonly ydoc: Y.Doc;
-  /** Update listener currently attached to `ydoc`; kept so it can be detached later. */
   onUpdate: (update: Uint8Array, origin: unknown) => void;
-  /** Set whenever the document changes since the last successful flush; cleared once written. */
   dirty: boolean;
-  /** The in-flight flush promise, if a write is currently happening, used to serialize writes. */
   writing: Promise<void> | null;
-  /** Monotonic counter incremented on every update, mostly useful for debugging/tracing. */
   revision: number;
 };
 
@@ -152,10 +148,7 @@ export class YjsPersistence {
    * @param oldPath - Previous vault-relative path.
    * @param newPath - New vault-relative path.
    */
-  public async renameStatePath(
-    oldPath: string,
-    newPath: string,
-  ): Promise<void> {
+  public async renameStatePath(oldPath: string, newPath: string): Promise<void> {
     const normalizedOld = this.normalizeRelativePath(oldPath);
     const normalizedNew = this.normalizeRelativePath(newPath);
 
@@ -176,10 +169,7 @@ export class YjsPersistence {
   }
 
   /** Seeds a brand-new (empty) Yjs document from its existing markdown file, if one exists on disk. */
-  private async bootstrapFromMarkdown(
-    fileName: string,
-    ydoc: Y.Doc,
-  ): Promise<void> {
+  private async bootstrapFromMarkdown(fileName: string, ydoc: Y.Doc): Promise<void> {
     const fullPath = this.resolveVaultPath(fileName);
 
     try {
@@ -211,11 +201,7 @@ export class YjsPersistence {
         throw new Error(`Empty or corrupted Yjs state: ${statePath}`);
       }
 
-      const state = new Uint8Array(
-        buffer.buffer,
-        buffer.byteOffset,
-        buffer.byteLength,
-      );
+      const state = new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
 
       return state;
     } catch (error) {
@@ -290,18 +276,12 @@ export class YjsPersistence {
   }
 
   /** Writes a document's binary Yjs state to its state file. */
-  private async writeBinaryState(
-    fileName: string,
-    binaryState: Uint8Array,
-  ): Promise<void> {
+  private async writeBinaryState(fileName: string, binaryState: Uint8Array): Promise<void> {
     await this.atomicWrite(this.resolveStateFilePath(fileName), binaryState);
   }
 
   /** Writes a document's plain-text content to its markdown mirror file. */
-  private async writeMarkdown(
-    fileName: string,
-    content: string,
-  ): Promise<void> {
+  private async writeMarkdown(fileName: string, content: string): Promise<void> {
     await this.atomicWrite(this.resolveVaultPath(fileName), content);
   }
 
@@ -311,10 +291,7 @@ export class YjsPersistence {
    * @param destination - Final absolute path to write to.
    * @param data - Content to write.
    */
-  private async atomicWrite(
-    destination: string,
-    data: string | Uint8Array,
-  ): Promise<void> {
+  private async atomicWrite(destination: string, data: string | Uint8Array): Promise<void> {
     await fsPromises.mkdir(path.dirname(destination), { recursive: true });
 
     const temporaryPath = `${destination}.${process.pid}.${randomUUID()}.tmp`;
@@ -323,9 +300,7 @@ export class YjsPersistence {
       await fsPromises.writeFile(temporaryPath, data);
       await fsPromises.rename(temporaryPath, destination);
     } finally {
-      await fsPromises
-        .rm(temporaryPath, { force: true })
-        .catch(() => undefined);
+      await fsPromises.rm(temporaryPath, { force: true }).catch(() => undefined);
     }
   }
 
@@ -335,10 +310,7 @@ export class YjsPersistence {
 
   /** Resolves a document's binary state file path (with the `.yjs-state` extension) inside `stateRoot`. */
   private resolveStateFilePath(relativePath: string): string {
-    return this.resolveInsideRoot(
-      this.stateRoot,
-      `${relativePath}${BINARY_STATE_EXTENSION}`,
-    );
+    return this.resolveInsideRoot(this.stateRoot, `${relativePath}${BINARY_STATE_EXTENSION}`);
   }
 
   private resolveStateDirectoryPath(relativePath: string): string {
@@ -357,9 +329,7 @@ export class YjsPersistence {
     const fullPath = path.resolve(root, normalized);
 
     if (!fullPath.startsWith(`${root}${path.sep}`)) {
-      throw new Error(
-        "The Yjs document must be inside the allowed directory.",
-      );
+      throw new Error("The Yjs document must be inside the allowed directory.");
     }
 
     return fullPath;

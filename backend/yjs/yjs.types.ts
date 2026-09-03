@@ -38,13 +38,9 @@ export type YjsPersistenceAdapter = {
 
 /** Identity of a user resolved from the authenticated WebSocket handshake, before a room-specific session is created. */
 export type YjsAuthenticatedConnection = {
-  /** Numeric database id of the authenticated user. */
   readonly userId: number;
-  /** Display name of the authenticated user. */
   readonly userName: string;
-  /** Email of the authenticated user; also used as the awareness presence identity. */
   readonly userEmail: string;
-  /** Authorization role, used to gate write access to shared documents. */
   readonly userRole: "admin" | "user";
 };
 
@@ -54,19 +50,14 @@ export type YjsConnectionState = {
   readonly controlledAwarenessIds: Set<number>;
   /** Normalized presence identity (lowercased email) this connection is authorized to broadcast awareness as. */
   readonly authenticatedPresenceId: string;
-  /** Numeric database id of the connection's authenticated user. */
   readonly userId: number;
-  /** Authorization role of the connection's authenticated user. */
   readonly userRole: "admin" | "user";
-  /** Whether this connection is allowed to apply document updates (currently true only for admins). */
   readonly canWriteGlobal: boolean;
-  /** Set once the connection has been released, to short-circuit any messages still in flight. */
   closed: boolean;
 };
 
 /** A single decoded entry from a `y-protocols/awareness` update payload. */
 export type YjsAwarenessEntry = {
-  /** Yjs awareness client id the entry belongs to. */
   readonly clientId: number;
   /** Logical clock of the entry, used by the awareness protocol to order updates. */
   readonly clock: number;
@@ -76,8 +67,6 @@ export type YjsAwarenessEntry = {
 
 /** Result of resolving a WebSocket upgrade request's URL into a concrete document/room identity. */
 export type YjsDocumentIdentity = {
-  /** URI-encoded form of `filePath`, used as the room registry key and persistence storage key. */
   readonly docName: string;
-  /** Normalized vault-relative file path the document represents. */
   readonly filePath: string;
 };

@@ -16,7 +16,6 @@ import { SyncVaultChanges } from './sync/SyncVaultChanges.ts';
 import type { AuthenticatedUser, UserActionResult, UserRole } from './auth/auth.types.ts';
 import { PathMuteRegistry } from './vault/PathMuteRegistry.ts';
 import { RemoteVaultChangeService } from './vault/RemoteVaultChangeService.ts';
-import { WorkerFather } from './Workers/WorkerFather.ts';
 /**
  * ObSync's Obsidian plugin entry point. Wires together authentication,
  * collaborative editing, and vault-change synchronization, and exposes the
@@ -36,7 +35,6 @@ export default class ObSync extends Plugin {
 	private systemChannel!: SystemChannel;
 	private initialVaultSync!: SyncInitialVault;
 	private vaultChangeSync!: SyncVaultChanges;
-	private workerFather!: WorkerFather;
 	private settingTab: ObSyncSettingTab | null = null;
 	private synchronizationStarted = false;
 

@@ -15,11 +15,9 @@ const events = new EventEmitter();
  * the "authorization-changed" event.
  */
 export function dbEvents() {
-
   return {
     /**
      * Subscribes to authorization changes for any user.
-     *
      * @param listener - Callback invoked with the affected user's id.
      * @returns An unsubscribe function that removes the listener.
      */
@@ -30,7 +28,6 @@ export function dbEvents() {
     /**
      * Notifies subscribers that a user's authorization (role or active
      * status) has changed.
-     *
      * @param userId - id of the user whose authorization changed.
      */
     emitAuthorizationChanged(userId: number): void {

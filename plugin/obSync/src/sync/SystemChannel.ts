@@ -4,9 +4,6 @@ import type { AuthService } from '../auth/AuthService.ts';
 import type { RemoteVaultChangeService } from '../vault/RemoteVaultChangeService.ts';
 import type { VaultChange } from '../vault/VaultChange.ts';
 
-/** Delay (ms) before retrying a dropped or failed system-channel connection. */
-//const RECONNECT_DELAY_MS = 1_000;
-
 /**
  * Maintains a persistent websocket to the backend's `/system` channel, which
  * broadcasts vault changes (create/delete/modify/rename) made by other
@@ -17,6 +14,7 @@ type backOff = {
 	next: () => number;
 	reset: () => void;
 };
+
 export class SystemChannel {
 	private socket: WebSocket | null = null;
 	private reconnectTimer: number | null = null;
@@ -119,6 +117,7 @@ export class SystemChannel {
 		if (socket) socket.close();
 		this.reconnectDelayMs.reset();
 	}
+
 	/** Creates a backoff that increases after a reconnection */
 	private creatBackoff({ base = 500, max = 30000, jitter = true } = {}): backOff {
 		let localGeneration = this.generation;

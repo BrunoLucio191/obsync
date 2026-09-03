@@ -1,6 +1,8 @@
 import {
 	App,
 	PluginSettingTab,
+	SettingDefinitionGroup,
+	SettingDefinitionPage,
 	type Plugin,
 	type SettingDefinitionItem,
 } from 'obsidian';
@@ -31,36 +33,32 @@ export class ObSyncSettingTab extends PluginSettingTab {
 		const refresh = (): void => this.update();
 		this.backend = new BackendConnectionSection(controller, refresh);
 		this.users = new UserManagementSection(controller, refresh);
-		this.account = new AccountSettingsSection(
-			controller,
-			this.users,
-			refresh,
-		);
+		this.account = new AccountSettingsSection(controller, this.users, refresh);
 	}
 
 	/** @returns The setting groups for the current state: backend-only, disconnected, or authenticated. */
 	public getSettingDefinitions(): SettingDefinitionItem[] {
 		const backendSection = this.backend.definition();
+		const configured = isApiEndpointConfigured();
+		const currentUser = configured ? this.controller.config.user : null;
+		const authenticated = configured && !!currentUser && this.controller.isAuthenticated();
 
-		// The login button needs a configured backend to talk to; without one,
-		// attempting to sign in would just fail with a confusing error.
-		if (!isApiEndpointConfigured()) {
-			return [backendSection];
-		}
+		let accountSection: SettingDefinitionGroup;
 
-		const currentUser = this.controller.config.user;
-		if (!currentUser || !this.controller.isAuthenticated()) {
-			return [backendSection, this.disconnectedDefinition()];
+		if (!configured) {
+			accountSection = { type: 'group', visible: false };
+		} else if (!authenticated || !currentUser) {
+			accountSection = this.disconnectedDefinition();
+		} else {
+			accountSection = this.account.definition(currentUser);
 		}
-
-		const definitions: SettingDefinitionItem[] = [
-			backendSection,
-			this.account.definition(currentUser),
-		];
-		if (currentUser.role === 'admin') {
-			definitions.push(...this.users.definitions());
-		}
-		return definitions;
+		const usersPage: SettingDefinitionPage = {
+			type: 'page',
+			name: t('settings.users.heading'),
+			visible: authenticated && currentUser?.role === 'admin',
+			items: this.users.definitions(),
+		};
+		return [backendSection, accountSection, usersPage];
 	}
 
 	/** Obsidian lifecycle hook: tears down the user-management section's pending timers/state when the tab closes. */
@@ -68,7 +66,7 @@ export class ObSyncSettingTab extends PluginSettingTab {
 		this.users.destroy();
 	}
 
-	private disconnectedDefinition(): SettingDefinitionItem {
+	private disconnectedDefinition(): SettingDefinitionGroup {
 		return {
 			type: 'group',
 			heading: t('settings.account.heading'),

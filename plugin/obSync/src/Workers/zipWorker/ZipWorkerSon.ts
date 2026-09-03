@@ -6,6 +6,12 @@ import { getApiBaseUrl } from '../../config/ApiConfig.ts';
 import zipWorkerSource from './zip.worker.generated.ts';
 import { ZipWorkerMessage } from './zip.worker.ts';
 
+/**
+ * Fetches the remote vault zip on the main thread (the only place with
+ * access to the Obsidian API), hands the raw bytes off to a real Worker to
+ * unzip off the main thread, then writes the extracted entries back into the
+ * vault once the worker reports its result.
+ */
 export class ZipWorkerSon {
 	private zipWoker!: Worker;
 	constructor(
@@ -36,8 +42,10 @@ export class ZipWorkerSon {
 		}
 		const blob = new Blob([zipWorkerSource], { type: 'application/javascript' });
 		this.zipWoker = new Worker(URL.createObjectURL(blob));
-		this.zipWoker.onmessage = (event: MessageEvent<ZipWorkerMessage>) =>
+
+		this.zipWoker.onmessage = (event: MessageEvent<ZipWorkerMessage>) => {
 			void this.handleZipResult(event.data);
+		};
 		this.zipWoker.onerror = (event) => {
 			console.error(t('sync.initialSyncError'), event.error ?? event.message);
 			new Notice(t('sync.initialSyncFailed'));
@@ -46,6 +54,14 @@ export class ZipWorkerSon {
 		const zipData = response.arrayBuffer;
 		this.zipWoker.postMessage(zipData, [zipData]);
 	}
+
+	/**
+	 * Handles the worker's result: on success, writes every extracted entry into the
+	 * vault (creating parent folders as needed), muting each path first so the
+	 * resulting vault events aren't re-published back to the server. Admins always get
+	 * the latest file content; non-admins only get files that don't already exist
+	 * locally, so local-only content survives for read-only users.
+	 */
 	private async handleZipResult(message: ZipWorkerMessage) {
 		this.zipWoker.terminate();
 

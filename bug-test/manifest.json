@@ -1,0 +1,9 @@
+{
+	"id": "bug-test",
+	"name": "Declarative Settings Repro",
+	"version": "1.0.0",
+	"minAppVersion": "1.13.0",
+	"description": "Minimal repro: does getSettingDefinitions() returning a different number of groups after update() crash Obsidian's settings renderer?",
+	"author": "obSync debugging",
+	"isDesktopOnly": true
+}
