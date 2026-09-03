@@ -18,5 +18,8 @@ main.js
 # obsidian
 data.json
 
+# generated at build time by esbuild.config.mjs (see worker bundling)
+src/Workers/zipWorker/zip.worker.generated.ts
+
 # Exclude macOS Finder (System Explorer) View States
 .DS_Store

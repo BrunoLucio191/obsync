@@ -5,21 +5,14 @@ import { t } from '../i18n/i18n.ts';
 import type { App } from 'obsidian';
 import { AuthService } from '../auth/AuthService.ts';
 import type { PathMuteRegistry } from '../vault/PathMuteRegistry.ts';
-import { WorkerFather } from '../Workers/WorkerFather.ts';
-
-/** Fixed request body sent to the sync-files endpoint (server-side marker, not currently parameterized). */
-const payload = {
-	myFlag: true,
-	name: 'obsidian ready to sync',
-};
-
+import { ZipWorkerSon } from '../Workers/zipWorker/ZipWorkerSon.ts';
 /**
  * Performs the one-time bulk sync that downloads the remote vault as a zip and
  * writes it into the local Obsidian vault, used when the plugin first connects
  * a vault to the backend (or needs to re-baseline it).
  */
 export class SyncInitialVault {
-	private workerFather!: WorkerFather;
+	private zipWorkerSon!: ZipWorkerSon;
 	constructor(
 		private readonly app: App,
 		private readonly auth: AuthService,
@@ -36,57 +29,7 @@ export class SyncInitialVault {
 	 */
 	public async sync(): Promise<void> {
 		//worker call
-		this.workerFather = new WorkerFather(this.app, this.mutedPaths, this.auth);
-		this.workerFather.startWorking();
-
-		try {
-			if (!(await this.auth.prepareAuthenticatedRequest())) {
-				throw new Error(t('sync.invalidOrExpiredSession'));
-			}
-
-			const response = await requestUrl({
-				url: `${getApiBaseUrl()}/api/syncfiles`,
-				method: 'POST',
-				headers: this.auth.headers(),
-				body: JSON.stringify(payload),
-			});
-
-			if (response.status !== 200) {
-				throw new Error(t('sync.serverReturnedError', { status: response.status }));
-			}
-
-			const zip = await JSZip.loadAsync(response.arrayBuffer);
-			const adapter = this.app.vault.adapter;
-
-			for (const relativePath of Object.keys(zip.files)) {
-				//entry is the obj value for the respect key relativepath
-				const entry = zip.files[relativePath];
-				if (!entry) continue;
-
-				if (entry.dir) {
-					if (!(await adapter.exists(relativePath))) {
-						this.mutedPaths.mute(relativePath);
-						await adapter.mkdir(relativePath);
-					}
-				} else {
-					const content = await entry.async('arraybuffer');
-					const parentPath = relativePath.substring(0, relativePath.lastIndexOf('/'));
-
-					if (parentPath && !(await adapter.exists(parentPath))) {
-						this.mutedPaths.mute(parentPath);
-						await adapter.mkdir(parentPath);
-					}
-					//TODO: fix implementation for non admin deals with files that has changed;
-					if (this.auth.isAdmin() || !(await adapter.exists(relativePath))) {
-						this.mutedPaths.mute(relativePath);
-						await adapter.writeBinary(relativePath, content);
-					}
-				}
-			}
-			new Notice(t('sync.initialSyncComplete'));
-		} catch (error) {
-			console.error(t('sync.initialSyncError'), error);
-			new Notice(t('sync.initialSyncFailed'));
-		}
+		this.zipWorkerSon = new ZipWorkerSon(this.app, this.mutedPaths, this.auth);
+		await this.zipWorkerSon.startWorking();
 	}
 }
