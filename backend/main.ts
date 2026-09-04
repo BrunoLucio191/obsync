@@ -1,5 +1,5 @@
 import "./env.ts";
-import { ExpressServer } from "./Server/ExpressServer.ts";
+import { ExpressServer } from "./Server/ExpressServer/ExpressServer.ts";
 import { WebSocketServer } from "./Server/WebSocketServer.ts";
 import { DBServices } from "./users/DBServices.ts";
 import { TokenService } from "./auth/TokenService.ts";
@@ -18,6 +18,7 @@ import { QueueManager } from "./queue/QueueManager.ts";
  * @throws {Error} If configuration loading or any service/server
  * initialization fails.
  */
+
 const main = () => {
   const config = loadServerConfig();
   const userDB = openUserDatabase(systemPaths.usersDatabase);

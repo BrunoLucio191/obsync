@@ -33,6 +33,25 @@ export class SyncVaultChanges {
 						? await this.plugin.app.vault.read(file)
 						: null;
 
+				let imageBuffer: ArrayBuffer = new ArrayBuffer(0);
+
+				if (file instanceof TFile) {
+					const fileExtension = file.extension;
+					switch (fileExtension) {
+						case 'jpg':
+						case 'jpeg':
+						case 'gif':
+						case 'png':
+						case 'webp':
+							imageBuffer = await this.plugin.app.vault.readBinary(file);
+					}
+				}
+				const binary = imageBuffer.byteLength > 0;
+
+				if (binary) {
+					//TODO: add sync for images and other type of files
+				}
+
 				await requestUrl({
 					url: `${getApiBaseUrl()}/sync/create`,
 					method: 'POST',
@@ -93,10 +112,7 @@ export class SyncVaultChanges {
 
 				if (
 					this.collaboration.currentPath &&
-					PathMuteRegistry.contains(
-						oldPath,
-						this.collaboration.currentPath,
-					)
+					PathMuteRegistry.contains(oldPath, this.collaboration.currentPath)
 				) {
 					this.collaboration.scheduleActiveRoomSync();
 				}

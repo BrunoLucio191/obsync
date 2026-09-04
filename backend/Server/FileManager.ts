@@ -59,10 +59,7 @@ export class FileManager {
    * @param filePath - Vault-relative path of the file to write.
    * @param content - Text content to write.
    */
-  public async createOrModifyFile(
-    filePath: string,
-    content: string,
-  ): Promise<void> {
+  public async createOrModifyFile(filePath: string, content: any): Promise<void> {
     const fullPath = this.resolveVaultPath(filePath);
     const dirName = path.dirname(fullPath);
 

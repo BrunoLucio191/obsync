@@ -40,12 +40,16 @@ export class ZipWorkerSon {
 			new Notice(t('sync.initialSyncFailed'));
 			return;
 		}
+
 		const blob = new Blob([zipWorkerSource], { type: 'application/javascript' });
 		this.zipWoker = new Worker(URL.createObjectURL(blob));
 
-		this.zipWoker.onmessage = (event: MessageEvent<ZipWorkerMessage>) => {
-			void this.handleZipResult(event.data);
-		};
+		this.app.workspace.onLayoutReady(() => {
+			this.zipWoker.onmessage = (event: MessageEvent<ZipWorkerMessage>) => {
+				void this.handleZipResult(event.data);
+			};
+		});
+
 		this.zipWoker.onerror = (event) => {
 			console.error(t('sync.initialSyncError'), event.error ?? event.message);
 			new Notice(t('sync.initialSyncFailed'));

@@ -91,6 +91,13 @@ export class AuthService {
 		};
 	}
 
+	public Authheaders(): Record<string, string> {
+		return {
+			Authorization: `Bearer ${this.accessToken}`,
+			'X-ObSync-Client': this.clientId,
+		};
+	}
+
 	/**
 	 * Ensures the access token is valid (refreshing it if close to expiry)
 	 * before an authenticated request is made.

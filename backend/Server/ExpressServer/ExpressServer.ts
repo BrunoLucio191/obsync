@@ -2,73 +2,18 @@ import express, { type Express, type NextFunction, type Request, type Response }
 import { type Server } from "node:http";
 import { createServer } from "node:http";
 import fs from "node:fs/promises";
-import { systemPaths } from "../paths.ts";
-import type {
-  AuthenticatedUser,
-  UserMutationResult,
-  UserRole,
-  WebSocketChannel,
-} from "../auth/auth.types.ts";
-import { LoginRateLimiter } from "../auth/LoginRateLimiter.ts";
-import { publishVaultChange } from "../syncEvents.ts";
-import type { YjsCollaborationServer as YjsCollaborationGateway } from "../yjs/YjsCollaborationServer.ts";
-import { FileManager } from "./FileManager.ts";
-import { AuthService } from "../auth/authService.ts";
-import type { TokenService } from "../auth/TokenService.ts";
-import type { DBServices } from "../users/DBServices.ts";
-import type { QueueManager } from "../queue/QueueManager.ts";
-
-/**
- * Maps a failed {@link UserMutationResult} to the appropriate HTTP status code.
- * @param result - The mutation result to inspect.
- * @returns `200` if `result.ok` is `true`, otherwise a status code matching `result.reason`.
- */
-function mutationErrorStatus(result: UserMutationResult): number {
-  if (result.ok) return 200;
-
-  switch (result.reason) {
-    case "not_found":
-      return 404;
-
-    case "last_admin":
-      return 409;
-
-    case "invalid_role":
-      return 400;
-
-    case "name_exists":
-      return 409;
-
-    case "invalid_current_password":
-      return 401;
-  }
-}
-
-/**
- * Maps a failed {@link UserMutationResult} to a human-readable error message.
- * @param result - The mutation result to inspect.
- * @returns An empty string if `result.ok` is `true`, otherwise a message describing `result.reason`.
- */
-function mutationErrorMessage(result: UserMutationResult): string {
-  if (result.ok) return "";
-
-  switch (result.reason) {
-    case "not_found":
-      return "User not found.";
-
-    case "last_admin":
-      return "This operation would leave the platform without an active administrator.";
-
-    case "invalid_role":
-      return "Invalid user role.";
-
-    case "name_exists":
-      return "A user with that name already exists.";
-
-    case "invalid_current_password":
-      return "Incorrect current password.";
-  }
-}
+import { systemPaths } from "../../paths.ts";
+import type { AuthenticatedUser, UserRole, WebSocketChannel } from "../../auth/auth.types.ts";
+import { LoginRateLimiter } from "../../auth/LoginRateLimiter.ts";
+import { publishVaultChange } from "../../syncEvents.ts";
+import type { YjsCollaborationServer as YjsCollaborationGateway } from "../../yjs/YjsCollaborationServer.ts";
+import { FileManager } from "../FileManager.ts";
+import { AuthService } from "../../auth/authService.ts";
+import type { TokenService } from "../../auth/TokenService.ts";
+import type { DBServices } from "../../users/DBServices.ts";
+import type { QueueManager } from "../../queue/QueueManager.ts";
+import { mutationErrorMessage, mutationErrorStatus } from "./mutationFunctions.ts";
+import { RouteAuth } from "./routes/route.auth.ts";
 
 /** Constructor options for {@link ExpressServer}. */
 type ExpressServerConstructorOptions = {
@@ -103,16 +48,8 @@ export class ExpressServer {
   private readonly tokenService: TokenService;
   private readonly authService: AuthService;
   private readonly collaborationServer: YjsCollaborationGateway;
-  private readonly accountLoginRateLimiter = new LoginRateLimiter({
-    maxFailedAttempts: 5,
-  });
-  private readonly ipLoginRateLimiter = new LoginRateLimiter({
-    maxFailedAttempts: 25,
-  });
-  private readonly passwordChangeRateLimiter = new LoginRateLimiter({
-    maxFailedAttempts: 5,
-  });
   private readonly queueManager: QueueManager;
+  private routeAuth: RouteAuth;
 
   /**
    * Creates the Express app and underlying HTTP server, then wires up middleware and routes.
@@ -143,6 +80,20 @@ export class ExpressServer {
     this.authService = authService;
     this.collaborationServer = collaborationServer;
     this.queueManager = queueManager;
+    this.routeAuth = new RouteAuth(
+      new LoginRateLimiter({
+        maxFailedAttempts: 5,
+      }),
+      new LoginRateLimiter({
+        maxFailedAttempts: 25,
+      }),
+      new LoginRateLimiter({
+        maxFailedAttempts: 5,
+      }),
+      this.tokenService,
+      this.authService,
+      this.dbService,
+    );
     this.initializeMiddleware();
     this.initializeRoutes();
   }
@@ -164,6 +115,7 @@ export class ExpressServer {
       res.setHeader("Cache-Control", "no-store");
       next();
     });
+    this.app.use("/auth", this.routeAuth.router);
   }
 
   /**
@@ -173,8 +125,13 @@ export class ExpressServer {
    * `requireAdmin` middlewares used throughout these routes.
    */
   private initializeRoutes(): void {
-    /** Middleware: resolves the bearer access token and rejects the request with 401 if it's
+    this.routeAuth.startRoute();
+    /** Middleware: resolves the bearer access token alnd rejects the request with 401 if it's
      * missing/invalid. */
+    this.app.get("/serverHealth", (_req: Request, res: Response) => {
+      res.json({ status: "ok", service: "obsync" });
+    });
+
     const requireAuth = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
       const token = req.header("Authorization")?.replace(/^Bearer\s+/i, "");
 
@@ -209,165 +166,6 @@ export class ExpressServer {
     this.app.get("/serverHealth", (_req: Request, res: Response) => {
       res.json({ status: "ok", service: "obsync" });
     });
-
-    this.app.post("/auth/login", async (req: Request, res: Response): Promise<void> => {
-      const { email, password } = req.body ?? {};
-
-      switch (true) {
-        case typeof email !== "string" || typeof password !== "string":
-          res.status(400).json({ error: "E-mail and password are required" });
-          return;
-        case !email.includes("@") || email.length < 10 || email.trim().length === 0:
-          res.status(400).json({ error: "E-mail is not valid" });
-          return;
-        case password.trim().length === 0:
-          res.status(400).json({ error: "password is not valid" });
-          return;
-        case email.length > 254 || password.length > 128:
-          res.status(400).json({ error: "Invalid credentials" });
-          return;
-      }
-
-      const { accountKey, ipKey } = this.loginRateLimitKeys(req, email);
-      const accountLimit = this.accountLoginRateLimiter.check(accountKey);
-      const ipLimit = this.ipLoginRateLimiter.check(ipKey);
-
-      if (!accountLimit.allowed || !ipLimit.allowed) {
-        res.setHeader(
-          "Retry-After",
-          Math.max(accountLimit.retryAfterSeconds, ipLimit.retryAfterSeconds),
-        );
-        res.status(429).json({ error: "Too many login attempts. Try again later." });
-
-        return;
-      }
-
-      const session = await this.authService.login(email, password);
-
-      if (!session) {
-        const updatedAccountLimit = this.accountLoginRateLimiter.recordFailure(accountKey);
-        const updatedIpLimit = this.ipLoginRateLimiter.recordFailure(ipKey);
-
-        if (!updatedAccountLimit.allowed || !updatedIpLimit.allowed) {
-          res.setHeader(
-            "Retry-After",
-            Math.max(updatedAccountLimit.retryAfterSeconds, updatedIpLimit.retryAfterSeconds),
-          );
-          res.status(429).json({ error: "Too many login attempts. Try again later." });
-
-          return;
-        }
-        res.status(401).json({ error: "Invalid e-mail or password." });
-
-        return;
-      }
-      this.accountLoginRateLimiter.reset(accountKey);
-      res.json(session);
-    });
-
-    this.app.post("/auth/refresh", async (req: Request, res: Response): Promise<void> => {
-      const refreshToken = req.body?.refreshToken;
-
-      const session = await this.tokenService.refreshSession(
-        typeof refreshToken === "string" ? refreshToken : null,
-      );
-
-      if (!session) {
-        res.status(401).json({ error: "Invalid or expired session." });
-
-        return;
-      }
-
-      res.json(session);
-    });
-
-    this.app.post("/auth/logout", (req: Request, res: Response): void => {
-      const refreshToken = req.body?.refreshToken;
-      this.tokenService.revokeSession(typeof refreshToken === "string" ? refreshToken : null);
-
-      res.sendStatus(204);
-    });
-
-    this.app.get("/auth/me", requireAuth, (_req: Request, res: Response): void => {
-      res.json({ user: this.currentUser(res) });
-    });
-
-    this.app.post(
-      "/auth/ws-ticket",
-      requireAuth,
-      async (req: Request, res: Response): Promise<void> => {
-        const channel = req.body?.channel;
-
-        if (!this.isWebSocketChannel(channel)) {
-          res.status(400).json({ error: "Invalid WebSocket channel." });
-
-          return;
-        }
-
-        const ticket = await this.tokenService.issueWebSocketTicket(
-          res.locals.accessToken,
-          channel,
-        );
-        if (!ticket) {
-          res.status(401).json({ error: "Invalid or expired session." });
-
-          return;
-        }
-        res.json(ticket);
-      },
-    );
-
-    this.app.post(
-      "/auth/change-password",
-      requireAuth,
-      async (req: Request, res: Response): Promise<void> => {
-        const { currentPassword, newPassword } = req.body ?? {};
-        if (
-          typeof currentPassword !== "string" ||
-          typeof newPassword !== "string" ||
-          newPassword.length < 6 ||
-          newPassword.length > 128
-        ) {
-          res.status(400).json({
-            error: "The new password must be between 6 and 128 characters.",
-          });
-
-          return;
-        }
-
-        const currentAuthenticatedUser = this.currentUser(res);
-        const rateLimitKey = String(currentAuthenticatedUser.id);
-        const limit = this.passwordChangeRateLimiter.check(rateLimitKey);
-        if (!limit.allowed) {
-          res.setHeader("Retry-After", limit.retryAfterSeconds);
-          res.status(429).json({
-            error: "Too many attempts. Try again later.",
-          });
-
-          return;
-        }
-
-        const result = await this.dbService.updateUserPassword(
-          currentAuthenticatedUser.id,
-          currentPassword,
-          newPassword,
-        );
-
-        if (!result.ok) {
-          if (result.reason === "invalid_current_password") {
-            this.passwordChangeRateLimiter.recordFailure(rateLimitKey);
-          }
-          res.status(mutationErrorStatus(result)).json({
-            error: mutationErrorMessage(result),
-            reason: result.reason,
-          });
-          return;
-        }
-
-        this.passwordChangeRateLimiter.reset(rateLimitKey);
-        res.json({ user: result.user });
-      },
-    );
 
     this.app.patch(
       "/api/users/:id/name",
@@ -688,7 +486,18 @@ export class ExpressServer {
 
     this.app.post("/sync/create", async (req: Request, res: Response) => {
       try {
-        const { path, isFolder, content } = req.body;
+        const isBinary = req.is("application/octet-stream");
+        const path = isBinary
+          ? decodeURIComponent(req.header("x-obsync-path") ?? "")
+          : req.body.path;
+        const isFolder = isBinary ? req.header("X-ObSync-Is-Folder") === "true" : req.body.isFolder;
+
+        const content = isBinary
+          ? req.body
+          : typeof req.body.content === "string"
+            ? req.body.contenta
+            : "";
+
         if (typeof path !== "string" || !path.trim()) {
           res.status(400).send("Invalid path");
           return;
@@ -813,29 +622,6 @@ export class ExpressServer {
   private currentUser(res: Response): AuthenticatedUser {
     return res.locals.authenticatedUser as AuthenticatedUser;
   }
-
-  /** Type guard narrowing an arbitrary value to a valid {@link WebSocketChannel}. */
-  private isWebSocketChannel(value: unknown): value is WebSocketChannel {
-    return value === "system" || value === "yjs";
-  }
-
-  /**
-   * Builds the two rate-limit keys used to throttle a login attempt: one per account (by normalized
-   * email) and one per source IP, so an attacker can't bypass the account limit by spraying across
-   * many emails from one IP, or vice versa.
-   * @param req - The incoming login request (used to read the client IP).
-   * @param email - The email address supplied in the login attempt.
-   * @returns The `accountKey` and `ipKey` to pass to the rate limiters.
-   */
-  private loginRateLimitKeys(req: Request, email: string): { accountKey: string; ipKey: string } {
-    const normalizedEmail = email.normalize("NFKC").trim().toLowerCase();
-    const address = req.ip ?? req.socket.remoteAddress ?? "unknown";
-    return {
-      accountKey: `account:${normalizedEmail}`,
-      ipKey: `ip:${address}`,
-    };
-  }
-
   /**
    * Parses and validates a route param as a positive user id.
    * @param value - The raw `:id` route param.

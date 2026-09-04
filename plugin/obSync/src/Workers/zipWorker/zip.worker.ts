@@ -2,7 +2,7 @@ import JSZip from 'jszip';
 
 export type ZipWorkerEntry =
 	| { path: string; isDir: true }
-	| { path: string; isDir: false; content: ArrayBuffer };
+	| { path: string; isDir: false; content: ArrayBuffer; ext: string };
 
 export type ZipWorkerMessage =
 	| { status: 'success'; entries: ZipWorkerEntry[] }
@@ -28,7 +28,12 @@ self.onmessage = async (event: MessageEvent<ArrayBuffer>) => {
 				entries.push({ path: relativePath, isDir: true });
 			} else {
 				const content = await entry.async('arraybuffer');
-				entries.push({ path: relativePath, isDir: false, content });
+				const fileExtension = relativePath.slice(
+					relativePath.lastIndexOf('.'),
+					relativePath.length,
+				);
+
+				entries.push({ path: relativePath, isDir: false, content, ext: fileExtension });
 				transferables.push(content);
 			}
 		}
