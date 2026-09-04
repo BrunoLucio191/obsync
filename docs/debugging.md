@@ -44,7 +44,7 @@ Confirm that the resulting `plugin/obSync/main.js` is the file installed in the 
 
 ## Confirm the authenticated role
 
-The settings page shows the current account and role. Session validation uses `/auth/me`, and the backend resolves the current role from its database rather than trusting the role stored in the token payload.
+The settings page shows the current account and role. Session validation uses `/api/auth/me`, and the backend resolves the current role from its database rather than trusting the role stored in the token payload.
 
 For database inspection during local development:
 
@@ -74,7 +74,7 @@ The backend reports rejected Yjs writes with:
 When a private edit appears in shared state, check the following in order:
 
 1. the client is running the current `main.js`;
-2. `/auth/me` resolves the client account as `user`;
+2. `/api/auth/me` resolves the client account as `user`;
 3. the running backend contains the current Yjs authorization check;
 4. the same Obsidian profile did not reopen the private history under an admin account;
 5. the content was not already published by an admin before the test began.

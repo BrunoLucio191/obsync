@@ -19,7 +19,7 @@ export class SyncVaultChanges {
 
 	/**
 	 * Registers the vault event listeners (`create`, `delete`, `modify`,
-	 * `rename`) that forward local changes to the corresponding `/sync/*`
+	 * `rename`) that forward local changes to the corresponding `/api/sync/*`
 	 * backend endpoints. Muted paths (changes caused by applying a remote
 	 * update) are skipped to avoid echoing changes back to their origin.
 	 */
@@ -53,7 +53,7 @@ export class SyncVaultChanges {
 				}
 
 				await requestUrl({
-					url: `${getApiBaseUrl()}/sync/create`,
+					url: `${getApiBaseUrl()}/api/sync/create`,
 					method: 'POST',
 					headers: this.auth.headers(),
 					body: JSON.stringify({
@@ -73,7 +73,7 @@ export class SyncVaultChanges {
 				this.collaboration.disconnectIfAffected(file.path);
 
 				await requestUrl({
-					url: `${getApiBaseUrl()}/sync/delete`,
+					url: `${getApiBaseUrl()}/api/sync/delete`,
 					method: 'DELETE',
 					headers: this.auth.headers(),
 					body: JSON.stringify({ path: file.path, isFolder }),
@@ -91,7 +91,7 @@ export class SyncVaultChanges {
 				if (file instanceof TFile) {
 					const content = await this.plugin.app.vault.read(file);
 					await requestUrl({
-						url: `${getApiBaseUrl()}/sync/modify`,
+						url: `${getApiBaseUrl()}/api/sync/modify`,
 						method: 'PUT',
 						headers: this.auth.headers(),
 						body: JSON.stringify({ path: file.path, content }),
@@ -104,7 +104,7 @@ export class SyncVaultChanges {
 				if (!(await this.canPublish(file.path, oldPath))) return;
 
 				await requestUrl({
-					url: `${getApiBaseUrl()}/sync/rename`,
+					url: `${getApiBaseUrl()}/api/sync/rename`,
 					method: 'PUT',
 					headers: this.auth.headers(),
 					body: JSON.stringify({ oldPath, newPath: file.path }),

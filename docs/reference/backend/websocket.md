@@ -6,7 +6,7 @@ deployments use WSS; loopback development may use WS.
 ## Authentication handshake
 
 Bearer tokens are not accepted in the URL. The client first requests a ticket
-from `POST /auth/ws-ticket`, then includes it as a WebSocket subprotocol:
+from `POST /api/auth/ws-ticket`, then includes it as a WebSocket subprotocol:
 
 ```ts
 const socket = new WebSocket(url, [

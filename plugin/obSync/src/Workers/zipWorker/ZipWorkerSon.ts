@@ -26,7 +26,7 @@ export class ZipWorkerSon {
 		}
 
 		const response = await requestUrl({
-			url: `${getApiBaseUrl()}/api/syncfiles`,
+			url: `${getApiBaseUrl()}/api/sync/initSync`,
 			method: 'POST',
 			headers: this.auth.headers(),
 			body: JSON.stringify({ myFlag: true, name: 'obsidian ready to sync' }),

@@ -11,7 +11,7 @@
 
 ## Plugin enforcement
 
-`SyncVaultChanges` checks the current role before calling any `/sync` endpoint:
+`SyncVaultChanges` checks the current role before calling any `/api/sync` endpoint:
 
 ```ts
 if (!this.auth.isAdmin() || this.mutedPaths.isMuted(file.path)) return;
@@ -24,7 +24,7 @@ User sessions also keep the private editor document separate from the document p
 All shared-vault mutation routes require both authentication and the admin role:
 
 ```ts
-this.app.use('/sync', requireAuth, requireAdmin);
+this.app.use('/api/sync', requireAuth, requireAdmin);
 ```
 
 ## Yjs enforcement

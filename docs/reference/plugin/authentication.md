@@ -105,7 +105,7 @@ changePassword(
 ): Promise<UserActionResult<null>>
 ```
 
-Calls `POST /auth/change-password` for the current user, retrying once after a
+Calls `POST /api/auth/change-password` for the current user, retrying once after a
 token refresh on `401`. Available to both roles — changing your own password
 is not an admin-only action. Exposed in the plugin settings under **Conta →
 Trocar senha** (see `AccountSettingsSection`).
@@ -115,7 +115,7 @@ Trocar senha** (see `AccountSettingsSection`).
 | Method | Behavior |
 | --- | --- |
 | `scheduleSessionRefresh()` | Debounces a current-profile refresh after an account change |
-| `refreshSession()` | Reloads `/auth/me` and publishes profile changes to the plugin |
+| `refreshSession()` | Reloads `/api/auth/me` and publishes profile changes to the plugin |
 | `logout()` | Revokes the backend session and clears local credentials |
 | `clearSession()` | Clears local credentials without issuing the logout request |
 | `destroy()` | Cancels session and access-refresh timers |

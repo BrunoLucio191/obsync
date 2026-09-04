@@ -50,7 +50,7 @@ new ExpressServer({
 
 | Member | Description |
 | --- | --- |
-| `initializeMiddleware()` | Installs TLS enforcement, JSON parsing, and a no-store header on `/auth` routes |
+| `initializeMiddleware()` | Installs TLS enforcement, JSON parsing, and a no-store header on `/api/auth` routes |
 | `serverStart(port?)` | Starts the Node HTTP server on the configured host |
 | `getHttpServer` | Returns the underlying `node:http` server for WebSocket upgrades |
 

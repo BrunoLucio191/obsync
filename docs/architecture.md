@@ -140,12 +140,12 @@ exists yet. `GET /api/users` is a read and is unaffected.
 
 | Channel | Direction | Purpose |
 | --- | --- | --- |
-| HTTPS `/auth/login` | client → server | Rate-limited login and access/refresh token issuance |
-| HTTPS `/auth/refresh` | client ↔ server | Refresh-token rotation and short access-token renewal |
-| HTTPS `/auth/logout` | client → server | Session revocation |
-| HTTPS `/auth/ws-ticket` | client ← server | One-use, channel-scoped WebSocket ticket |
-| HTTPS `/api/*` | client ↔ server | User administration and initial vault download |
-| HTTPS `/sync/*` | admin → server | Shared file operations |
+| HTTPS `/api/auth/login` | client → server | Rate-limited login and access/refresh token issuance |
+| HTTPS `/api/auth/refresh` | client ↔ server | Refresh-token rotation and short access-token renewal |
+| HTTPS `/api/auth/logout` | client → server | Session revocation |
+| HTTPS `/api/auth/ws-ticket` | client ← server | One-use, channel-scoped WebSocket ticket |
+| HTTPS `/api/users/*`, `/api/sync/initSync` | client ↔ server | User administration and initial vault download |
+| HTTPS `/api/sync/*` | admin → server | Shared file operations |
 | WSS `/system` | server → client | Shared-vault change notifications |
 | WSS `/<encoded-note-path>` | client ↔ server | Yjs synchronization and awareness |
 

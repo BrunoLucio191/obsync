@@ -133,7 +133,7 @@ cannot be recovered afterward. Copy it down before closing the terminal.
 
 Any account can change its own password from Obsidian, under **Settings →
 ObSync → Conta → Trocar senha**, or by calling
-[`POST /auth/change-password`](reference/backend/http.md#post-authchange-password)
+[`POST /api/auth/change-password`](reference/backend/http.md#post-apiauthchange-password)
 directly. The current password must be supplied and is verified before the
 change is applied. Change the temporary seed password the first time you sign
 in.

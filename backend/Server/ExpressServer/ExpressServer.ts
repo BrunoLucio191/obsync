@@ -3,7 +3,7 @@ import { type Server } from "node:http";
 import { createServer } from "node:http";
 import fs from "node:fs/promises";
 import { systemPaths } from "../../paths.ts";
-import type { AuthenticatedUser, UserRole, WebSocketChannel } from "../../auth/auth.types.ts";
+import type { AuthenticatedUser } from "../../auth/auth.types.ts";
 import { LoginRateLimiter } from "../../auth/LoginRateLimiter.ts";
 import { publishVaultChange } from "../../syncEvents.ts";
 import type { YjsCollaborationServer as YjsCollaborationGateway } from "../../yjs/YjsCollaborationServer.ts";
@@ -12,8 +12,8 @@ import { AuthService } from "../../auth/authService.ts";
 import type { TokenService } from "../../auth/TokenService.ts";
 import type { DBServices } from "../../users/DBServices.ts";
 import type { QueueManager } from "../../queue/QueueManager.ts";
-import { mutationErrorMessage, mutationErrorStatus } from "./mutationFunctions.ts";
 import { RouteAuth } from "./routes/route.auth.ts";
+import { RouteUsers } from "./routes/route.users.ts";
 
 /** Constructor options for {@link ExpressServer}. */
 type ExpressServerConstructorOptions = {
@@ -50,6 +50,7 @@ export class ExpressServer {
   private readonly collaborationServer: YjsCollaborationGateway;
   private readonly queueManager: QueueManager;
   private routeAuth: RouteAuth;
+  private routeUsers: RouteUsers;
 
   /**
    * Creates the Express app and underlying HTTP server, then wires up middleware and routes.
@@ -80,6 +81,7 @@ export class ExpressServer {
     this.authService = authService;
     this.collaborationServer = collaborationServer;
     this.queueManager = queueManager;
+    this.routeUsers = new RouteUsers(this.tokenService, this.dbService, this.queueManager);
     this.routeAuth = new RouteAuth(
       new LoginRateLimiter({
         maxFailedAttempts: 5,
@@ -99,7 +101,7 @@ export class ExpressServer {
   }
 
   /** Registers global middleware: TLS enforcement, JSON body parsing (16mb limit),
-   * and no-store caching for `/auth` responses. */
+   * and no-store caching for `/api/auth` responses. */
   public initializeMiddleware(): void {
     this.app.use((req: Request, res: Response, next: NextFunction) => {
       if (this.requireTls && !req.secure) {
@@ -111,27 +113,26 @@ export class ExpressServer {
 
     this.app.use(express.json({ limit: "16mb" }));
 
-    this.app.use("/auth", (_req, res, next) => {
+    this.app.use("/api/auth", (_req, res, next) => {
       res.setHeader("Cache-Control", "no-store");
       next();
     });
-    this.app.use("/auth", this.routeAuth.router);
+    this.app.use("/api/auth", this.routeAuth.router);
+    this.app.use("/api/users", this.routeUsers.router);
   }
 
   /**
-   * Registers every HTTP route: health check, auth endpoints (`/auth/*`), admin-only user
-   * management endpoints (`/api/users/*`), the vault zip download (`/api/syncfiles`), and the
-   * global vault mutation endpoints (`/sync/*`, admin-only). Also defines the `requireAuth` and
+   * Registers every HTTP route: health check, auth endpoints (`/api/auth/*`), admin-only user
+   * management endpoints (`/api/users/*`), the vault zip download (`/api/sync/initSync`), and the
+   * global vault mutation endpoints (`/api/sync/*`, admin-only). Also defines the `requireAuth` and
    * `requireAdmin` middlewares used throughout these routes.
    */
   private initializeRoutes(): void {
     this.routeAuth.startRoute();
+    this.routeUsers.startRoute();
+
     /** Middleware: resolves the bearer access token alnd rejects the request with 401 if it's
      * missing/invalid. */
-    this.app.get("/serverHealth", (_req: Request, res: Response) => {
-      res.json({ status: "ok", service: "obsync" });
-    });
-
     const requireAuth = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
       const token = req.header("Authorization")?.replace(/^Bearer\s+/i, "");
 
@@ -163,294 +164,12 @@ export class ExpressServer {
       next();
     };
 
-    this.app.get("/serverHealth", (_req: Request, res: Response) => {
+    this.app.get("/api/serverHealth", (_req: Request, res: Response) => {
       res.json({ status: "ok", service: "obsync" });
     });
 
-    this.app.patch(
-      "/api/users/:id/name",
-      requireAuth,
-      requireAdmin,
-      async (req: Request, res: Response): Promise<void> => {
-        const userId = this.parseUserId(req.params.id);
-        const normalizedName = typeof req.body?.name === "string" ? req.body.name.trim() : "";
-
-        if (!userId) {
-          res.status(400).json({ error: "Invalid user." });
-          return;
-        }
-        if (normalizedName.length < 2 || normalizedName.length > 64) {
-          res.status(400).json({
-            error: "The name must be between 2 and 64 characters.",
-          });
-          return;
-        }
-        const actor = this.currentUser(res);
-        const target = await this.dbService.getUserById(userId, true);
-        const queue = this.queueManager.creatQueueOrReturn(String(userId));
-
-        queue.addTask(async () => {
-          try {
-            if (!target) {
-              res.status(404).json({ error: "User not found." });
-              return;
-            }
-            if (target.role === "admin" && target.id !== actor.id) {
-              res.status(403).json({
-                error: "Administrators can only change their own name.",
-              });
-              return;
-            }
-
-            const result = await this.dbService.updateUserName(userId, normalizedName);
-            if (!result.ok) {
-              res.status(mutationErrorStatus(result)).json({
-                error: mutationErrorMessage(result),
-                reason: result.reason,
-              });
-              return;
-            }
-            res.json({ user: result.user });
-          } catch (error) {
-            console.error(`Something happened while changing ${userId} name`);
-            res.status(500).json({
-              error: "Something happened while changing some user name",
-            });
-          }
-        });
-      },
-    );
-
-    this.app.patch(
-      "/api/users/:id/password",
-      requireAuth,
-      requireAdmin,
-      async (req: Request, res: Response): Promise<void> => {
-        const userId = this.parseUserId(req.params.id);
-        const newPassword = req.body?.newPassword;
-
-        if (!userId) {
-          res.status(400).json({ error: "Invalid user." });
-          return;
-        }
-        if (typeof newPassword !== "string" || newPassword.length < 6 || newPassword.length > 128) {
-          res.status(400).json({
-            error: "The new password must be between 6 and 128 characters.",
-          });
-          return;
-        }
-
-        const target = await this.dbService.getUserById(userId, true);
-        const queue = this.queueManager.creatQueueOrReturn(String(userId));
-
-        queue.addTask(async () => {
-          try {
-            if (!target) {
-              res.status(404).json({ error: "User not found." });
-              return;
-            }
-            if (target.role !== "user") {
-              res.status(403).json({
-                error:
-                  "Administrators can only reset a regular user's password. " +
-                  "Use the self-service password change for your own account.",
-              });
-              return;
-            }
-
-            const result = await this.dbService.adminSetUserPassword(userId, newPassword);
-            if (!result.ok) {
-              res.status(mutationErrorStatus(result)).json({
-                error: mutationErrorMessage(result),
-                reason: result.reason,
-              });
-              return;
-            }
-            res.json({ user: result.user });
-          } catch (error) {
-            console.error(`Something happened while changing ${userId} name`);
-
-            res.status(500).json({
-              error: "Something happened while changing some user password",
-            });
-          }
-        });
-      },
-    );
-
-    this.app.get(
-      "/api/users",
-      requireAuth,
-      requireAdmin,
-      async (_req: Request, res: Response): Promise<void> => {
-        res.json({ users: await this.dbService.listUsers() });
-      },
-    );
-
     this.app.post(
-      "/api/users",
-      requireAuth,
-      requireAdmin,
-      async (req: Request, res: Response): Promise<void> => {
-        const { name, email, password, role } = req.body ?? {};
-        const normalizedName = typeof name === "string" ? name.trim() : "";
-        const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
-        const normalizedRole: UserRole = this.dbService.isUserRole(role) ? role : "user";
-
-        if (normalizedName.length < 2 || normalizedName.length > 64) {
-          res.status(400).json({ error: "The name must be between 2 and 64 characters." });
-          return;
-        }
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
-          res.status(400).json({ error: "Enter a valid e-mail address." });
-          return;
-        }
-        if (typeof password !== "string" || password.length < 6 || password.length > 128) {
-          res.status(400).json({
-            error: "The password must be between 6 and 128 characters.",
-          });
-          return;
-        }
-        const queue = this.queueManager.creatQueueOrReturn(email);
-
-        queue.addTask(async () => {
-          try {
-            const result = await this.dbService.createUser(
-              normalizedName,
-              normalizedEmail,
-              password,
-              normalizedRole,
-            );
-            if (!result.ok) {
-              res.status(409).json({
-                error:
-                  result.reason === "email_exists"
-                    ? "A user with that e-mail already exists."
-                    : "A user with that name already exists.",
-                reason: result.reason,
-              });
-              return;
-            }
-            res.status(201).json({ user: result.user });
-          } catch (error) {
-            console.error(`Something happened while creating a new user`);
-
-            res.status(500).json({
-              error: "Something happened while creating a new user",
-            });
-          }
-        });
-      },
-    );
-
-    this.app.patch(
-      "/api/users/:id/role",
-      requireAuth,
-      requireAdmin,
-      async (req: Request, res: Response): Promise<void> => {
-        const userId = this.parseUserId(req.params.id);
-        const role = req.body?.role;
-        if (!userId || !this.dbService.isUserRole(role)) {
-          res.status(400).json({ error: "Invalid user or role." });
-          return;
-        }
-
-        const queue = this.queueManager.creatQueueOrReturn(String(userId));
-        queue.addTask(async () => {
-          try {
-            const result = await this.dbService.updateUserRole(userId, role);
-            if (!result.ok) {
-              res.status(mutationErrorStatus(result)).json({
-                error: mutationErrorMessage(result),
-                reason: result.reason,
-              });
-              return;
-            }
-            res.json({ user: result.user });
-          } catch (error) {
-            console.error("Something happened while updating a user role");
-
-            res.status(500).json({
-              error: "Something happened while updating a user role",
-            });
-          }
-        });
-      },
-    );
-
-    this.app.patch(
-      "/api/users/:id/status",
-      requireAuth,
-      requireAdmin,
-      async (req: Request, res: Response): Promise<void> => {
-        const userId = this.parseUserId(req.params.id);
-        const active = req.body?.active;
-
-        if (!userId || typeof active !== "boolean") {
-          res.status(400).json({ error: "Invalid user or status." });
-          return;
-        }
-
-        const queue = this.queueManager.creatQueueOrReturn(String(userId));
-        queue.addTask(async () => {
-          try {
-            const result = await this.dbService.updateUserStatus(userId, active);
-            if (!result.ok) {
-              res.status(mutationErrorStatus(result)).json({
-                error: mutationErrorMessage(result),
-                reason: result.reason,
-              });
-              return;
-            }
-            res.json({ user: result.user });
-          } catch (error) {
-            console.error("Something happened while updating a user status");
-
-            res.status(500).json({
-              error: "Something happened while updating a user status",
-            });
-          }
-        });
-      },
-    );
-
-    this.app.delete(
-      "/api/users/:id",
-      requireAuth,
-      requireAdmin,
-      async (req: Request, res: Response): Promise<void> => {
-        const userId = this.parseUserId(req.params.id);
-        if (!userId) {
-          res.status(400).json({ error: "Invalid user." });
-          return;
-        }
-
-        const queue = this.queueManager.creatQueueOrReturn(String(userId));
-
-        queue.addTask(async () => {
-          try {
-            const result = await this.dbService.deleteUser(userId);
-            if (!result.ok) {
-              res.status(mutationErrorStatus(result)).json({
-                error: mutationErrorMessage(result),
-                reason: result.reason,
-              });
-              return;
-            }
-            res.json({ user: result.user });
-          } catch (error) {
-            console.error("Something happened while deleting a user ");
-
-            res.status(500).json({
-              error: "Something happened while deleting a user ",
-            });
-          }
-        });
-      },
-    );
-
-    this.app.post(
-      "/api/syncfiles",
+      "/api/sync/initSync",
       requireAuth,
       async (_req: Request, res: Response): Promise<void> => {
         try {
@@ -482,9 +201,9 @@ export class ExpressServer {
     );
 
     // Every global structure mutation requires authentication and the admin role.
-    this.app.use("/sync", requireAuth, requireAdmin);
+    this.app.use("/api/sync", requireAuth, requireAdmin);
 
-    this.app.post("/sync/create", async (req: Request, res: Response) => {
+    this.app.post("/api/sync/create", async (req: Request, res: Response) => {
       try {
         const isBinary = req.is("application/octet-stream");
         const path = isBinary
@@ -533,7 +252,7 @@ export class ExpressServer {
       }
     });
 
-    this.app.delete("/sync/delete", async (req: Request, res: Response) => {
+    this.app.delete("/api/sync/delete", async (req: Request, res: Response) => {
       try {
         const { path, isFolder } = req.body;
         if (typeof path !== "string" || !path.trim()) {
@@ -563,7 +282,7 @@ export class ExpressServer {
       }
     });
 
-    this.app.put("/sync/modify", async (req: Request, res: Response) => {
+    this.app.put("/api/sync/modify", async (req: Request, res: Response) => {
       try {
         const { path, content } = req.body;
         if (typeof path !== "string" || typeof content !== "string") {
@@ -589,7 +308,7 @@ export class ExpressServer {
       }
     });
 
-    this.app.put("/sync/rename", async (req: Request, res: Response) => {
+    this.app.put("/api/sync/rename", async (req: Request, res: Response) => {
       try {
         const { oldPath, newPath } = req.body;
         if (
@@ -622,17 +341,6 @@ export class ExpressServer {
   private currentUser(res: Response): AuthenticatedUser {
     return res.locals.authenticatedUser as AuthenticatedUser;
   }
-  /**
-   * Parses and validates a route param as a positive user id.
-   * @param value - The raw `:id` route param.
-   * @returns The parsed id, or `null` if it's missing, an array, non-numeric, or not positive.
-   */
-  private parseUserId(value: string | string[] | undefined): number | null {
-    if (Array.isArray(value)) return null;
-    const userId = Number(value);
-    return userId > 0 ? userId : null;
-  }
-
   /** Extracts the vault path targeted by a sync request body (`path`, `oldPath`, or `newPath`), normalizing slashes. */
   private requestPath(req: Request): string | undefined {
     const value = req.body?.path ?? req.body?.oldPath ?? req.body?.newPath;

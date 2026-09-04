@@ -24,7 +24,7 @@ Error responses generally use:
 
 ## Health
 
-### `GET /serverHealth`
+### `GET /api/serverHealth`
 
 No authentication required.
 
@@ -34,7 +34,7 @@ No authentication required.
 
 ## Authentication
 
-### `POST /auth/login`
+### `POST /api/auth/login`
 
 ```json
 {
@@ -46,7 +46,7 @@ No authentication required.
 Returns `AuthSession` on success. Account and IP failure limits can return
 `429` with a `Retry-After` header. Invalid credentials return `401`.
 
-### `POST /auth/refresh`
+### `POST /api/auth/refresh`
 
 ```json
 { "refreshToken": "<opaque-refresh-token>" }
@@ -55,7 +55,7 @@ Returns `AuthSession` on success. Account and IP failure limits can return
 Returns a new `AuthSession` and rotates the refresh token. An invalid, expired,
 or already-rotated value returns `401`.
 
-### `POST /auth/logout`
+### `POST /api/auth/logout`
 
 ```json
 { "refreshToken": "<opaque-refresh-token>" }
@@ -64,7 +64,7 @@ or already-rotated value returns `401`.
 Revokes the matching session and returns `204`. The operation is idempotent for
 unknown input.
 
-### `GET /auth/me`
+### `GET /api/auth/me`
 
 Requires authentication. Returns the current database profile:
 
@@ -72,7 +72,7 @@ Requires authentication. Returns the current database profile:
 { "user": { "id": 1, "email": "...", "name": "...", "role": "admin", "active": true } }
 ```
 
-### `POST /auth/change-password`
+### `POST /api/auth/change-password`
 
 Requires authentication. Any role can change its own password; there is no
 admin-triggered reset for another account.
@@ -87,7 +87,7 @@ per account (5 per 15 minutes, independent of the login limiter) and return
 `429` with `Retry-After` once exceeded. An incorrect current password returns
 `401`. Returns `200 { user }` on success.
 
-### `POST /auth/ws-ticket`
+### `POST /api/auth/ws-ticket`
 
 Requires authentication.
 
@@ -120,7 +120,7 @@ prevents operations that would leave no active admin; an admin may otherwise
 deactivate or delete their own account. An admin may change only their own
 name when the target is another admin. `PATCH /api/users/:id/password` only
 accepts a `user`-role target — an admin resets their own password through
-[`POST /auth/change-password`](#post-authchange-password) instead, which
+[`POST /api/auth/change-password`](#post-apiauthchange-password) instead, which
 requires the current password.
 
 Every route above except `GET /api/users` runs its work on a per-target-user
@@ -131,16 +131,16 @@ instead.
 
 ## Initial vault download
 
-### `POST /api/syncfiles`
+### `POST /api/sync/initSync`
 
 Requires authentication for either role. Returns the shared vault as
 `vault.zip`. The temporary ZIP is removed after the response completes.
 
 ## Shared-vault sync
 
-Every `/sync/*` endpoint requires an active admin.
+Every `/api/sync/*` endpoint requires an active admin.
 
-### `POST /sync/create`
+### `POST /api/sync/create`
 
 ```json
 {
@@ -152,7 +152,7 @@ Every `/sync/*` endpoint requires an active admin.
 
 Creates a file or folder and publishes a `VaultChange` event.
 
-### `PUT /sync/modify`
+### `PUT /api/sync/modify`
 
 ```json
 { "path": "Folder/note.md", "content": "Updated text" }
@@ -160,7 +160,7 @@ Creates a file or folder and publishes a `VaultChange` event.
 
 Writes a non-deleted file and publishes a modify event.
 
-### `DELETE /sync/delete`
+### `DELETE /api/sync/delete`
 
 ```json
 { "path": "Folder/note.md", "isFolder": false }
@@ -169,7 +169,7 @@ Writes a non-deleted file and publishes a modify event.
 Marks the path deleted, removes Markdown and Yjs state, and publishes a delete
 event.
 
-### `PUT /sync/rename`
+### `PUT /api/sync/rename`
 
 ```json
 {

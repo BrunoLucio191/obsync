@@ -39,7 +39,7 @@ export class RouteAuth {
   }
 
   public startRoute() {
-    this.router.post("/auth/login", async (req: Request, res: Response): Promise<void> => {
+    this.router.post("/login", async (req: Request, res: Response): Promise<void> => {
       const { email, password } = req.body ?? {};
 
       switch (true) {
@@ -106,7 +106,7 @@ export class RouteAuth {
       res.json(session);
     });
 
-    this.router.post("/auth/refresh", async (req: Request, res: Response): Promise<void> => {
+    this.router.post("/refresh", async (req: Request, res: Response): Promise<void> => {
       const refreshToken = req.body?.refreshToken;
 
       const session = await this.tokenService.refreshSession(
@@ -122,19 +122,19 @@ export class RouteAuth {
       res.json(session);
     });
 
-    this.router.post("/auth/logout", (req: Request, res: Response): void => {
+    this.router.post("/logout", (req: Request, res: Response): void => {
       const refreshToken = req.body?.refreshToken;
       this.tokenService.revokeSession(typeof refreshToken === "string" ? refreshToken : null);
 
       res.sendStatus(204);
     });
 
-    this.router.get("/auth/me", this.requireAuth, (_req: Request, res: Response): void => {
+    this.router.get("/me", this.requireAuth, (_req: Request, res: Response): void => {
       res.json({ user: this.currentUser(res) });
     });
 
     this.router.post(
-      "/auth/ws-ticket",
+      "/ws-ticket",
       this.requireAuth,
       async (req: Request, res: Response): Promise<void> => {
         const channel = req.body?.channel;
@@ -163,7 +163,7 @@ export class RouteAuth {
     );
 
     this.router.post(
-      "/auth/change-password",
+      "/change-password",
       this.requireAuth,
       async (req: Request, res: Response): Promise<void> => {
         const { currentPassword, newPassword } = req.body ?? {};

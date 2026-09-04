@@ -22,7 +22,7 @@ new SyncInitialVault(
 sync(): Promise<void>
 ```
 
-Downloads `/api/syncfiles` as a ZIP and writes its entries through the vault
+Downloads `/api/sync/initSync` as a ZIP and writes its entries through the vault
 adapter. Paths are muted before each local write so Obsidian's vault events do
 not publish the downloaded files back to the server.
 

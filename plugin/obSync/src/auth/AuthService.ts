@@ -239,7 +239,7 @@ export class AuthService {
 		try {
 			if (refreshToken) {
 				await requestUrl({
-					url: `${getApiBaseUrl()}/auth/logout`,
+					url: `${getApiBaseUrl()}/api/auth/logout`,
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
 					body: JSON.stringify({ refreshToken }),
@@ -297,7 +297,7 @@ export class AuthService {
 	private async login(email: string, password: string): Promise<boolean> {
 		try {
 			const response = await requestUrl({
-				url: `${getApiBaseUrl()}/auth/login`,
+				url: `${getApiBaseUrl()}/api/auth/login`,
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ email, password }),
@@ -376,7 +376,7 @@ export class AuthService {
 
 		try {
 			const response = await requestUrl({
-				url: `${getApiBaseUrl()}/auth/refresh`,
+				url: `${getApiBaseUrl()}/api/auth/refresh`,
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ refreshToken: this.refreshToken }),
@@ -487,7 +487,7 @@ export class AuthService {
 
 	private requestCurrentUser() {
 		return requestUrl({
-			url: `${getApiBaseUrl()}/auth/me`,
+			url: `${getApiBaseUrl()}/api/auth/me`,
 			headers: this.headers(),
 			throw: false,
 		});
@@ -496,7 +496,7 @@ export class AuthService {
 	/** Sends a change-password request to the backend. */
 	private requestChangePassword(currentPassword: string, newPassword: string) {
 		return requestUrl({
-			url: `${getApiBaseUrl()}/auth/change-password`,
+			url: `${getApiBaseUrl()}/api/auth/change-password`,
 			method: 'POST',
 			headers: this.headers(),
 			body: JSON.stringify({ currentPassword, newPassword }),
@@ -507,7 +507,7 @@ export class AuthService {
 	/** Requests a WebSocket authentication ticket for the given channel. */
 	private requestWebSocketTicket(channel: WebSocketChannel) {
 		return requestUrl({
-			url: `${getApiBaseUrl()}/auth/ws-ticket`,
+			url: `${getApiBaseUrl()}/api/auth/ws-ticket`,
 			method: 'POST',
 			headers: this.headers(),
 			body: JSON.stringify({ channel }),
