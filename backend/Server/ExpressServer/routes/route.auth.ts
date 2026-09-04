@@ -7,18 +7,40 @@ import type { AuthenticatedUser, WebSocketChannel } from "../../../auth/auth.typ
 import type { NextFunction } from "express";
 import { mutationErrorMessage, mutationErrorStatus } from "../mutationFunctions.ts";
 
+export type RouteAuthConstructor = {
+  accountLoginRateLimiter: LoginRateLimiter;
+  ipLoginRateLimiter: LoginRateLimiter;
+  passwordChangeRateLimiter: LoginRateLimiter;
+  tokenService: TokenService;
+  authService: AuthService;
+  dbService: DBServices;
+};
+
 /** Session endpoints mounted at `/api/auth`: login, refresh, logout, current user, WebSocket
  * ticket issuance, and self-service password change. */
 export class RouteAuth {
   public router: express.Router = express.Router();
-  constructor(
-    private readonly accountLoginRateLimiter: LoginRateLimiter,
-    private readonly ipLoginRateLimiter: LoginRateLimiter,
-    private readonly passwordChangeRateLimiter: LoginRateLimiter,
-    private readonly tokenService: TokenService,
-    private readonly authService: AuthService,
-    private readonly dbService: DBServices,
-  ) {}
+  private readonly accountLoginRateLimiter: LoginRateLimiter;
+  private readonly ipLoginRateLimiter: LoginRateLimiter;
+  private readonly passwordChangeRateLimiter: LoginRateLimiter;
+  private readonly tokenService: TokenService;
+  private readonly authService: AuthService;
+  private readonly dbService: DBServices;
+  constructor({
+    accountLoginRateLimiter,
+    ipLoginRateLimiter,
+    passwordChangeRateLimiter,
+    tokenService,
+    authService,
+    dbService,
+  }: RouteAuthConstructor) {
+    this.accountLoginRateLimiter = accountLoginRateLimiter;
+    this.ipLoginRateLimiter = ipLoginRateLimiter;
+    this.passwordChangeRateLimiter = passwordChangeRateLimiter;
+    this.tokenService = tokenService;
+    this.authService = authService;
+    this.dbService = dbService;
+  }
 
   /** Middleware: resolves the bearer access token and rejects the request with 401 if it's
    * missing/invalid. Must run before any route reading {@link currentUser} or

@@ -1,11 +1,7 @@
 import express, { type Express, type NextFunction, type Request, type Response } from "express";
 import { type Server } from "node:http";
 import { createServer } from "node:http";
-import fs from "node:fs/promises";
-import { systemPaths } from "../../paths.ts";
-import type { AuthenticatedUser } from "../../auth/auth.types.ts";
 import { LoginRateLimiter } from "../../auth/LoginRateLimiter.ts";
-import { publishVaultChange } from "../../syncEvents.ts";
 import type { YjsCollaborationServer as YjsCollaborationGateway } from "../../yjs/YjsCollaborationServer.ts";
 import { FileManager } from "../FileManager.ts";
 import { AuthService } from "../../auth/authService.ts";
@@ -14,7 +10,7 @@ import type { DBServices } from "../../users/DBServices.ts";
 import type { QueueManager } from "../../queue/QueueManager.ts";
 import { RouteAuth } from "./routes/route.auth.ts";
 import { RouteUsers } from "./routes/route.users.ts";
-import { RouteSyncFiles } from "./routes/route.syncFiles.js";
+import { RouteSyncFiles } from "./routes/route.syncFiles.ts";
 
 /** Constructor options for {@link ExpressServer}. */
 type ExpressServerConstructorOptions = {
@@ -83,26 +79,30 @@ export class ExpressServer {
     this.authService = authService;
     this.collaborationServer = collaborationServer;
     this.queueManager = queueManager;
-    this.routeUsers = new RouteUsers(this.tokenService, this.dbService, this.queueManager);
-    this.routeAuth = new RouteAuth(
-      new LoginRateLimiter({
+    this.routeUsers = new RouteUsers({
+      tokenService: this.tokenService,
+      dbService: this.dbService,
+      queueManager: this.queueManager,
+    });
+    this.routeAuth = new RouteAuth({
+      accountLoginRateLimiter: new LoginRateLimiter({
         maxFailedAttempts: 5,
       }),
-      new LoginRateLimiter({
+      ipLoginRateLimiter: new LoginRateLimiter({
         maxFailedAttempts: 25,
       }),
-      new LoginRateLimiter({
+      passwordChangeRateLimiter: new LoginRateLimiter({
         maxFailedAttempts: 5,
       }),
-      this.tokenService,
-      this.authService,
-      this.dbService,
-    );
-    this.routeSyncFiles = new RouteSyncFiles(
-      this.tokenService,
-      this.fileManager,
-      this.collaborationServer,
-    );
+      tokenService: this.tokenService,
+      authService: this.authService,
+      dbService: this.dbService,
+    });
+    this.routeSyncFiles = new RouteSyncFiles({
+      tokenService: this.tokenService,
+      fileManager: this.fileManager,
+      collaborationServer: this.collaborationServer,
+    });
     this.initializeMiddleware();
     this.initializeRoutes();
   }

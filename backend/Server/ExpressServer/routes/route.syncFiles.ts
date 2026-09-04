@@ -12,13 +12,22 @@ import type { YjsCollaborationServer as YjsCollaborationGateway } from "../../..
  * (`/initSync`, any authenticated role) and the admin-only structure mutations
  * (`/create`, `/delete`, `/modify`, `/rename`) that also broadcast a {@link VaultChange}
  * over the WebSocket for other connected clients. */
+export type RouteSyncFilesContructor = {
+  tokenService: TokenService;
+  fileManager: FileManager;
+  collaborationServer: YjsCollaborationGateway;
+};
+
 export class RouteSyncFiles {
   public router: express.Router = express.Router();
-  constructor(
-    private readonly tokenService: TokenService,
-    private readonly fileManager: FileManager,
-    private readonly collaborationServer: YjsCollaborationGateway,
-  ) {}
+  private readonly tokenService: TokenService;
+  private readonly fileManager: FileManager;
+  private readonly collaborationServer: YjsCollaborationGateway;
+  constructor({ tokenService, fileManager, collaborationServer }: RouteSyncFilesContructor) {
+    this.tokenService = tokenService;
+    this.fileManager = fileManager;
+    this.collaborationServer = collaborationServer;
+  }
 
   /** Reads the authenticated user previously attached to the request by {@link requireAuth}. */
   private currentUser(res: Response): AuthenticatedUser {
@@ -124,19 +133,7 @@ export class RouteSyncFiles {
       this.requireAdmin,
       async (req: Request, res: Response) => {
         try {
-          const isBinary = req.is("application/octet-stream");
-          const path = isBinary
-            ? decodeURIComponent(req.header("x-obsync-path") ?? "")
-            : req.body.path;
-          const isFolder = isBinary
-            ? req.header("X-ObSync-Is-Folder") === "true"
-            : req.body.isFolder;
-
-          const content = isBinary
-            ? req.body
-            : typeof req.body.content === "string"
-              ? req.body.contenta
-              : "";
+          const { path, isFolder, content } = req.body;
 
           if (typeof path !== "string" || !path.trim()) {
             res.status(400).send("Invalid path");
@@ -269,6 +266,20 @@ export class RouteSyncFiles {
         } catch (error) {
           console.error("[Sync] Error in Rename:", error);
           res.status(500).send("Error renaming");
+        }
+      },
+    );
+    //TODO: add route for making a file
+    this.router.get(
+      "/createFile",
+      this.requireAuth,
+      this.requireAdmin,
+      async (req: Request, res: Response) => {
+        try {
+          const doingNothing = null;
+        } catch (error) {
+          console.error();
+          res.status(500).send("Error making file");
         }
       },
     );

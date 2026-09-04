@@ -9,14 +9,23 @@ import type { QueueManager } from "../../../queue/QueueManager.ts";
  * reset password, change role, activate/deactivate, and delete. Every mutation runs on a
  * per-target-user {@link QueueManager} queue so concurrent requests for the same user
  * serialize instead of racing. */
+
+type RouteUsersContructor = {
+  tokenService: TokenService;
+  dbService: DBServices;
+  queueManager: QueueManager;
+};
+
 export class RouteUsers {
   public router: express.Router = express.Router();
-  constructor(
-    private readonly tokenService: TokenService,
-    private readonly dbService: DBServices,
-
-    private readonly queueManager: QueueManager,
-  ) {}
+  private readonly tokenService: TokenService;
+  private readonly dbService: DBServices;
+  private readonly queueManager: QueueManager;
+  constructor({ tokenService, dbService, queueManager }: RouteUsersContructor) {
+    this.tokenService = tokenService;
+    this.dbService = dbService;
+    this.queueManager = queueManager;
+  }
 
   /**
    * Parses and validates a route param as a positive user id.
