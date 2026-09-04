@@ -5,6 +5,10 @@ import { mutationErrorMessage, mutationErrorStatus } from "../mutationFunctions.
 import { DBServices } from "../../../users/DBServices.ts";
 import type { QueueManager } from "../../../queue/QueueManager.ts";
 
+/** Admin-only user management endpoints mounted at `/api/users`: list, create, rename,
+ * reset password, change role, activate/deactivate, and delete. Every mutation runs on a
+ * per-target-user {@link QueueManager} queue so concurrent requests for the same user
+ * serialize instead of racing. */
 export class RouteUsers {
   public router: express.Router = express.Router();
   constructor(
@@ -14,16 +18,25 @@ export class RouteUsers {
     private readonly queueManager: QueueManager,
   ) {}
 
+  /**
+   * Parses and validates a route param as a positive user id.
+   * @param value - The raw `:id` route param.
+   * @returns The parsed id, or `null` if it's missing, an array, non-numeric, or not positive.
+   */
   private parseUserId(value: string | string[] | undefined): number | null {
     if (Array.isArray(value)) return null;
     const userId = Number(value);
     return userId > 0 ? userId : null;
   }
 
+  /** Extracts the vault path an audited request targeted (`path`, `oldPath`, or `newPath`),
+   * normalizing slashes, for {@link auditDenied} log entries. */
   private requestPath(req: Request): string | undefined {
     const value = req.body?.path ?? req.body?.oldPath ?? req.body?.newPath;
     return typeof value === "string" ? value.replace(/\\/g, "/") : undefined;
   }
+
+  /** Logs an audit warning for an operation denied by {@link requireAdmin}. */
   private auditDenied(
     user: AuthenticatedUser,
     operation: string,
@@ -41,9 +54,14 @@ export class RouteUsers {
     });
   }
 
+  /** Reads the authenticated user previously attached to the request by {@link requireAuth}. */
   private currentUser(res: Response): AuthenticatedUser {
     return res.locals.authenticatedUser as AuthenticatedUser;
   }
+
+  /** Middleware: resolves the bearer access token and rejects the request with 401 if it's
+   * missing/invalid. Must run before {@link requireAdmin} or any route reading
+   * {@link currentUser}. */
   private requireAuth = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     const token = req.header("Authorization")?.replace(/^Bearer\s+/i, "");
 
@@ -60,6 +78,8 @@ export class RouteUsers {
     next();
   };
 
+  /** Middleware: rejects the request with 403 (and logs an audit entry) unless the
+   * authenticated user is an admin. Must run after {@link requireAuth}. */
   private requireAdmin = (req: Request, res: Response, next: NextFunction): void => {
     const user = this.currentUser(res);
 
@@ -73,6 +93,7 @@ export class RouteUsers {
     next();
   };
 
+  /** Registers this router's routes on {@link router}. Must be called once before mounting. */
   public startRoute() {
     this.router.patch(
       "/:id/name",

@@ -21,10 +21,12 @@ User sessions also keep the private editor document separate from the document p
 
 ## HTTP enforcement
 
-All shared-vault mutation routes require both authentication and the admin role:
+All shared-vault mutation routes require both authentication and the admin role,
+applied per route in `RouteSyncFiles` (`/initSync` only requires authentication,
+since any role can download the initial vault):
 
 ```ts
-this.app.use('/api/sync', requireAuth, requireAdmin);
+this.router.post('/create', this.requireAuth, this.requireAdmin, handler);
 ```
 
 ## Yjs enforcement

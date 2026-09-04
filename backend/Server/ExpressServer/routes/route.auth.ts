@@ -7,6 +7,8 @@ import type { AuthenticatedUser, WebSocketChannel } from "../../../auth/auth.typ
 import type { NextFunction } from "express";
 import { mutationErrorMessage, mutationErrorStatus } from "../mutationFunctions.ts";
 
+/** Session endpoints mounted at `/api/auth`: login, refresh, logout, current user, WebSocket
+ * ticket issuance, and self-service password change. */
 export class RouteAuth {
   public router: express.Router = express.Router();
   constructor(
@@ -18,6 +20,9 @@ export class RouteAuth {
     private readonly dbService: DBServices,
   ) {}
 
+  /** Middleware: resolves the bearer access token and rejects the request with 401 if it's
+   * missing/invalid. Must run before any route reading {@link currentUser} or
+   * `res.locals.accessToken`. */
   private requireAuth = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     const token = req.header("Authorization")?.replace(/^Bearer\s+/i, "");
 
@@ -34,11 +39,15 @@ export class RouteAuth {
     next();
   };
 
+  /** Reads the authenticated user previously attached to the request by {@link requireAuth}. */
   private currentUser(res: Response): AuthenticatedUser {
     return res.locals.authenticatedUser as AuthenticatedUser;
   }
 
+  /** Registers this router's routes on {@link router}. Must be called once before mounting. */
   public startRoute() {
+    // Rate-limited by both account and IP; a failed attempt only counts against the limit
+    // once the credentials are confirmed invalid, so a malformed request doesn't cost a try.
     this.router.post("/login", async (req: Request, res: Response): Promise<void> => {
       const { email, password } = req.body ?? {};
 

@@ -97,7 +97,10 @@ without creating a useful object boundary.
 | Module | Responsibility |
 | --- | --- |
 | `backend/main.ts` | Application composition and startup |
-| `backend/Server/ExpressServer.ts` | HTTP routes and route-level authorization |
+| `backend/Server/ExpressServer/ExpressServer.ts` | Express app setup: mounts each router, no route handlers of its own |
+| `backend/Server/ExpressServer/routes/route.auth.ts` | `/api/auth/*` routes and their authorization |
+| `backend/Server/ExpressServer/routes/route.users.ts` | `/api/users/*` routes and their authorization |
+| `backend/Server/ExpressServer/routes/route.syncFiles.ts` | `/api/sync/*` routes and their authorization |
 | `backend/Server/WebSocketServer.ts` | WebSocket upgrade authentication and channel routing |
 | `backend/yjs/YjsCollaborationServer.ts` | Composition root for the Yjs backend: wires the room registry, persistence gateway, and message handlers, and exposes the public API used by `ExpressServer` and `WebSocketServer` |
 | `backend/yjs/yjsRooms/YjsRoomRegistry.ts` | Shared-room lifecycle: reservation, creation, cleanup, and path invalidation |
@@ -126,6 +129,16 @@ composes its own services.
 `SyncMessageHandler.ts` was originally a class with a single `handle()`
 method; it is now a plain function (`syncMessageHandler`) taking a params
 object, since it held no state of its own between calls.
+
+`ExpressServer.ts` used to register every route handler directly, mixing
+Express app setup with three unrelated domains' worth of authorization logic
+in one file. Routes were split by domain into `RouteAuth`, `RouteUsers`, and
+`RouteSyncFiles` (`backend/Server/ExpressServer/routes/`), each owning its
+own `requireAuth`/`requireAdmin` middleware and building an `express.Router`
+that `ExpressServer` mounts at the matching `/api/*` prefix. Every route path
+inside a router is relative to that prefix (e.g. `RouteUsers` registers
+`/:id/name`, not `/api/users/:id/name`) — a router mounted with a path
+already registered under its own full path would double the prefix.
 
 `ExpressServer` is also constructor-injected with a `QueueManager`. Every
 route that mutates a user's row (`POST /api/users`,

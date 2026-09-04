@@ -92,7 +92,7 @@ type UserMutationResult =
 	  };
 ```
 
-`ExpressServer` maps these domain reasons to HTTP status codes and messages.
+`RouteUsers` and `RouteAuth` map these domain reasons to HTTP status codes and messages via `mutationErrorStatus()`/`mutationErrorMessage()`.
 
 ## VaultChange
 

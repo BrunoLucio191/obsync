@@ -29,9 +29,13 @@ new DBServices(userDB: UserDB)
 
 ## ExpressServer
 
-`ExpressServer` configures middleware and exposes the HTTP API.
+`ExpressServer` owns the Express app and Node HTTP server. It builds one
+router instance per domain (`RouteAuth`, `RouteUsers`, `RouteSyncFiles`),
+mounts each at its `/api/*` prefix, and registers the unauthenticated health
+check. Route handlers themselves live in the router classes below, not in
+`ExpressServer`.
 
-Source: [`backend/Server/ExpressServer.ts`](../../../backend/Server/ExpressServer.ts)
+Source: [`backend/Server/ExpressServer/ExpressServer.ts`](../../../backend/Server/ExpressServer/ExpressServer.ts)
 
 ```ts
 new ExpressServer({
@@ -50,13 +54,56 @@ new ExpressServer({
 
 | Member | Description |
 | --- | --- |
-| `initializeMiddleware()` | Installs TLS enforcement, JSON parsing, and a no-store header on `/api/auth` routes |
+| `initializeMiddleware()` | Installs TLS enforcement, JSON parsing, a no-store header on `/api/auth`, and mounts each router |
+| `initializeRoutes()` | Calls `startRoute()` on each router and registers `GET /api/serverHealth` |
 | `serverStart(port?)` | Starts the Node HTTP server on the configured host |
 | `getHttpServer` | Returns the underlying `node:http` server for WebSocket upgrades |
 
 Routes are documented in [HTTP API](http.md). Every route that creates,
 updates, or deletes a user runs through a per-user queue instead of
 directly; see [QueueManager](#queuemanager) below.
+
+### RouteAuth
+
+Session endpoints mounted at `/api/auth`: login, refresh, logout, current
+user, WebSocket ticket issuance, and self-service password change. Login is
+rate-limited by both account and IP; a failed attempt only counts against the
+limit once the credentials are confirmed invalid.
+
+Source: [`backend/Server/ExpressServer/routes/route.auth.ts`](../../../backend/Server/ExpressServer/routes/route.auth.ts)
+
+| Member | Description |
+| --- | --- |
+| `requireAuth` | Middleware: resolves the bearer token, rejects with 401 if missing/invalid |
+| `startRoute()` | Registers `/login`, `/refresh`, `/logout`, `/me`, `/ws-ticket`, `/change-password` on `router` |
+
+### RouteUsers
+
+Admin-only user management endpoints mounted at `/api/users`: list, create,
+rename, reset password, change role, activate/deactivate, and delete.
+
+Source: [`backend/Server/ExpressServer/routes/route.users.ts`](../../../backend/Server/ExpressServer/routes/route.users.ts)
+
+| Member | Description |
+| --- | --- |
+| `requireAuth` | Middleware: resolves the bearer token, rejects with 401 if missing/invalid |
+| `requireAdmin` | Middleware: rejects with 403 (and audit-logs) unless the caller is an admin |
+| `startRoute()` | Registers `/`, `/:id/name`, `/:id/password`, `/:id/role`, `/:id/status`, `/:id` on `router` |
+
+### RouteSyncFiles
+
+Vault sync endpoints mounted at `/api/sync`: the initial full-vault zip
+download (`/initSync`, any authenticated role) and the admin-only structure
+mutations (`/create`, `/delete`, `/modify`, `/rename`) that also broadcast a
+`VaultChange` over the WebSocket for other connected clients.
+
+Source: [`backend/Server/ExpressServer/routes/route.syncFiles.ts`](../../../backend/Server/ExpressServer/routes/route.syncFiles.ts)
+
+| Member | Description |
+| --- | --- |
+| `requireAuth` | Middleware: resolves the bearer token, rejects with 401 if missing/invalid |
+| `requireAdmin` | Middleware: rejects with 403 (and audit-logs) unless the caller is an admin |
+| `startRoute()` | Registers `/initSync`, `/create`, `/delete`, `/modify`, `/rename` on `router` |
 
 ## WebSocketServer
 

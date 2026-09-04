@@ -26,7 +26,8 @@ and live WebSocket rooms observe the same deleted-path and room state.
 | `TokenService` | Access tokens, refresh sessions, revocation, and WS tickets | [Authentication](authentication.md#tokenservice) |
 | `LoginRateLimiter` | In-memory failure windows and blocking | [Authentication](authentication.md#loginratelimiter) |
 | `DBServices` | User queries and protected mutations | [Services](services.md#dbservices) |
-| `ExpressServer` | Middleware, HTTP routes, and route authorization | [Services](services.md#expressserver) |
+| `ExpressServer` | Middleware and router mounting | [Services](services.md#expressserver) |
+| `RouteAuth` / `RouteUsers` / `RouteSyncFiles` | HTTP routes and route authorization, one class per domain | [Services](services.md#expressserver) |
 | `WebSocketServer` | Upgrade authentication and channel routing | [Services](services.md#websocketserver) |
 | `YjsCollaborationServer` | Yjs room lifecycle, sync, and awareness | [Services](services.md#yjscollaborationserver) |
 | `QueueManager` | Per-user task queues, used to serialize same-user mutations | [Services](services.md#queuemanager) |
