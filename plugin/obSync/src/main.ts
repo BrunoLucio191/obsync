@@ -51,8 +51,6 @@ export default class ObSync extends Plugin {
 		try {
 			this.applyBackendUrl(this.config.backendUrl);
 		} catch (error) {
-			// A previously-saved URL should already be valid, but never let a
-			// stored config value keep the whole plugin from loading.
 			console.error(t('settings.backend.notConfigured'), error);
 		}
 		this.composeServices();

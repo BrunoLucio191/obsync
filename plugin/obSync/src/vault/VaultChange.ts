@@ -9,7 +9,8 @@ export type VaultChange =
 			type: 'create';
 			path: string;
 			isFolder: boolean;
-			content: string;
+			content?: string;
+			isBinary?: boolean;
 			originClientId?: string;
 	  }
 	| {

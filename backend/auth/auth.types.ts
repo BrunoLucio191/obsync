@@ -41,12 +41,16 @@ export type UserMutationResult =
   | {
       ok: false;
       reason:
-        | "not_found"
-        | "last_admin"
-        | "invalid_role"
-        | "name_exists"
-        | "invalid_current_password";
+        | "NOT_FOUND"
+        | "LAST_ADMIN"
+        | "INVALID_ROLE"
+        | "NAME_EXISTS"
+        | "INVALID_CURRENT_PASSWORD";
     };
+
+export type AuthMutationResul =
+  | { ok: true; user: AuthenticatedUser }
+  | { ok: false; reason: "missing_header_info" };
 
 /** Raw shape of a `users` table row as returned directly by the database driver. */
 export type StoredUserRow = {

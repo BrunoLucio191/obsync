@@ -7,7 +7,14 @@ import { EventEmitter } from "node:events";
  * excluded from receiving its own echoed update.
  */
 export type VaultChange =
-  | { type: "create"; path: string; isFolder: boolean; content: string; originClientId?: string }
+  | {
+      type: "create";
+      path: string;
+      isFolder: boolean;
+      content?: string;
+      isBinary?: boolean;
+      originClientId?: string;
+    }
   | { type: "delete"; path: string; isFolder: boolean; originClientId?: string }
   | { type: "modify"; path: string; content: string; originClientId?: string }
   | { type: "rename"; oldPath: string; newPath: string; originClientId?: string };

@@ -62,6 +62,7 @@ export class SystemChannel {
 		socket.onmessage = (event) => {
 			try {
 				const change = JSON.parse(event.data as string) as VaultChange;
+
 				if (change.originClientId !== this.auth.clientId) {
 					void this.remoteChanges.apply(change);
 				}

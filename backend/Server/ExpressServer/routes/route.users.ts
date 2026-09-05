@@ -1,7 +1,10 @@
 import express, { type Request, type Response, type NextFunction } from "express";
 import type { TokenService } from "../../../auth/TokenService.ts";
 import type { AuthenticatedUser, UserRole } from "../../../auth/auth.types.ts";
-import { mutationErrorMessage, mutationErrorStatus } from "../mutationFunctions.ts";
+import {
+  UserMutationErrorMessage,
+  userMutationErrorStatus,
+} from "./mutationMessage/userMessageMutation.ts";
 import { DBServices } from "../../../users/DBServices.ts";
 import type { QueueManager } from "../../../queue/QueueManager.ts";
 
@@ -77,8 +80,7 @@ export class RouteUsers {
     const authenticatedUser = await this.tokenService.verifyToken(token);
 
     if (!authenticatedUser) {
-      res.status(401).json({ error: "Unauthorized." });
-
+      res.status(401).json({ error: "Authentication required" });
       return;
     }
 
@@ -110,12 +112,15 @@ export class RouteUsers {
       this.requireAdmin,
       async (req: Request, res: Response): Promise<void> => {
         const userId = this.parseUserId(req.params.id);
+        const { ["x-obsync-client"]: clientId } = req.headers;
         const normalizedName = typeof req.body?.name === "string" ? req.body.name.trim() : "";
 
         if (!userId) {
+          console.error("[Users] Missing userId from url params");
           res.status(400).json({ error: "Invalid user." });
           return;
         }
+
         if (normalizedName.length < 2 || normalizedName.length > 64) {
           res.status(400).json({
             error: "The name must be between 2 and 64 characters.",
@@ -124,11 +129,12 @@ export class RouteUsers {
         }
         const actor = this.currentUser(res);
         const target = await this.dbService.getUserById(userId, true);
-        const queue = this.queueManager.creatQueueOrReturn(String(userId));
+        const queue = this.queueManager.creatDBQueueOrReturn(String(clientId));
 
         queue.addTask(async () => {
           try {
             if (!target) {
+              console.log("[Users] User not found in the DB");
               res.status(404).json({ error: "User not found." });
               return;
             }
@@ -141,15 +147,15 @@ export class RouteUsers {
 
             const result = await this.dbService.updateUserName(userId, normalizedName);
             if (!result.ok) {
-              res.status(mutationErrorStatus(result)).json({
-                error: mutationErrorMessage(result),
+              res.status(userMutationErrorStatus(result)).json({
+                error: UserMutationErrorMessage(result),
                 reason: result.reason,
               });
               return;
             }
             res.json({ user: result.user });
           } catch (error) {
-            console.error(`Something happened while changing ${userId} name`);
+            console.error(`[Users] An error happened while changing the ${userId} name`, error);
             res.status(500).json({
               error: "Something happened while changing some user name",
             });
@@ -165,6 +171,7 @@ export class RouteUsers {
       async (req: Request, res: Response): Promise<void> => {
         const userId = this.parseUserId(req.params.id);
         const newPassword = req.body?.newPassword;
+        const { ["x-obsync-client"]: clientId } = req.headers;
 
         if (!userId) {
           res.status(400).json({ error: "Invalid user." });
@@ -178,12 +185,14 @@ export class RouteUsers {
         }
 
         const target = await this.dbService.getUserById(userId, true);
-        const queue = this.queueManager.creatQueueOrReturn(String(userId));
+        const queue = this.queueManager.creatDBQueueOrReturn(String(clientId));
 
         queue.addTask(async () => {
           try {
             if (!target) {
-              res.status(404).json({ error: "User not found." });
+              res.status(404).json({
+                error: "User not found in DB",
+              });
               return;
             }
             if (target.role !== "user") {
@@ -197,8 +206,8 @@ export class RouteUsers {
 
             const result = await this.dbService.adminSetUserPassword(userId, newPassword);
             if (!result.ok) {
-              res.status(mutationErrorStatus(result)).json({
-                error: mutationErrorMessage(result),
+              res.status(userMutationErrorStatus(result)).json({
+                error: UserMutationErrorMessage(result),
                 reason: result.reason,
               });
               return;
@@ -248,7 +257,7 @@ export class RouteUsers {
           });
           return;
         }
-        const queue = this.queueManager.creatQueueOrReturn(email);
+        const queue = this.queueManager.creatDBQueueOrReturn(email);
 
         queue.addTask(async () => {
           try {
@@ -270,7 +279,7 @@ export class RouteUsers {
             }
             res.status(201).json({ user: result.user });
           } catch (error) {
-            console.error(`Something happened while creating a new user`);
+            console.error(`[Users] Something happened while creating a new user`);
 
             res.status(500).json({
               error: "Something happened while creating a new user",
@@ -292,20 +301,20 @@ export class RouteUsers {
           return;
         }
 
-        const queue = this.queueManager.creatQueueOrReturn(String(userId));
+        const queue = this.queueManager.creatDBQueueOrReturn(String(userId));
         queue.addTask(async () => {
           try {
             const result = await this.dbService.updateUserRole(userId, role);
             if (!result.ok) {
-              res.status(mutationErrorStatus(result)).json({
-                error: mutationErrorMessage(result),
+              res.status(userMutationErrorStatus(result)).json({
+                error: UserMutationErrorMessage(result),
                 reason: result.reason,
               });
               return;
             }
             res.json({ user: result.user });
           } catch (error) {
-            console.error("Something happened while updating a user role");
+            console.error("[Users] Something happened while updating a user role");
 
             res.status(500).json({
               error: "Something happened while updating a user role",
@@ -328,13 +337,13 @@ export class RouteUsers {
           return;
         }
 
-        const queue = this.queueManager.creatQueueOrReturn(String(userId));
+        const queue = this.queueManager.creatDBQueueOrReturn(String(userId));
         queue.addTask(async () => {
           try {
             const result = await this.dbService.updateUserStatus(userId, active);
             if (!result.ok) {
-              res.status(mutationErrorStatus(result)).json({
-                error: mutationErrorMessage(result),
+              res.status(userMutationErrorStatus(result)).json({
+                error: UserMutationErrorMessage(result),
                 reason: result.reason,
               });
               return;
@@ -362,14 +371,14 @@ export class RouteUsers {
           return;
         }
 
-        const queue = this.queueManager.creatQueueOrReturn(String(userId));
+        const queue = this.queueManager.creatDBQueueOrReturn(String(userId));
 
         queue.addTask(async () => {
           try {
             const result = await this.dbService.deleteUser(userId);
             if (!result.ok) {
-              res.status(mutationErrorStatus(result)).json({
-                error: mutationErrorMessage(result),
+              res.status(userMutationErrorStatus(result)).json({
+                error: UserMutationErrorMessage(result),
                 reason: result.reason,
               });
               return;

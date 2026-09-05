@@ -1,24 +1,23 @@
-import { DbQueue } from "./dbQueue.ts";
-
+import { Queue } from "./dbQueue.ts";
 /**
- * Lazily creates and caches one {@link DbQueue} per user id, so every caller
+ * Lazily creates and caches one {@link Queue} per user id, so every caller
  * mutating the same user shares a single FIFO queue instead of racing each
  * other with independent queues.
  */
 export class QueueManager {
-  private queuesRecord = new Map<string, DbQueue>();
+  private dbQueuesRecord = new Map<string, Queue>();
 
   /** Returns the existing queue for `userId`, creating one on first use. */
-  public creatQueueOrReturn(userId: string): DbQueue {
-    if (!this.queuesRecord.has(userId)) {
-      const queue = new DbQueue();
-      this.queuesRecord.set(userId, queue);
+  public creatDBQueueOrReturn(userID: string): Queue {
+    if (!this.dbQueuesRecord.has(userID)) {
+      const queue = new Queue();
+      this.dbQueuesRecord.set(userID, queue);
     }
 
-    const queue = this.queuesRecord.get(userId);
+    const queue = this.dbQueuesRecord.get(userID);
 
     if (!queue) {
-      throw new Error("there is not queue");
+      throw new Error("there is no queue");
     }
     return queue;
   }

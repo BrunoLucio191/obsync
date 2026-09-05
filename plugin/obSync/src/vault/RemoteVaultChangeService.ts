@@ -1,8 +1,9 @@
-import type { App } from 'obsidian';
+import { requestUrl, type App } from 'obsidian';
 import type { VaultChange } from './VaultChange.ts';
 import type { AuthService } from '../auth/AuthService.ts';
 import type { CollaborationController } from '../collab/CollaborationController.ts';
 import { PathMuteRegistry } from './PathMuteRegistry.ts';
+import { getApiBaseUrl } from '../config/ApiConfig.ts';
 
 /**
  * Applies vault changes received from other clients (via {@link SystemChannel})
@@ -36,13 +37,39 @@ export class RemoteVaultChangeService {
 			}
 
 			this.mutedPaths.mute(change.path);
+			if (change.isBinary) {
+				let fileName = null;
+				if (!change.path.includes('/')) {
+					fileName = change.path;
+				} else {
+					fileName = change.path.slice(
+						change.path.lastIndexOf('/') + 1,
+						change.path.length,
+					);
+				}
+				const params = new URLSearchParams({
+					path: change.path,
+					fileName: fileName,
+				});
+				const response = await requestUrl({
+					url: `${getApiBaseUrl()}/api/sync/getFile?${params}`,
+					method: 'GET',
+					headers: this.auth.Authheaders(),
+				});
+				if (response.status !== 200) {
+					console.error('Error when downloading tha file');
+				}
+				this.mutedPaths.mute(change.path);
+				await this.ensureParentFolder(change.path);
+				await adapter.writeBinary(change.path, response.arrayBuffer);
+			}
 			if (change.isFolder) {
 				if (!(await adapter.exists(change.path))) {
 					await adapter.mkdir(change.path);
 				}
 			} else {
 				await this.ensureParentFolder(change.path);
-				await adapter.write(change.path, change.content);
+				await adapter.write(change.path, change.content!);
 			}
 			return;
 		}
@@ -55,6 +82,7 @@ export class RemoteVaultChangeService {
 			this.mutedPaths.mute(change.path);
 			await this.ensureParentFolder(change.path);
 			await adapter.write(change.path, change.content);
+
 			return;
 		}
 

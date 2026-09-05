@@ -49,19 +49,28 @@ export class SyncVaultChanges {
 				const binary = imageBuffer.byteLength > 0;
 
 				if (binary) {
-					//TODO: add sync for images and other type of files
+					await requestUrl({
+						url: `${getApiBaseUrl()}/api/sync/createFile`,
+						method: 'POST',
+						headers: {
+							...this.auth.Authheaders(),
+							'Content-Type': 'application/octet-stream',
+							'X-ObSync-filePath': file.path,
+						},
+						body: imageBuffer,
+					});
+				} else {
+					await requestUrl({
+						url: `${getApiBaseUrl()}/api/sync/create`,
+						method: 'POST',
+						headers: this.auth.headers(),
+						body: JSON.stringify({
+							path: file.path,
+							isFolder,
+							content,
+						}),
+					});
 				}
-
-				await requestUrl({
-					url: `${getApiBaseUrl()}/api/sync/create`,
-					method: 'POST',
-					headers: this.auth.headers(),
-					body: JSON.stringify({
-						path: file.path,
-						isFolder,
-						content,
-					}),
-				});
 			}),
 		);
 

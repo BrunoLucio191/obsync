@@ -5,7 +5,10 @@ import type { TokenService } from "../../../auth/TokenService.ts";
 import type { DBServices } from "../../../users/DBServices.ts";
 import type { AuthenticatedUser, WebSocketChannel } from "../../../auth/auth.types.ts";
 import type { NextFunction } from "express";
-import { mutationErrorMessage, mutationErrorStatus } from "../mutationFunctions.ts";
+import {
+  UserMutationErrorMessage,
+  userMutationErrorStatus,
+} from "./mutationMessage/userMessageMutation.ts";
 
 export type RouteAuthConstructor = {
   accountLoginRateLimiter: LoginRateLimiter;
@@ -233,8 +236,8 @@ export class RouteAuth {
           if (result.reason === "invalid_current_password") {
             this.passwordChangeRateLimiter.recordFailure(rateLimitKey);
           }
-          res.status(mutationErrorStatus(result)).json({
-            error: mutationErrorMessage(result),
+          res.status(userMutationErrorStatus(result)).json({
+            error: UserMutationErrorMessage(result),
             reason: result.reason,
           });
           return;

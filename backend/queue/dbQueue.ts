@@ -9,7 +9,7 @@
  * own queue types instead of growing this one once that need shows up.
  */
 
-export class DbQueue {
+export class Queue {
   private queue: Array<() => Promise<void>> = [];
   private processing: boolean = false;
 

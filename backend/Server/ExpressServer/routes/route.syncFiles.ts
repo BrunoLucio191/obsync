@@ -7,6 +7,9 @@ import { publishVaultChange } from "../../../syncEvents.ts";
 import type { NextFunction } from "express";
 import type { AuthenticatedUser } from "../../../auth/auth.types.ts";
 import type { YjsCollaborationServer as YjsCollaborationGateway } from "../../../yjs/YjsCollaborationServer.ts";
+import { QueueManager } from "../../../queue/QueueManager.ts";
+import pathes from "node:path";
+import { error } from "node:console";
 
 /** Vault sync endpoints mounted at `/api/sync`: the initial full-vault zip download
  * (`/initSync`, any authenticated role) and the admin-only structure mutations
@@ -16,6 +19,7 @@ export type RouteSyncFilesContructor = {
   tokenService: TokenService;
   fileManager: FileManager;
   collaborationServer: YjsCollaborationGateway;
+  queueManager: QueueManager;
 };
 
 export class RouteSyncFiles {
@@ -23,10 +27,17 @@ export class RouteSyncFiles {
   private readonly tokenService: TokenService;
   private readonly fileManager: FileManager;
   private readonly collaborationServer: YjsCollaborationGateway;
-  constructor({ tokenService, fileManager, collaborationServer }: RouteSyncFilesContructor) {
+  private readonly queueManager: QueueManager;
+  constructor({
+    tokenService,
+    fileManager,
+    collaborationServer,
+    queueManager,
+  }: RouteSyncFilesContructor) {
     this.tokenService = tokenService;
     this.fileManager = fileManager;
     this.collaborationServer = collaborationServer;
+    this.queueManager = queueManager;
   }
 
   /** Reads the authenticated user previously attached to the request by {@link requireAuth}. */
@@ -38,7 +49,6 @@ export class RouteSyncFiles {
    * authenticated user is an admin. Must run after {@link requireAuth}. */
   private requireAdmin = (req: Request, res: Response, next: NextFunction): void => {
     const user = this.currentUser(res);
-
     if (user.role !== "admin") {
       this.auditDenied(user, req.method, req.path, this.requestPath(req));
       res.status(403).json({ error: "Only administrators can perform this action." });
@@ -135,21 +145,23 @@ export class RouteSyncFiles {
         try {
           const { path, isFolder, content } = req.body;
 
-          if (typeof path !== "string" || !path.trim()) {
-            res.status(400).send("Invalid path");
+          const pathDecoded = decodeURI(path);
+
+          if (typeof pathDecoded !== "string" || !pathDecoded.trim()) {
+            res.status(400).json({ error: "Invalid path" });
             return;
           }
 
-          if (this.collaborationServer.isPathDeleted(path)) {
-            await this.collaborationServer.deletePersistedStateUnderPath(path);
+          if (this.collaborationServer.isPathDeleted(pathDecoded)) {
+            await this.collaborationServer.deletePersistedStateUnderPath(pathDecoded);
           }
-          this.collaborationServer.clearPathDeleted(path);
+          this.collaborationServer.clearPathDeleted(pathDecoded);
 
           if (isFolder) {
-            await this.fileManager.createFolder(path);
+            await this.fileManager.createFolder(pathDecoded);
           } else {
             await this.fileManager.createOrModifyFile(
-              path,
+              pathDecoded,
               typeof content === "string" ? content : "",
             );
           }
@@ -157,7 +169,7 @@ export class RouteSyncFiles {
           //spread vault changes to the WebSocket
           publishVaultChange({
             type: "create",
-            path,
+            path: pathDecoded,
             isFolder: Boolean(isFolder),
             content: typeof content === "string" ? content : "",
             originClientId: req.header("x-obsync-client") ?? undefined,
@@ -166,7 +178,7 @@ export class RouteSyncFiles {
           res.sendStatus(200);
         } catch (error) {
           console.error("[Sync] Error in Create:", error);
-          res.status(500).send("Error creating file or folder");
+          res.status(500).json({ error: "Error creating file or folder" });
         }
       },
     );
@@ -269,19 +281,60 @@ export class RouteSyncFiles {
         }
       },
     );
-    //TODO: add route for making a file
-    this.router.get(
+    this.router.post(
       "/createFile",
       this.requireAuth,
       this.requireAdmin,
+      express.raw({ limit: "50mb", type: "application/octet-stream" }),
       async (req: Request, res: Response) => {
         try {
-          const doingNothing = null;
+          const buffer: ArrayBuffer = req.body;
+          const nodeBuffer = Buffer.from(buffer);
+          const headers = req.headers;
+          const { ["x-obsync-client"]: clientId, ["x-obsync-filepath"]: path } = headers;
+
+          if (typeof clientId === "undefined" || typeof path === "undefined") {
+            res.send(400).send("Invalid clientId or path");
+          }
+
+          const queue = this.queueManager.creatDBQueueOrReturn(String(clientId));
+          queue.addTask(async () => {
+            try {
+              if (nodeBuffer.byteLength == 0 || path.length == 0 || task === undefined) {
+                throw new Error("The task is empty or is missing an important field");
+              }
+            } catch (error) {
+              console.error("[Sync] Error in Sending File");
+              res.status(500).send("Error making file");
+              return;
+            }
+          });
+          publishVaultChange({
+            type: "create",
+            path: String(path),
+            isFolder: false,
+            isBinary: true,
+          });
+          res.sendStatus(200);
         } catch (error) {
-          console.error();
+          console.error("[Sync] Error in Sending File");
           res.status(500).send("Error making file");
         }
       },
     );
+    this.router.get("/getFile", this.requireAuth, async (req: Request, res: Response) => {
+      try {
+        const { path, fileName } = req.query;
+        const vaultPath = systemPaths.vault;
+
+        const fileNameOrDirectory = path === fileName ? fileName : path;
+        const relativo = pathes.join(vaultPath, String(fileNameOrDirectory));
+        res.download(relativo, async (error) => {
+          if (error) {
+            console.error(error);
+          }
+        });
+      } catch (error) {}
+    });
   }
 }

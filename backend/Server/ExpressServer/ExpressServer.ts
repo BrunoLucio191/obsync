@@ -7,7 +7,7 @@ import { FileManager } from "../FileManager.ts";
 import { AuthService } from "../../auth/authService.ts";
 import type { TokenService } from "../../auth/TokenService.ts";
 import type { DBServices } from "../../users/DBServices.ts";
-import type { QueueManager } from "../../queue/QueueManager.ts";
+import { QueueManager } from "../../queue/QueueManager.ts";
 import { RouteAuth } from "./routes/route.auth.ts";
 import { RouteUsers } from "./routes/route.users.ts";
 import { RouteSyncFiles } from "./routes/route.syncFiles.ts";
@@ -45,7 +45,6 @@ export class ExpressServer {
   private readonly tokenService: TokenService;
   private readonly authService: AuthService;
   private readonly collaborationServer: YjsCollaborationGateway;
-  private readonly queueManager: QueueManager;
   private routeAuth: RouteAuth;
   private routeUsers: RouteUsers;
   private routeSyncFiles: RouteSyncFiles;
@@ -65,7 +64,6 @@ export class ExpressServer {
     dbService,
     authService,
     collaborationServer,
-    queueManager,
   }: ExpressServerConstructorOptions) {
     this.port = port;
     this.host = host;
@@ -78,11 +76,10 @@ export class ExpressServer {
     this.dbService = dbService;
     this.authService = authService;
     this.collaborationServer = collaborationServer;
-    this.queueManager = queueManager;
     this.routeUsers = new RouteUsers({
       tokenService: this.tokenService,
       dbService: this.dbService,
-      queueManager: this.queueManager,
+      queueManager: new QueueManager(),
     });
     this.routeAuth = new RouteAuth({
       accountLoginRateLimiter: new LoginRateLimiter({
@@ -102,6 +99,7 @@ export class ExpressServer {
       tokenService: this.tokenService,
       fileManager: this.fileManager,
       collaborationServer: this.collaborationServer,
+      queueManager: new QueueManager(),
     });
     this.initializeMiddleware();
     this.initializeRoutes();
@@ -119,8 +117,7 @@ export class ExpressServer {
       }
       next();
     });
-
-    this.app.use(express.json({ limit: "16mb" }));
+    this.app.use(express.json({ type: "application/json", limit: "16mb" }));
 
     this.app.use("/api/auth", (_req, res, next) => {
       res.setHeader("Cache-Control", "no-store");
