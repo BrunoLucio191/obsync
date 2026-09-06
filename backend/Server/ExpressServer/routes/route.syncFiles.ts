@@ -9,7 +9,6 @@ import type { AuthenticatedUser } from "../../../auth/auth.types.ts";
 import type { YjsCollaborationServer as YjsCollaborationGateway } from "../../../yjs/YjsCollaborationServer.ts";
 import { QueueManager } from "../../../queue/QueueManager.ts";
 import pathes from "node:path";
-import { error } from "node:console";
 
 /** Vault sync endpoints mounted at `/api/sync`: the initial full-vault zip download
  * (`/initSync`, any authenticated role) and the admin-only structure mutations
@@ -109,31 +108,39 @@ export class RouteSyncFiles {
       "/initSync",
       this.requireAuth,
       async (_req: Request, res: Response): Promise<void> => {
-        try {
-          console.log("[ZIP] Starting compression...");
-          await this.fileManager.directoryZiped();
-          const zipPath = systemPaths.vaultExit;
-
-          res.download(zipPath, "vault.zip", async (error) => {
-            if (error) {
-              console.error("[ZIP] Error sending file:", error.message);
-              if (!res.headersSent) {
-                res.status(500).json({ error: "Failed to send the files." });
-              }
-            } else {
-              console.log("[ZIP] Sent successfully.");
-            }
-
-            try {
-              await fs.unlink(zipPath);
-            } catch (error) {
-              console.error("[ZIP] Error cleaning up temporary file:", error);
-            }
-          });
-        } catch (error) {
-          console.error("[ZIP] General error:", error);
-          res.status(500).json({ error: "Internal error generating the file." });
+        const { ["x-obsync-client"]: clientId } = _req.headers;
+        if (typeof clientId !== "string" || !clientId.trim()) {
+          console.warn("[Files] Missing headers info");
+          res.status(400).send({ error: "missing headers info" });
+          return;
         }
+        const queue = this.queueManager.creatDBQueueOrReturn(clientId);
+        queue.addTask(async () => {
+          try {
+            console.log("[ZIP] Starting compression...");
+            await this.fileManager.directoryZiped();
+            const zipPath = systemPaths.vaultExit;
+
+            res.download(zipPath, "vault.zip", async (error) => {
+              if (error) {
+                console.error("[ZIP] Error sending file:", error.message);
+                if (!res.headersSent) {
+                  res.status(500).json({ error: "Failed to send the files." });
+                }
+              } else {
+                console.log("[ZIP] Sent successfully.");
+              }
+              try {
+                await fs.unlink(zipPath);
+              } catch (error) {
+                console.error("[ZIP] Error cleaning up temporary file:", error);
+              }
+            });
+          } catch (error) {
+            console.error("[ZIP] General error:", error);
+            res.status(500).json({ error: "Internal error generating the file." });
+          }
+        });
       },
     );
 
@@ -293,15 +300,15 @@ export class RouteSyncFiles {
           const headers = req.headers;
           const { ["x-obsync-client"]: clientId, ["x-obsync-filepath"]: path } = headers;
 
-          if (typeof clientId === "undefined" || typeof path === "undefined") {
+          if (typeof clientId === "undefined" || typeof path !== "string") {
             res.send(400).send("Invalid clientId or path");
           }
 
           const queue = this.queueManager.creatDBQueueOrReturn(String(clientId));
           queue.addTask(async () => {
             try {
-              if (nodeBuffer.byteLength == 0 || path.length == 0 || task === undefined) {
-                throw new Error("The task is empty or is missing an important field");
+              if (nodeBuffer.byteLength == 0 || path == undefined) {
+                console.error("[Files] The task is empty or is missing an important field");
               }
             } catch (error) {
               console.error("[Sync] Error in Sending File");

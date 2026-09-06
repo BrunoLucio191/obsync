@@ -96,7 +96,7 @@ export class RouteUsers {
 
     if (user.role !== "admin") {
       this.auditDenied(user, req.method, req.path, this.requestPath(req));
-      res.status(403).json({ error: "Only administrators can perform this action." });
+      res.status(403).json({ error: "[Users] Only administrators can perform this action." });
 
       return;
     }
@@ -116,12 +116,13 @@ export class RouteUsers {
         const normalizedName = typeof req.body?.name === "string" ? req.body.name.trim() : "";
 
         if (!userId) {
-          console.error("[Users] Missing userId from url params");
-          res.status(400).json({ error: "Invalid user." });
+          console.warn("[Users] Missing or invalid userId in URL params");
+          res.status(404).json({ error: "Invalid user." });
           return;
         }
 
         if (normalizedName.length < 2 || normalizedName.length > 64) {
+          console.warn("[Users] Invalid name length (must be 2-64 characters)");
           res.status(400).json({
             error: "The name must be between 2 and 64 characters.",
           });
@@ -134,11 +135,12 @@ export class RouteUsers {
         queue.addTask(async () => {
           try {
             if (!target) {
-              console.log("[Users] User not found in the DB");
+              console.warn("[Users] Target user not found");
               res.status(404).json({ error: "User not found." });
               return;
             }
             if (target.role === "admin" && target.id !== actor.id) {
+              console.warn("[Users] Only admins can change their own name");
               res.status(403).json({
                 error: "Administrators can only change their own name.",
               });
@@ -174,6 +176,7 @@ export class RouteUsers {
         const { ["x-obsync-client"]: clientId } = req.headers;
 
         if (!userId) {
+          console.warn("[Users] Missing or invalid userId in URL params");
           res.status(400).json({ error: "Invalid user." });
           return;
         }
@@ -214,7 +217,7 @@ export class RouteUsers {
             }
             res.json({ user: result.user });
           } catch (error) {
-            console.error(`Something happened while changing ${userId} name`);
+            console.error(`[Users] Something happened while changing ${userId} name`, error);
 
             res.status(500).json({
               error: "Something happened while changing some user password",
@@ -244,6 +247,7 @@ export class RouteUsers {
         const normalizedRole: UserRole = this.dbService.isUserRole(role) ? role : "user";
 
         if (normalizedName.length < 2 || normalizedName.length > 64) {
+          console.warn("[Users] Invalid name length (must be 2-64 characters)");
           res.status(400).json({ error: "The name must be between 2 and 64 characters." });
           return;
         }
@@ -252,6 +256,7 @@ export class RouteUsers {
           return;
         }
         if (typeof password !== "string" || password.length < 6 || password.length > 128) {
+          console.warn("[Users] Invalid password length (must be 6-128 characters)");
           res.status(400).json({
             error: "The password must be between 6 and 128 characters.",
           });
@@ -279,8 +284,7 @@ export class RouteUsers {
             }
             res.status(201).json({ user: result.user });
           } catch (error) {
-            console.error(`[Users] Something happened while creating a new user`);
-
+            console.error(`[Users] Something happened while creating a new user`, error);
             res.status(500).json({
               error: "Something happened while creating a new user",
             });
@@ -297,6 +301,7 @@ export class RouteUsers {
         const userId = this.parseUserId(req.params.id);
         const role = req.body?.role;
         if (!userId || !this.dbService.isUserRole(role)) {
+          console.warn("[Users] Invalid userId or role in request body");
           res.status(400).json({ error: "Invalid user or role." });
           return;
         }
@@ -314,8 +319,7 @@ export class RouteUsers {
             }
             res.json({ user: result.user });
           } catch (error) {
-            console.error("[Users] Something happened while updating a user role");
-
+            console.error("[Users] Something happened while updating a user role", error);
             res.status(500).json({
               error: "Something happened while updating a user role",
             });
@@ -333,6 +337,7 @@ export class RouteUsers {
         const active = req.body?.active;
 
         if (!userId || typeof active !== "boolean") {
+          console.warn("[Users] Invalid userId or status in request body");
           res.status(400).json({ error: "Invalid user or status." });
           return;
         }
@@ -350,7 +355,7 @@ export class RouteUsers {
             }
             res.json({ user: result.user });
           } catch (error) {
-            console.error("Something happened while updating a user status");
+            console.error("[Users] Something happened while updating a user status", error);
 
             res.status(500).json({
               error: "Something happened while updating a user status",
@@ -367,6 +372,7 @@ export class RouteUsers {
       async (req: Request, res: Response): Promise<void> => {
         const userId = this.parseUserId(req.params.id);
         if (!userId) {
+          console.warn("[Users] Missing or invalid userId in URL params");
           res.status(400).json({ error: "Invalid user." });
           return;
         }
@@ -385,7 +391,7 @@ export class RouteUsers {
             }
             res.json({ user: result.user });
           } catch (error) {
-            console.error("Something happened while deleting a user ");
+            console.error("[Users] Something happened while deleting a user ", error);
 
             res.status(500).json({
               error: "Something happened while deleting a user ",

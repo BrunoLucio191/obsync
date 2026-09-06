@@ -7,11 +7,7 @@ import type {
   UserRole,
 } from "../auth/auth.types.ts";
 import { UserDB } from "./UserDB.ts";
-import {
-  normalizeEmailKey,
-  normalizeName,
-  normalizeNameKey,
-} from "./userNormalization.ts";
+import { normalizeEmailKey, normalizeName, normalizeNameKey } from "./userNormalization.ts";
 import { dbEvents } from "./DBEvents.ts";
 
 /**
@@ -43,9 +39,7 @@ export class DBServices {
    * @param userId - id of the user to look up.
    * @returns The row, or `null` if no user with that id exists.
    */
-  private getUserRow(
-    userId: number,
-  ): Omit<StoredUserRow, "password_hash"> | null {
+  private getUserRow(userId: number): Omit<StoredUserRow, "password_hash"> | null {
     const row = this.userDB
       .prepare("SELECT id, email, name, role, active FROM users WHERE id = ?")
       .get(userId) as Omit<StoredUserRow, "password_hash"> | undefined;
@@ -60,9 +54,7 @@ export class DBServices {
    */
   private activeAdminCount(): number {
     const row = this.userDB
-      .prepare(
-        "SELECT COUNT(*) AS count FROM users WHERE role = 'admin' AND active = 1",
-      )
+      .prepare("SELECT COUNT(*) AS count FROM users WHERE role = 'admin' AND active = 1")
       .get() as { count: number };
     return Number(row.count);
   }
@@ -95,9 +87,7 @@ export class DBServices {
    * @returns The corresponding {@link AuthenticatedUser}.
    * @throws If the row's `role` column holds an invalid value.
    */
-  public rowToUser(
-    row: Omit<StoredUserRow, "password_hash">,
-  ): AuthenticatedUser {
+  public rowToUser(row: Omit<StoredUserRow, "password_hash">): AuthenticatedUser {
     if (!this.isUserRole(row.role)) {
       throw new Error(`Invalid role stored for user ${row.id}.`);
     }
@@ -186,9 +176,7 @@ export class DBServices {
         .run(normalizedEmail, normalizedName, nameKey, passwordHash, role);
 
       const row = this.userDB
-        .prepare(
-          "SELECT id, email, name, role, active FROM users WHERE email = ?",
-        )
+        .prepare("SELECT id, email, name, role, active FROM users WHERE email = ?")
         .get(emailKey) as Omit<StoredUserRow, "password_hash"> | undefined;
       if (!row) throw new Error("The created user could not be loaded.");
       return { ok: true, user: this.rowToUser(row) };
@@ -206,27 +194,24 @@ export class DBServices {
    * @param name - New display name.
    * @returns `{ ok: true, user }` on success, or `{ ok: false, reason }` if the user doesn't exist or the name is taken.
    */
-  public async updateUserName(
-    userId: number,
-    name: string,
-  ): Promise<UserMutationResult> {
+  public async updateUserName(userId: number, name: string): Promise<UserMutationResult> {
     const normalizedName = normalizeName(name);
     const nameKey = normalizeNameKey(normalizedName);
     const result = this.runImmediateTransaction<UserMutationResult>(() => {
       const row = this.getUserRow(userId);
-      if (!row) return { ok: false, reason: "not_found" };
+      if (!row) return { ok: false, reason: "NOT_FOUND" };
 
       const existing = this.userDB
         .prepare("SELECT id FROM users WHERE name_key = ? AND id != ?")
         .get(nameKey, userId);
-      if (existing) return { ok: false, reason: "name_exists" };
+      if (existing) return { ok: false, reason: "NAME_EXISTS" };
 
       this.userDB
         .prepare("UPDATE users SET name = ?, name_key = ? WHERE id = ?")
         .run(normalizedName, nameKey, userId);
 
       const updated = this.getUserRow(userId);
-      if (!updated) return { ok: false, reason: "not_found" };
+      if (!updated) return { ok: false, reason: "NOT_FOUND" };
       return { ok: true, user: this.rowToUser(updated) };
     });
 
@@ -243,15 +228,12 @@ export class DBServices {
    * @param role - New role to assign.
    * @returns `{ ok: true, user }` on success, or `{ ok: false, reason }` if `role` is invalid, the user doesn't exist, or this would remove the last active admin.
    */
-  public async updateUserRole(
-    userId: number,
-    role: UserRole,
-  ): Promise<UserMutationResult> {
-    if (!this.isUserRole(role)) return { ok: false, reason: "invalid_role" };
+  public async updateUserRole(userId: number, role: UserRole): Promise<UserMutationResult> {
+    if (!this.isUserRole(role)) return { ok: false, reason: "INVALID_ROLE" };
 
     const result = this.runImmediateTransaction<UserMutationResult>(() => {
       const row = this.getUserRow(userId);
-      if (!row) return { ok: false, reason: "not_found" };
+      if (!row) return { ok: false, reason: "NOT_FOUND" };
 
       if (
         row.role === "admin" &&
@@ -259,15 +241,13 @@ export class DBServices {
         role === "user" &&
         this.activeAdminCount() <= 1
       ) {
-        return { ok: false, reason: "last_admin" };
+        return { ok: false, reason: "LAST_ADMIN" };
       }
 
-      this.userDB
-        .prepare("UPDATE users SET role = ? WHERE id = ?")
-        .run(role, userId);
+      this.userDB.prepare("UPDATE users SET role = ? WHERE id = ?").run(role, userId);
       const updated = this.getUserRow(userId);
 
-      if (!updated) return { ok: false, reason: "not_found" };
+      if (!updated) return { ok: false, reason: "NOT_FOUND" };
 
       return { ok: true, user: this.rowToUser(updated) };
     });
@@ -285,27 +265,17 @@ export class DBServices {
    * @param active - Desired active status.
    * @returns `{ ok: true, user }` on success, or `{ ok: false, reason }` if the user doesn't exist or this would remove the last active admin.
    */
-  public async updateUserStatus(
-    userId: number,
-    active: boolean,
-  ): Promise<UserMutationResult> {
+  public async updateUserStatus(userId: number, active: boolean): Promise<UserMutationResult> {
     const result = this.runImmediateTransaction<UserMutationResult>(() => {
       const row = this.getUserRow(userId);
-      if (!row) return { ok: false, reason: "not_found" };
-      if (
-        row.role === "admin" &&
-        row.active === 1 &&
-        !active &&
-        this.activeAdminCount() <= 1
-      ) {
-        return { ok: false, reason: "last_admin" };
+      if (!row) return { ok: false, reason: "NOT_FOUND" };
+      if (row.role === "admin" && row.active === 1 && !active && this.activeAdminCount() <= 1) {
+        return { ok: false, reason: "LAST_ADMIN" };
       }
 
-      this.userDB
-        .prepare("UPDATE users SET active = ? WHERE id = ?")
-        .run(active ? 1 : 0, userId);
+      this.userDB.prepare("UPDATE users SET active = ? WHERE id = ?").run(active ? 1 : 0, userId);
       const updated = this.getUserRow(userId);
-      if (!updated) return { ok: false, reason: "not_found" };
+      if (!updated) return { ok: false, reason: "NOT_FOUND" };
       return { ok: true, user: this.rowToUser(updated) };
     });
 
@@ -328,21 +298,19 @@ export class DBServices {
     newPassword: string,
   ): Promise<UserMutationResult> {
     const row = this.userDB
-      .prepare(
-        "SELECT id, email, name, password_hash, role, active FROM users WHERE id = ?",
-      )
+      .prepare("SELECT id, email, name, password_hash, role, active FROM users WHERE id = ?")
       .get(userId) as StoredUserRow | undefined;
-    if (!row) return { ok: false, reason: "not_found" };
+    if (!row) return { ok: false, reason: "NOT_FOUND" };
 
     if (!(await passwordMatches(currentPassword, row.password_hash))) {
-      return { ok: false, reason: "invalid_current_password" };
+      return { ok: false, reason: "INVALID_CURRENT_PASSWORD" };
     }
 
     const passwordHash = await hashPassword(newPassword);
 
     return this.runImmediateTransaction<UserMutationResult>(() => {
       const current = this.getUserRow(userId);
-      if (!current) return { ok: false, reason: "not_found" };
+      if (!current) return { ok: false, reason: "NOT_FOUND" };
 
       this.userDB
         .prepare("UPDATE users SET password_hash = ? WHERE id = ?")
@@ -368,7 +336,7 @@ export class DBServices {
 
     return this.runImmediateTransaction<UserMutationResult>(() => {
       const current = this.getUserRow(userId);
-      if (!current) return { ok: false, reason: "not_found" };
+      if (!current) return { ok: false, reason: "NOT_FOUND" };
 
       this.userDB
         .prepare("UPDATE users SET password_hash = ? WHERE id = ?")
@@ -388,14 +356,10 @@ export class DBServices {
   public async deleteUser(userId: number): Promise<UserMutationResult> {
     const result = this.runImmediateTransaction<UserMutationResult>(() => {
       const row = this.getUserRow(userId);
-      if (!row) return { ok: false, reason: "not_found" };
+      if (!row) return { ok: false, reason: "NOT_FOUND" };
 
-      if (
-        row.role === "admin" &&
-        row.active === 1 &&
-        this.activeAdminCount() <= 1
-      ) {
-        return { ok: false, reason: "last_admin" };
+      if (row.role === "admin" && row.active === 1 && this.activeAdminCount() <= 1) {
+        return { ok: false, reason: "LAST_ADMIN" };
       }
 
       const user = this.rowToUser(row);
