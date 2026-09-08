@@ -107,8 +107,9 @@ export class RouteSyncFiles {
     this.router.post(
       "/initSync",
       this.requireAuth,
-      async (_req: Request, res: Response): Promise<void> => {
-        const { ["x-obsync-client"]: clientId } = _req.headers;
+      async (req: Request, res: Response): Promise<void> => {
+        const { ["x-obsync-client"]: clientId } = req.headers;
+
         if (typeof clientId !== "string" || !clientId.trim()) {
           console.warn("[Files] Missing headers info");
           res.status(400).send({ error: "missing headers info" });
@@ -149,44 +150,53 @@ export class RouteSyncFiles {
       this.requireAuth,
       this.requireAdmin,
       async (req: Request, res: Response) => {
-        try {
-          const { path, isFolder, content } = req.body;
+        const { ["x-obsync-client"]: clientId } = req.headers;
 
-          const pathDecoded = decodeURI(path);
-
-          if (typeof pathDecoded !== "string" || !pathDecoded.trim()) {
-            res.status(400).json({ error: "Invalid path" });
-            return;
-          }
-
-          if (this.collaborationServer.isPathDeleted(pathDecoded)) {
-            await this.collaborationServer.deletePersistedStateUnderPath(pathDecoded);
-          }
-          this.collaborationServer.clearPathDeleted(pathDecoded);
-
-          if (isFolder) {
-            await this.fileManager.createFolder(pathDecoded);
-          } else {
-            await this.fileManager.createOrModifyFile(
-              pathDecoded,
-              typeof content === "string" ? content : "",
-            );
-          }
-
-          //spread vault changes to the WebSocket
-          publishVaultChange({
-            type: "create",
-            path: pathDecoded,
-            isFolder: Boolean(isFolder),
-            content: typeof content === "string" ? content : "",
-            originClientId: req.header("x-obsync-client") ?? undefined,
-          });
-
-          res.sendStatus(200);
-        } catch (error) {
-          console.error("[Sync] Error in Create:", error);
-          res.status(500).json({ error: "Error creating file or folder" });
+        if (typeof clientId !== "string" || clientId === undefined) {
+          console.warn("[Users] Missing clientId inside the header");
+          res.send(400).json({ error: "Missing clientId inside the header" });
         }
+
+        const queue = this.queueManager.creatDBQueueOrReturn(String(clientId));
+        queue.addTask(async () => {
+          try {
+            const { path, isFolder, content } = req.body;
+
+            const pathDecoded = decodeURI(path);
+
+            if (typeof pathDecoded !== "string" || !pathDecoded.trim()) {
+              res.status(400).json({ error: "Invalid path" });
+              return;
+            }
+
+            if (this.collaborationServer.isPathDeleted(pathDecoded)) {
+              await this.collaborationServer.deletePersistedStateUnderPath(pathDecoded);
+            }
+            this.collaborationServer.clearPathDeleted(pathDecoded);
+
+            if (isFolder) {
+              await this.fileManager.createFolder(pathDecoded);
+            } else {
+              await this.fileManager.createOrModifyFile(
+                pathDecoded,
+                typeof content === "string" ? content : "",
+              );
+            }
+            //spread vault changes to the WebSocket
+            publishVaultChange({
+              type: "create",
+              path: pathDecoded,
+              isFolder: Boolean(isFolder),
+              content: typeof content === "string" ? content : "",
+              originClientId: req.header("x-obsync-client") ?? undefined,
+            });
+
+            res.sendStatus(200);
+          } catch (error) {
+            console.error("[Sync] Error in Create:", error);
+            res.status(500).json({ error: "Error creating file or folder" });
+          }
+        });
       },
     );
 

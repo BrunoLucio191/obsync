@@ -112,8 +112,13 @@ export class RouteUsers {
       this.requireAdmin,
       async (req: Request, res: Response): Promise<void> => {
         const userId = this.parseUserId(req.params.id);
-        const { ["x-obsync-client"]: clientId } = req.headers;
         const normalizedName = typeof req.body?.name === "string" ? req.body.name.trim() : "";
+        const { ["x-obsync-client"]: clientId } = req.headers;
+
+        if (typeof clientId !== "string" || clientId === undefined) {
+          console.warn("[Users] Missing clientId inside the header");
+          res.send(400).json({ error: "Missing clientId inside the header" });
+        }
 
         if (!userId) {
           console.warn("[Users] Missing or invalid userId in URL params");
@@ -130,7 +135,9 @@ export class RouteUsers {
         }
         const actor = this.currentUser(res);
         const target = await this.dbService.getUserById(userId, true);
-        const queue = this.queueManager.creatDBQueueOrReturn(String(clientId));
+        const taskKey = `${userId}:${normalizedName}`;
+        const queue = this.queueManager.creatDBQueueOrReturn(String(clientId), taskKey);
+        const getIfTaskExiste = this.queueManager.isTaskDone(String(clientId), taskKey);
 
         queue.addTask(async () => {
           try {
@@ -162,7 +169,7 @@ export class RouteUsers {
               error: "Something happened while changing some user name",
             });
           }
-        });
+        }, taskKey);
       },
     );
 
@@ -174,6 +181,11 @@ export class RouteUsers {
         const userId = this.parseUserId(req.params.id);
         const newPassword = req.body?.newPassword;
         const { ["x-obsync-client"]: clientId } = req.headers;
+
+        if (typeof clientId !== "string" || clientId === undefined) {
+          console.warn("[Users] Missing clientId inside the header");
+          res.send(400).json({ error: "Missing clientId inside the header" });
+        }
 
         if (!userId) {
           console.warn("[Users] Missing or invalid userId in URL params");
@@ -245,6 +257,12 @@ export class RouteUsers {
         const normalizedName = typeof name === "string" ? name.trim() : "";
         const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
         const normalizedRole: UserRole = this.dbService.isUserRole(role) ? role : "user";
+        const { ["x-obsync-client"]: clientId } = req.headers;
+
+        if (typeof clientId !== "string" || clientId === undefined) {
+          console.warn("[Users] Missing clientId inside the header");
+          res.send(400).json({ error: "Missing clientId inside the header" });
+        }
 
         if (normalizedName.length < 2 || normalizedName.length > 64) {
           console.warn("[Users] Invalid name length (must be 2-64 characters)");
@@ -262,8 +280,7 @@ export class RouteUsers {
           });
           return;
         }
-        const queue = this.queueManager.creatDBQueueOrReturn(email);
-
+        const queue = this.queueManager.creatDBQueueOrReturn(String(clientId));
         queue.addTask(async () => {
           try {
             const result = await this.dbService.createUser(
@@ -299,14 +316,19 @@ export class RouteUsers {
       this.requireAdmin,
       async (req: Request, res: Response): Promise<void> => {
         const userId = this.parseUserId(req.params.id);
+        const { ["x-obsync-client"]: clientId } = req.headers;
         const role = req.body?.role;
+
+        if (typeof clientId !== "string" || clientId === undefined) {
+          console.warn("[Users] Missing clientId inside the header");
+          res.send(400).json({ error: "Missing clientId inside the header" });
+        }
         if (!userId || !this.dbService.isUserRole(role)) {
           console.warn("[Users] Invalid userId or role in request body");
           res.status(400).json({ error: "Invalid user or role." });
           return;
         }
-
-        const queue = this.queueManager.creatDBQueueOrReturn(String(userId));
+        const queue = this.queueManager.creatDBQueueOrReturn(String(clientId));
         queue.addTask(async () => {
           try {
             const result = await this.dbService.updateUserRole(userId, role);
@@ -335,6 +357,12 @@ export class RouteUsers {
       async (req: Request, res: Response): Promise<void> => {
         const userId = this.parseUserId(req.params.id);
         const active = req.body?.active;
+        const { ["x-obsync-client"]: clientId } = req.headers;
+
+        if (typeof clientId !== "string" || clientId === undefined) {
+          console.warn("[Users] Missing clientId inside the header");
+          res.send(400).json({ error: "Missing clientId inside the header" });
+        }
 
         if (!userId || typeof active !== "boolean") {
           console.warn("[Users] Invalid userId or status in request body");
@@ -342,7 +370,7 @@ export class RouteUsers {
           return;
         }
 
-        const queue = this.queueManager.creatDBQueueOrReturn(String(userId));
+        const queue = this.queueManager.creatDBQueueOrReturn(String(clientId));
         queue.addTask(async () => {
           try {
             const result = await this.dbService.updateUserStatus(userId, active);
@@ -371,13 +399,20 @@ export class RouteUsers {
       this.requireAdmin,
       async (req: Request, res: Response): Promise<void> => {
         const userId = this.parseUserId(req.params.id);
+        const { ["x-obsync-client"]: clientId } = req.headers;
+
+        if (typeof clientId !== "string" || clientId === undefined) {
+          console.warn("[Users] Missing clientId inside the header");
+          res.send(400).json({ error: "Missing clientId inside the header" });
+        }
+
         if (!userId) {
           console.warn("[Users] Missing or invalid userId in URL params");
           res.status(400).json({ error: "Invalid user." });
           return;
         }
 
-        const queue = this.queueManager.creatDBQueueOrReturn(String(userId));
+        const queue = this.queueManager.creatDBQueueOrReturn(String(clientId));
 
         queue.addTask(async () => {
           try {
