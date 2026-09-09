@@ -1,9 +1,13 @@
 import { ZipWorkerSon } from './zipWorker/ZipWorkerSon.ts';
 
 export class Boss {
-	constructor(private readonly zipWorkerSon: ZipWorkerSon) {}
+	readonly #zipWorkerSon: ZipWorkerSon;
+
+	constructor(zipWorkerSon: ZipWorkerSon) {
+		this.#zipWorkerSon = zipWorkerSon;
+	}
 
 	public async startWorking(): Promise<void> {
-		await this.zipWorkerSon.startWorking();
+		await this.#zipWorkerSon.startWorking();
 	}
 }

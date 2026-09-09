@@ -8,13 +8,18 @@ import type { SettingsController } from './SettingsController.ts';
  * thereafter restricted to admins only.
  */
 export class BackendConnectionSection {
-	private url: string;
+	#url: string;
+
+	readonly #controller: SettingsController;
+	readonly #refresh: () => void;
 
 	public constructor(
-		private readonly controller: SettingsController,
-		private readonly refresh: () => void,
+		controller: SettingsController,
+		refresh: () => void,
 	) {
-		this.url = controller.config.backendUrl;
+		this.#controller = controller;
+		this.#refresh = refresh;
+		this.#url = controller.config.backendUrl;
 	}
 
 	public definition(): SettingDefinitionGroup {
@@ -28,8 +33,8 @@ export class BackendConnectionSection {
 					render: (setting) => {
 						setting.addText((text) => {
 							text.setPlaceholder(t('settings.backend.urlPlaceholder'))
-								.setValue(this.url)
-								.onChange((value) => (this.url = value));
+								.setValue(this.#url)
+								.onChange((value) => (this.#url = value));
 						});
 
 						setting.addButton((button) =>
@@ -38,7 +43,7 @@ export class BackendConnectionSection {
 								.setCta()
 								.onClick(async () => {
 									button.setDisabled(true);
-									const result = await this.controller.setBackendUrl(this.url);
+									const result = await this.#controller.setBackendUrl(this.#url);
 									button.setDisabled(false);
 
 									if (!result.ok) {
@@ -47,7 +52,7 @@ export class BackendConnectionSection {
 									}
 
 									new Notice(t('settings.backend.saved'));
-									window.setTimeout(() => this.refresh(), 1);
+									window.setTimeout(() => this.#refresh(), 1);
 								}),
 						);
 					},

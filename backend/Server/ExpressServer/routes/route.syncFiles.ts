@@ -23,33 +23,33 @@ export type RouteSyncFilesContructor = {
 
 export class RouteSyncFiles {
   public router: express.Router = express.Router();
-  private readonly tokenService: TokenService;
-  private readonly fileManager: FileManager;
-  private readonly collaborationServer: YjsCollaborationGateway;
-  private readonly queueManager: QueueManager;
+  readonly #tokenService: TokenService;
+  readonly #fileManager: FileManager;
+  readonly #collaborationServer: YjsCollaborationGateway;
+  readonly #queueManager: QueueManager;
   constructor({
     tokenService,
     fileManager,
     collaborationServer,
     queueManager,
   }: RouteSyncFilesContructor) {
-    this.tokenService = tokenService;
-    this.fileManager = fileManager;
-    this.collaborationServer = collaborationServer;
-    this.queueManager = queueManager;
+    this.#tokenService = tokenService;
+    this.#fileManager = fileManager;
+    this.#collaborationServer = collaborationServer;
+    this.#queueManager = queueManager;
   }
 
-  /** Reads the authenticated user previously attached to the request by {@link requireAuth}. */
-  private currentUser(res: Response): AuthenticatedUser {
+  /** Reads the authenticated user previously attached to the request by {@link #requireAuth}. */
+  #currentUser(res: Response): AuthenticatedUser {
     return res.locals.authenticatedUser as AuthenticatedUser;
   }
 
   /** Middleware: rejects the request with 403 (and logs an audit entry) unless the
-   * authenticated user is an admin. Must run after {@link requireAuth}. */
-  private requireAdmin = (req: Request, res: Response, next: NextFunction): void => {
-    const user = this.currentUser(res);
+   * authenticated user is an admin. Must run after {@link #requireAuth}. */
+  #requireAdmin = (req: Request, res: Response, next: NextFunction): void => {
+    const user = this.#currentUser(res);
     if (user.role !== "admin") {
-      this.auditDenied(user, req.method, req.path, this.requestPath(req));
+      this.#auditDenied(user, req.method, req.path, this.#requestPath(req));
       res.status(403).json({ error: "Only administrators can perform this action." });
 
       return;
@@ -59,12 +59,12 @@ export class RouteSyncFiles {
   };
 
   /** Middleware: resolves the bearer access token and rejects the request with 401 if it's
-   * missing/invalid. Must run before {@link requireAdmin} or any route reading
-   * {@link currentUser}. */
-  private requireAuth = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+   * missing/invalid. Must run before {@link #requireAdmin} or any route reading
+   * {@link #currentUser}. */
+  #requireAuth = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     const token = req.header("Authorization")?.replace(/^Bearer\s+/i, "");
 
-    const authenticatedUser = await this.tokenService.verifyToken(token);
+    const authenticatedUser = await this.#tokenService.verifyToken(token);
 
     if (!authenticatedUser) {
       res.status(401).json({ error: "Unauthorized." });
@@ -77,8 +77,8 @@ export class RouteSyncFiles {
     next();
   };
 
-  /** Logs an audit warning for an operation denied by {@link requireAdmin}. */
-  private auditDenied(
+  /** Logs an audit warning for an operation denied by {@link #requireAdmin}. */
+  #auditDenied(
     user: AuthenticatedUser,
     operation: string,
     route: string,
@@ -96,8 +96,8 @@ export class RouteSyncFiles {
   }
 
   /** Extracts the vault path an audited request targeted (`path`, `oldPath`, or `newPath`),
-   * normalizing slashes, for {@link auditDenied} log entries. */
-  private requestPath(req: Request): string | undefined {
+   * normalizing slashes, for {@link #auditDenied} log entries. */
+  #requestPath(req: Request): string | undefined {
     const value = req.body?.path ?? req.body?.oldPath ?? req.body?.newPath;
     return typeof value === "string" ? value.replace(/\\/g, "/") : undefined;
   }
@@ -106,7 +106,7 @@ export class RouteSyncFiles {
   public startRoute() {
     this.router.post(
       "/initSync",
-      this.requireAuth,
+      this.#requireAuth,
       async (req: Request, res: Response): Promise<void> => {
         const { ["x-obsync-client"]: clientId } = req.headers;
 
@@ -115,11 +115,11 @@ export class RouteSyncFiles {
           res.status(400).send({ error: "missing headers info" });
           return;
         }
-        const queue = this.queueManager.creatDBQueueOrReturn(clientId);
+        const queue = this.#queueManager.creatDBQueueOrReturn(clientId);
         queue.addTask(async () => {
           try {
             console.log("[ZIP] Starting compression...");
-            await this.fileManager.directoryZiped();
+            await this.#fileManager.directoryZiped();
             const zipPath = systemPaths.vaultExit;
 
             res.download(zipPath, "vault.zip", async (error) => {
@@ -141,14 +141,14 @@ export class RouteSyncFiles {
             console.error("[ZIP] General error:", error);
             res.status(500).json({ error: "Internal error generating the file." });
           }
-        });
+        }, "vault:initSync");
       },
     );
 
     this.router.post(
       "/create",
-      this.requireAuth,
-      this.requireAdmin,
+      this.#requireAuth,
+      this.#requireAdmin,
       async (req: Request, res: Response) => {
         const { ["x-obsync-client"]: clientId } = req.headers;
 
@@ -157,27 +157,33 @@ export class RouteSyncFiles {
           res.send(400).json({ error: "Missing clientId inside the header" });
         }
 
-        const queue = this.queueManager.creatDBQueueOrReturn(String(clientId));
+        const { path, isFolder, content } = req.body;
+
+        if (typeof path !== "string" || !path.trim()) {
+          res.status(400).json({ error: "Invalid path" });
+          return;
+        }
+
+        const pathDecoded = decodeURI(path);
+
+        if (!pathDecoded.trim()) {
+          res.status(400).json({ error: "Invalid path" });
+          return;
+        }
+
+        const queue = this.#queueManager.creatDBQueueOrReturn(String(clientId));
         queue.addTask(async () => {
           try {
-            const { path, isFolder, content } = req.body;
 
-            const pathDecoded = decodeURI(path);
-
-            if (typeof pathDecoded !== "string" || !pathDecoded.trim()) {
-              res.status(400).json({ error: "Invalid path" });
-              return;
+            if (this.#collaborationServer.isPathDeleted(pathDecoded)) {
+              await this.#collaborationServer.deletePersistedStateUnderPath(pathDecoded);
             }
-
-            if (this.collaborationServer.isPathDeleted(pathDecoded)) {
-              await this.collaborationServer.deletePersistedStateUnderPath(pathDecoded);
-            }
-            this.collaborationServer.clearPathDeleted(pathDecoded);
+            this.#collaborationServer.clearPathDeleted(pathDecoded);
 
             if (isFolder) {
-              await this.fileManager.createFolder(pathDecoded);
+              await this.#fileManager.createFolder(pathDecoded);
             } else {
-              await this.fileManager.createOrModifyFile(
+              await this.#fileManager.createOrModifyFile(
                 pathDecoded,
                 typeof content === "string" ? content : "",
               );
@@ -196,112 +202,148 @@ export class RouteSyncFiles {
             console.error("[Sync] Error in Create:", error);
             res.status(500).json({ error: "Error creating file or folder" });
           }
-        });
+        }, `file:${pathDecoded}:create`);
       },
     );
 
     this.router.delete(
       "/delete",
-      this.requireAuth,
-      this.requireAdmin,
+      this.#requireAuth,
+      this.#requireAdmin,
       async (req: Request, res: Response) => {
-        try {
-          const { path, isFolder } = req.body;
-          if (typeof path !== "string" || !path.trim()) {
-            res.status(400).send("Invalid path");
-            return;
-          }
+        const { ["x-obsync-client"]: clientId } = req.headers;
+        const { path, isFolder } = req.body;
 
-          this.collaborationServer.markPathDeleted(path);
-          try {
-            await this.fileManager.deletePath(path);
-          } catch (error) {
-            this.collaborationServer.clearPathDeleted(path);
-            throw error;
-          }
-
-          await this.collaborationServer.deletePersistedStateUnderPath(path);
-          publishVaultChange({
-            type: "delete",
-            path,
-            isFolder: Boolean(isFolder),
-            originClientId: req.header("x-obsync-client") ?? undefined,
-          });
-          res.sendStatus(200);
-        } catch (error) {
-          console.error("[Sync] Error in Delete:", error);
-          res.status(500).send("Error deleting");
+        if (typeof clientId !== "string" || !clientId.trim()) {
+          console.warn("[Files] Missing clientId inside the header");
+          res.status(400).send("Missing clientId inside the header");
+          return;
         }
+
+        if (typeof path !== "string" || !path.trim()) {
+          res.status(400).send("Invalid path");
+          return;
+        }
+
+        const queue = this.#queueManager.creatDBQueueOrReturn(clientId);
+        queue.addTask(async () => {
+          try {
+            this.#collaborationServer.markPathDeleted(path);
+            try {
+              await this.#fileManager.deletePath(path);
+            } catch (error) {
+              this.#collaborationServer.clearPathDeleted(path);
+              throw error;
+            }
+
+            await this.#collaborationServer.deletePersistedStateUnderPath(path);
+            publishVaultChange({
+              type: "delete",
+              path,
+              isFolder: Boolean(isFolder),
+              originClientId: clientId,
+            });
+            res.sendStatus(200);
+          } catch (error) {
+            console.error("[Sync] Error in Delete:", error);
+            res.status(500).send("Error deleting");
+          }
+        }, `file:${path}:delete`);
       },
     );
 
     this.router.put(
       "/modify",
-      this.requireAuth,
-      this.requireAdmin,
+      this.#requireAuth,
+      this.#requireAdmin,
       async (req: Request, res: Response) => {
-        try {
-          const { path, content } = req.body;
-          if (typeof path !== "string" || typeof content !== "string") {
-            res.status(400).send("Invalid content or path");
-            return;
-          }
-          if (this.collaborationServer.isPathDeleted(path)) {
-            res.status(409).send("The path was deleted");
-            return;
-          }
+        const { ["x-obsync-client"]: clientId } = req.headers;
+        const { path, content } = req.body;
 
-          await this.fileManager.createOrModifyFile(path, content);
-          publishVaultChange({
-            type: "modify",
-            path,
-            content,
-            originClientId: req.header("x-obsync-client") ?? undefined,
-          });
-          res.sendStatus(200);
-        } catch (error) {
-          console.error("[Sync] Error in Modify:", error);
-          res.status(500).send("Error modifying file");
+        if (typeof clientId !== "string" || !clientId.trim()) {
+          console.warn("[Files] Missing clientId inside the header");
+          res.status(400).send("Missing clientId inside the header");
+          return;
         }
+
+        if (typeof path !== "string" || typeof content !== "string") {
+          res.status(400).send("Invalid content or path");
+          return;
+        }
+
+        const queue = this.#queueManager.creatDBQueueOrReturn(clientId);
+        queue.addTask(async () => {
+          try {
+            if (this.#collaborationServer.isPathDeleted(path)) {
+              res.status(409).send("The path was deleted");
+              return;
+            }
+
+            await this.#fileManager.createOrModifyFile(path, content);
+            publishVaultChange({
+              type: "modify",
+              path,
+              content,
+              originClientId: clientId,
+            });
+            res.sendStatus(200);
+          } catch (error) {
+            console.error("[Sync] Error in Modify:", error);
+            res.status(500).send("Error modifying file");
+          }
+        }, `file:${path}:modify`);
       },
     );
 
     this.router.put(
       "/rename",
-      this.requireAuth,
-      this.requireAdmin,
+      this.#requireAuth,
+      this.#requireAdmin,
       async (req: Request, res: Response) => {
-        try {
-          const { oldPath, newPath } = req.body;
-          if (
-            typeof oldPath !== "string" ||
-            !oldPath.trim() ||
-            typeof newPath !== "string" ||
-            !newPath.trim()
-          ) {
-            res.status(400).send("Invalid path");
-            return;
-          }
+        const { ["x-obsync-client"]: clientId } = req.headers;
+        const { oldPath, newPath } = req.body;
 
-          await this.fileManager.rename(oldPath, newPath);
-          await this.collaborationServer.renamePersistedStatePath(oldPath, newPath);
-          publishVaultChange({
-            type: "rename",
-            oldPath,
-            newPath,
-            originClientId: req.header("x-obsync-client") ?? undefined,
-          });
-          res.sendStatus(200);
-        } catch (error) {
-          console.error("[Sync] Error in Rename:", error);
-          res.status(500).send("Error renaming");
+        if (typeof clientId !== "string" || !clientId.trim()) {
+          console.warn("[Files] Missing clientId inside the header");
+          res.status(400).send("Missing clientId inside the header");
+          return;
         }
+
+        if (
+          typeof oldPath !== "string" ||
+          !oldPath.trim() ||
+          typeof newPath !== "string" ||
+          !newPath.trim()
+        ) {
+          res.status(400).send("Invalid path");
+          return;
+        }
+
+        const queue = this.#queueManager.creatDBQueueOrReturn(clientId);
+        // Keyed on the source path: it is the resource that stops existing, and
+        // locking both paths at once would open the door to a deadlock.
+        queue.addTask(async () => {
+          try {
+            await this.#fileManager.rename(oldPath, newPath);
+            await this.#collaborationServer.renamePersistedStatePath(oldPath, newPath);
+            publishVaultChange({
+              type: "rename",
+              oldPath,
+              newPath,
+              originClientId: clientId,
+            });
+            res.sendStatus(200);
+          } catch (error) {
+            console.error("[Sync] Error in Rename:", error);
+            res.status(500).send("Error renaming");
+          }
+        }, `file:${oldPath}:rename`);
       },
     );
     this.router.post(
       "/createFile",
-      this.requireAuth,
-      this.requireAdmin,
+      this.#requireAuth,
+      this.#requireAdmin,
       express.raw({ limit: "50mb", type: "application/octet-stream" }),
       async (req: Request, res: Response) => {
         try {
@@ -314,7 +356,7 @@ export class RouteSyncFiles {
             res.send(400).send("Invalid clientId or path");
           }
 
-          const queue = this.queueManager.creatDBQueueOrReturn(String(clientId));
+          const queue = this.#queueManager.creatDBQueueOrReturn(String(clientId));
           queue.addTask(async () => {
             try {
               if (nodeBuffer.byteLength == 0 || path == undefined) {
@@ -325,7 +367,7 @@ export class RouteSyncFiles {
               res.status(500).send("Error making file");
               return;
             }
-          });
+          }, `file:${String(path)}:writeBinary`);
           publishVaultChange({
             type: "create",
             path: String(path),
@@ -339,7 +381,7 @@ export class RouteSyncFiles {
         }
       },
     );
-    this.router.get("/getFile", this.requireAuth, async (req: Request, res: Response) => {
+    this.router.get("/getFile", this.#requireAuth, async (req: Request, res: Response) => {
       try {
         const { path, fileName } = req.query;
         const vaultPath = systemPaths.vault;

@@ -37,7 +37,7 @@ export class AwarenessOwnershipGuard {
     connectionState: YjsConnectionState,
     update: Uint8Array,
   ): void {
-    const entries = this.parseEntries(update);
+    const entries = this.#parseEntries(update);
     const authenticatedPresenceId = connectionState.authenticatedPresenceId;
     const acceptedEntries: YjsAwarenessEntry[] = [];
     const ignoredEntries: Array<Record<string, unknown>> = [];
@@ -52,7 +52,7 @@ export class AwarenessOwnershipGuard {
           ignoredEntries.push({
             clientId: entry.clientId,
             reason: "foreign-removal-echo",
-            currentOwner: currentOwner ? this.describeConnection(currentOwner) : null,
+            currentOwner: currentOwner ? this.#describeConnection(currentOwner) : null,
           });
           continue;
         }
@@ -90,8 +90,8 @@ export class AwarenessOwnershipGuard {
           ignoredEntries.push({
             clientId: entry.clientId,
             reason: "cross-user-client-id-collision",
-            currentOwner: this.describeConnection(currentOwner),
-            attemptedOwner: this.describeConnection(connection),
+            currentOwner: this.#describeConnection(currentOwner),
+            attemptedOwner: this.#describeConnection(connection),
           });
           continue;
         }
@@ -111,7 +111,7 @@ export class AwarenessOwnershipGuard {
     */
     if (acceptedEntries.length === 0) return;
 
-    const filteredUpdate = this.encodeEntries(acceptedEntries);
+    const filteredUpdate = this.#encodeEntries(acceptedEntries);
     awarenessProtocol.applyAwarenessUpdate(room.awareness, filteredUpdate, connection);
 
     for (const entry of acceptedEntries) {
@@ -127,7 +127,7 @@ export class AwarenessOwnershipGuard {
   }
 
   /** Builds a small serializable summary of a connection's identity, for diagnostic logging. */
-  private describeConnection(connection: WebSocket): unknown {
+  #describeConnection(connection: WebSocket): unknown {
     const context = getYjsDebugConnection(connection);
 
     return {
@@ -145,7 +145,7 @@ export class AwarenessOwnershipGuard {
    * @throws If the entry count exceeds the allowed maximum, the state JSON is invalid, or the
    * payload has trailing bytes.
    */
-  private parseEntries(update: Uint8Array): YjsAwarenessEntry[] {
+  #parseEntries(update: Uint8Array): YjsAwarenessEntry[] {
     const decoder = decoding.createDecoder(update);
     const count = decoding.readVarUint(decoder);
 
@@ -180,7 +180,7 @@ export class AwarenessOwnershipGuard {
    * @param entries - Entries that passed ownership/identity validation.
    * @returns The re-encoded update payload.
    */
-  private encodeEntries(entries: readonly YjsAwarenessEntry[]): Uint8Array {
+  #encodeEntries(entries: readonly YjsAwarenessEntry[]): Uint8Array {
     const encoder = encoding.createEncoder();
     encoding.writeVarUint(encoder, entries.length);
 

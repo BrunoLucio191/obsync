@@ -30,12 +30,12 @@ const TOKEN_AUDIENCE = "obsync-api";
  * lost on process restart.
  */
 export class TokenService {
-  private readonly secret: string;
-  private readonly dbService: DBServices;
-  private readonly sessions = new Map<string, SessionRecord>();
-  private readonly webSocketTickets = new Map<string, WebSocketTicketRecord>();
+  readonly #secret: string;
+  readonly #dbService: DBServices;
+  readonly #sessions = new Map<string, SessionRecord>();
+  readonly #webSocketTickets = new Map<string, WebSocketTicketRecord>();
   /** Callbacks notified whenever a session is revoked (e.g. so open WebSocket connections can be closed). */
-  private readonly revocationListeners = new Set<(sessionId: string) => void>();
+  readonly #revocationListeners = new Set<(sessionId: string) => void>();
 
   /**
    * @param options.secret - HMAC signing secret; must be at least 32 bytes long.
@@ -47,8 +47,8 @@ export class TokenService {
       throw new Error("OBSYNC_TOKEN_SECRET must contain at least 32 random bytes.");
     }
 
-    this.secret = secret;
-    this.dbService = dbService;
+    this.#secret = secret;
+    this.#dbService = dbService;
   }
 
   /**
@@ -57,17 +57,17 @@ export class TokenService {
    * @returns A fresh {@link AuthSession} containing an access token and refresh token.
    */
   public sessionFor(user: AuthenticatedUser): AuthSession {
-    this.removeExpiredState();
-    const sessionId = this.randomValue();
-    const refreshToken = this.createRefreshToken(sessionId);
+    this.#removeExpiredState();
+    const sessionId = this.#randomValue();
+    const refreshToken = this.#createRefreshToken(sessionId);
 
-    this.sessions.set(sessionId, {
+    this.#sessions.set(sessionId, {
       userId: user.id,
-      refreshTokenHash: this.hashOpaqueToken(refreshToken),
+      refreshTokenHash: this.#hashOpaqueToken(refreshToken),
       refreshExpiresAt: Date.now() + REFRESH_TOKEN_LIFETIME_MS,
     });
 
-    return this.buildSession(user, sessionId, refreshToken);
+    return this.#buildSession(user, sessionId, refreshToken);
   }
 
   /**
@@ -76,7 +76,7 @@ export class TokenService {
    * @returns The {@link AuthenticatedUser} the token belongs to, or `null` if the token is missing/invalid/expired.
    */
   public async verifyToken(token: string | null | undefined): Promise<AuthenticatedUser | null> {
-    return (await this.authorizeAccessToken(token))?.user ?? null;
+    return (await this.#authorizeAccessToken(token))?.user ?? null;
   }
 
   /**
@@ -88,33 +88,33 @@ export class TokenService {
     refreshToken: string | null | undefined,
   ): Promise<AuthSession | null> {
     if (!refreshToken) return null;
-    this.removeExpiredState();
+    this.#removeExpiredState();
 
     const [sessionId, secret, extra] = refreshToken.split(".");
 
     if (!sessionId || !secret || extra) return null;
 
-    const record = this.sessions.get(sessionId);
+    const record = this.#sessions.get(sessionId);
     if (
       !record ||
       record.refreshExpiresAt <= Date.now() ||
-      !this.safeEqual(record.refreshTokenHash, this.hashOpaqueToken(refreshToken))
+      !this.#safeEqual(record.refreshTokenHash, this.#hashOpaqueToken(refreshToken))
     ) {
       return null;
     }
 
     //user need to exist in the db
-    const user = await this.dbService.getUserById(record.userId);
+    const user = await this.#dbService.getUserById(record.userId);
     if (!user) {
-      this.revokeSessionId(sessionId);
+      this.#revokeSessionId(sessionId);
 
       return null;
     }
 
-    const rotatedRefreshToken = this.createRefreshToken(sessionId);
-    record.refreshTokenHash = this.hashOpaqueToken(rotatedRefreshToken);
+    const rotatedRefreshToken = this.#createRefreshToken(sessionId);
+    record.refreshTokenHash = this.#hashOpaqueToken(rotatedRefreshToken);
 
-    return this.buildSession(user, sessionId, rotatedRefreshToken);
+    return this.#buildSession(user, sessionId, rotatedRefreshToken);
   }
 
   /**
@@ -127,9 +127,9 @@ export class TokenService {
     const [sessionId, secret, extra] = refreshToken.split(".");
     if (!sessionId || !secret || extra) return;
 
-    const record = this.sessions.get(sessionId);
-    if (record && this.safeEqual(record.refreshTokenHash, this.hashOpaqueToken(refreshToken))) {
-      this.revokeSessionId(sessionId);
+    const record = this.#sessions.get(sessionId);
+    if (record && this.#safeEqual(record.refreshTokenHash, this.#hashOpaqueToken(refreshToken))) {
+      this.#revokeSessionId(sessionId);
     }
   }
 
@@ -144,12 +144,12 @@ export class TokenService {
     accessToken: string | null | undefined,
     channel: WebSocketChannel,
   ): Promise<WebSocketTicket | null> {
-    const authorization = await this.authorizeAccessToken(accessToken);
+    const authorization = await this.#authorizeAccessToken(accessToken);
     if (!authorization) return null;
 
-    this.removeExpiredState();
-    const ticket = this.randomValue();
-    this.webSocketTickets.set(this.hashOpaqueToken(ticket), {
+    this.#removeExpiredState();
+    const ticket = this.#randomValue();
+    this.#webSocketTickets.set(this.#hashOpaqueToken(ticket), {
       ...authorization,
       channel,
       ticketExpiresAt: Date.now() + WEB_SOCKET_TICKET_LIFETIME_SECONDS * 1_000,
@@ -170,25 +170,25 @@ export class TokenService {
     channel: WebSocketChannel,
   ): Promise<WebSocketAuthorization | null> {
     if (!ticket) return null;
-    this.removeExpiredState();
+    this.#removeExpiredState();
 
-    const ticketHash = this.hashOpaqueToken(ticket);
-    const record = this.webSocketTickets.get(ticketHash);
-    this.webSocketTickets.delete(ticketHash);
+    const ticketHash = this.#hashOpaqueToken(ticket);
+    const record = this.#webSocketTickets.get(ticketHash);
+    this.#webSocketTickets.delete(ticketHash);
 
     if (
       !record ||
       record.channel !== channel ||
       record.ticketExpiresAt <= Date.now() ||
       record.expiresAt <= Date.now() ||
-      !this.sessions.has(record.sessionId)
+      !this.#sessions.has(record.sessionId)
     ) {
       return null;
     }
 
-    const user = await this.dbService.getUserById(record.user.id);
+    const user = await this.#dbService.getUserById(record.user.id);
     if (!user) {
-      this.revokeSessionId(record.sessionId);
+      this.#revokeSessionId(record.sessionId);
       return null;
     }
 
@@ -205,18 +205,18 @@ export class TokenService {
    * @returns An unsubscribe function that removes the listener.
    */
   public onSessionRevoked(listener: (sessionId: string) => void): () => void {
-    this.revocationListeners.add(listener);
-    return () => this.revocationListeners.delete(listener);
+    this.#revocationListeners.add(listener);
+    return () => this.#revocationListeners.delete(listener);
   }
 
   /** Assembles the client-facing {@link AuthSession} object: a fresh access token plus the given refresh token. */
-  private buildSession(
+  #buildSession(
     user: AuthenticatedUser,
     sessionId: string,
     refreshToken: string,
   ): AuthSession {
     return {
-      token: this.issueAccessToken(user, sessionId),
+      token: this.#issueAccessToken(user, sessionId),
       refreshToken,
       expiresIn: ACCESS_TOKEN_LIFETIME_SECONDS,
       user,
@@ -224,7 +224,7 @@ export class TokenService {
   }
 
   /** Builds and signs a new access token (header.payload.signature) for the given user and session. */
-  private issueAccessToken(user: AuthenticatedUser, sessionId: string): string {
+  #issueAccessToken(user: AuthenticatedUser, sessionId: string): string {
     //transform in seconds;
     const now = Math.floor(Date.now() / 1_000);
     const header = encode({ alg: "HS256", typ: "JWT" });
@@ -233,20 +233,20 @@ export class TokenService {
       aud: TOKEN_AUDIENCE,
       sub: String(user.id),
       sid: sessionId,
-      jti: this.randomValue(16),
+      jti: this.#randomValue(16),
       iat: now,
       nbf: now,
       exp: now + ACCESS_TOKEN_LIFETIME_SECONDS,
     });
     const signed = `${header}.${payload}`;
-    return `${signed}.${this.sign(signed)}`;
+    return `${signed}.${this.#sign(signed)}`;
   }
 
   /**
    * Full validation pipeline for an access token: signature check, structural/claim checks,
    * expiry checks, and cross-referencing the live session and current user record.
    */
-  private async authorizeAccessToken(
+  async #authorizeAccessToken(
     token: string | null | undefined,
   ): Promise<AccessAuthorization | null> {
     if (!token) return null;
@@ -260,7 +260,7 @@ export class TokenService {
     if (!header || !payload || !signature) return null;
 
     const signedForVerication = `${header}.${payload}`;
-    if (!this.safeEqual(signature, this.sign(signedForVerication))) return null;
+    if (!this.#safeEqual(signature, this.#sign(signedForVerication))) return null;
 
     try {
       const headerValue = decode<TokenHeader>(header);
@@ -286,14 +286,14 @@ export class TokenService {
         return null;
       }
 
-      const session = this.sessions.get(payloadValue.sid);
+      const session = this.#sessions.get(payloadValue.sid);
       if (!session || session.userId !== userId || session.refreshExpiresAt <= Date.now()) {
         return null;
       }
 
-      const user = await this.dbService.getUserById(userId);
+      const user = await this.#dbService.getUserById(userId);
       if (!user) {
-        this.revokeSessionId(payloadValue.sid);
+        this.#revokeSessionId(payloadValue.sid);
         return null;
       }
 
@@ -308,36 +308,36 @@ export class TokenService {
   }
 
   /** Removes a session and any WebSocket tickets tied to it, then notifies revocation listeners. */
-  private revokeSessionId(sessionId: string): void {
-    if (!this.sessions.delete(sessionId)) return;
+  #revokeSessionId(sessionId: string): void {
+    if (!this.#sessions.delete(sessionId)) return;
 
-    for (const [ticketHash, ticket] of this.webSocketTickets) {
+    for (const [ticketHash, ticket] of this.#webSocketTickets) {
       if (ticket.sessionId === sessionId) {
-        this.webSocketTickets.delete(ticketHash);
+        this.#webSocketTickets.delete(ticketHash);
       }
     }
-    for (const listener of this.revocationListeners) {
+    for (const listener of this.#revocationListeners) {
       listener(sessionId);
     }
   }
 
   /** Sweeps expired sessions (revoking them) and expired WebSocket tickets. Called lazily before mutating state. */
-  private removeExpiredState(): void {
+  #removeExpiredState(): void {
     const now = Date.now();
 
-    for (const [sessionId, session] of this.sessions) {
-      if (session.refreshExpiresAt <= now) this.revokeSessionId(sessionId);
+    for (const [sessionId, session] of this.#sessions) {
+      if (session.refreshExpiresAt <= now) this.#revokeSessionId(sessionId);
     }
-    for (const [ticketHash, ticket] of this.webSocketTickets) {
+    for (const [ticketHash, ticket] of this.#webSocketTickets) {
       if (ticket.ticketExpiresAt <= now) {
-        this.webSocketTickets.delete(ticketHash);
+        this.#webSocketTickets.delete(ticketHash);
       }
     }
   }
 
   /** Builds a new opaque refresh token string in the form `"<sessionId>.<random>"`. */
-  private createRefreshToken(sessionId: string): string {
-    return `${sessionId}.${this.randomValue()}`;
+  #createRefreshToken(sessionId: string): string {
+    return `${sessionId}.${this.#randomValue()}`;
   }
 
   /**
@@ -345,22 +345,22 @@ export class TokenService {
    * @param bytes - Number of random bytes to generate (default 32).
    * @returns The random value as a base64url string.
    */
-  private randomValue(bytes = 32): string {
+  #randomValue(bytes = 32): string {
     return randomBytes(bytes).toString("base64url");
   }
 
   /** Computes an HMAC-SHA256 signature (base64url) over a value, using the service secret. */
-  private sign(value: string): string {
-    return createHmac("sha256", this.secret).update(value).digest("base64url");
+  #sign(value: string): string {
+    return createHmac("sha256", this.#secret).update(value).digest("base64url");
   }
 
   /** Hashes an opaque token (e.g. a refresh token or ticket) so only its HMAC is kept in memory, not the raw value. */
-  private hashOpaqueToken(value: string): string {
-    return createHmac("sha256", this.secret).update(`opaque:${value}`).digest("base64url");
+  #hashOpaqueToken(value: string): string {
+    return createHmac("sha256", this.#secret).update(`opaque:${value}`).digest("base64url");
   }
 
   /** Constant-time string equality check, used to compare secrets/hashes without leaking timing information. */
-  private safeEqual(left: string, right: string): boolean {
+  #safeEqual(left: string, right: string): boolean {
     const leftBuffer = Buffer.from(left);
     const rightBuffer = Buffer.from(right);
     return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer);

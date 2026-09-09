@@ -12,12 +12,22 @@ import { getApiBaseUrl } from '../config/ApiConfig.ts';
  * trigger a local vault event that gets re-published back to the server.
  */
 export class RemoteVaultChangeService {
+	readonly #app: App;
+	readonly #auth: AuthService;
+	readonly #mutedPaths: PathMuteRegistry;
+	readonly #collaboration: CollaborationController;
+
 	public constructor(
-		private readonly app: App,
-		private readonly auth: AuthService,
-		private readonly mutedPaths: PathMuteRegistry,
-		private readonly collaboration: CollaborationController,
-	) {}
+		app: App,
+		auth: AuthService,
+		mutedPaths: PathMuteRegistry,
+		collaboration: CollaborationController,
+	) {
+		this.#app = app;
+		this.#auth = auth;
+		this.#mutedPaths = mutedPaths;
+		this.#collaboration = collaboration;
+	}
 
 	/**
 	 * Applies a single remote vault change to the local vault. For read-only
@@ -29,14 +39,14 @@ export class RemoteVaultChangeService {
 	 * @param change - The remote change to apply.
 	 */
 	public async apply(change: VaultChange): Promise<void> {
-		const adapter = this.app.vault.adapter;
+		const adapter = this.#app.vault.adapter;
 
 		if (change.type === 'create') {
-			if (this.auth.isReadOnlyUser() && (await adapter.exists(change.path))) {
+			if (this.#auth.isReadOnlyUser() && (await adapter.exists(change.path))) {
 				return;
 			}
 
-			this.mutedPaths.mute(change.path);
+			this.#mutedPaths.mute(change.path);
 			if (change.isBinary) {
 				let fileName = null;
 				if (!change.path.includes('/')) {
@@ -54,13 +64,13 @@ export class RemoteVaultChangeService {
 				const response = await requestUrl({
 					url: `${getApiBaseUrl()}/api/sync/getFile?${params}`,
 					method: 'GET',
-					headers: this.auth.Authheaders(),
+					headers: this.#auth.Authheaders(),
 				});
 				if (response.status !== 200) {
 					console.error('Error when downloading tha file');
 				}
-				this.mutedPaths.mute(change.path);
-				await this.ensureParentFolder(change.path);
+				this.#mutedPaths.mute(change.path);
+				await this.#ensureParentFolder(change.path);
 				await adapter.writeBinary(change.path, response.arrayBuffer);
 			}
 			if (change.isFolder) {
@@ -68,31 +78,31 @@ export class RemoteVaultChangeService {
 					await adapter.mkdir(change.path);
 				}
 			} else {
-				await this.ensureParentFolder(change.path);
+				await this.#ensureParentFolder(change.path);
 				await adapter.write(change.path, change.content!);
 			}
 			return;
 		}
 
 		if (change.type === 'modify') {
-			if (this.auth.isReadOnlyUser() && (await adapter.exists(change.path))) {
+			if (this.#auth.isReadOnlyUser() && (await adapter.exists(change.path))) {
 				return;
 			}
 
-			this.mutedPaths.mute(change.path);
-			await this.ensureParentFolder(change.path);
+			this.#mutedPaths.mute(change.path);
+			await this.#ensureParentFolder(change.path);
 			await adapter.write(change.path, change.content);
 
 			return;
 		}
 
 		if (change.type === 'delete') {
-			this.collaboration.disconnectIfAffected(change.path);
-			this.mutedPaths.mute(change.path);
+			this.#collaboration.disconnectIfAffected(change.path);
+			this.#mutedPaths.mute(change.path);
 
-			const file = this.app.vault.getAbstractFileByPath(change.path);
+			const file = this.#app.vault.getAbstractFileByPath(change.path);
 			if (file) {
-				await this.app.fileManager.trashFile(file);
+				await this.#app.fileManager.trashFile(file);
 				return;
 			}
 
@@ -105,10 +115,10 @@ export class RemoteVaultChangeService {
 			return;
 		}
 
-		this.mutedPaths.mute(change.oldPath);
-		this.mutedPaths.mute(change.newPath);
+		this.#mutedPaths.mute(change.oldPath);
+		this.#mutedPaths.mute(change.newPath);
 		if (await adapter.exists(change.oldPath)) {
-			await this.ensureParentFolder(change.newPath);
+			await this.#ensureParentFolder(change.newPath);
 			await adapter.rename(change.oldPath, change.newPath);
 		}
 	}
@@ -119,18 +129,18 @@ export class RemoteVaultChangeService {
 	 * events aren't republished.
 	 * @param filePath - Vault-relative file path whose parent folders should exist.
 	 */
-	private async ensureParentFolder(filePath: string): Promise<void> {
+	async #ensureParentFolder(filePath: string): Promise<void> {
 		const parent = filePath.substring(0, filePath.lastIndexOf('/'));
 		if (!parent) return;
 
-		const adapter = this.app.vault.adapter;
+		const adapter = this.#app.vault.adapter;
 		const parts = parent.split('/');
 		let current = '';
 
 		for (const part of parts) {
 			current = current ? `${current}/${part}` : part;
 			if (!(await adapter.exists(current))) {
-				this.mutedPaths.mute(current);
+				this.#mutedPaths.mute(current);
 				await adapter.mkdir(current);
 			}
 		}

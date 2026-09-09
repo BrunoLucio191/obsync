@@ -12,13 +12,19 @@ import type { UserDirectory } from './UserDirectory.ts';
  * text instead of requiring an explicit save button.
  */
 export class UserNameEditor {
-	private readonly saveTimers = new Map<number, number>();
-	private readonly saveGenerations = new Map<number, number>();
+	readonly #saveTimers = new Map<number, number>();
+	readonly #saveGenerations = new Map<number, number>();
+
+	readonly #controller: SettingsController;
+	readonly #directory: UserDirectory;
 
 	public constructor(
-		private readonly controller: SettingsController,
-		private readonly directory: UserDirectory,
-	) {}
+		controller: SettingsController,
+		directory: UserDirectory,
+	) {
+		this.#controller = controller;
+		this.#directory = directory;
+	}
 
 	/** Renders a labeled name field with an inline save-status indicator, and wires its `onChange` to `scheduleSave`. */
 	public render(
@@ -60,13 +66,13 @@ export class UserNameEditor {
 		onSaved?: () => void,
 	): void {
 		const normalizedName = value.trim();
-		const generation = (this.saveGenerations.get(user.id) ?? 0) + 1;
-		this.saveGenerations.set(user.id, generation);
+		const generation = (this.#saveGenerations.get(user.id) ?? 0) + 1;
+		this.#saveGenerations.set(user.id, generation);
 
-		const currentTimer = this.saveTimers.get(user.id);
+		const currentTimer = this.#saveTimers.get(user.id);
 		if (currentTimer !== undefined) {
 			window.clearTimeout(currentTimer);
-			this.saveTimers.delete(user.id);
+			this.#saveTimers.delete(user.id);
 		}
 
 		if (normalizedName.length < 2 || normalizedName.length > 64) {
@@ -78,7 +84,7 @@ export class UserNameEditor {
 			return;
 		}
 
-		const duplicateUser = this.directory.findByName(
+		const duplicateUser = this.#directory.findByName(
 			normalizedName,
 			user.id,
 		);
@@ -93,8 +99,8 @@ export class UserNameEditor {
 
 		statusEl.setText(t('settings.users.saving'));
 		const timer = window.setTimeout(() => {
-			this.saveTimers.delete(user.id);
-			void this.persist(
+			this.#saveTimers.delete(user.id);
+			void this.#persist(
 				user,
 				normalizedName,
 				generation,
@@ -103,15 +109,15 @@ export class UserNameEditor {
 				onSaved,
 			);
 		}, 500);
-		this.saveTimers.set(user.id, timer);
+		this.#saveTimers.set(user.id, timer);
 	}
 
 	/** Cancels every pending debounced save timer, e.g. when the settings tab closes. */
 	public destroy(): void {
-		for (const timer of this.saveTimers.values()) {
+		for (const timer of this.#saveTimers.values()) {
 			window.clearTimeout(timer);
 		}
-		this.saveTimers.clear();
+		this.#saveTimers.clear();
 	}
 
 	/**
@@ -119,7 +125,7 @@ export class UserNameEditor {
 	 * bailing out silently if a newer edit superseded this one or the input
 	 * has since been removed from the DOM.
 	 */
-	private async persist(
+	async #persist(
 		user: AuthenticatedUser,
 		name: string,
 		generation: number,
@@ -128,9 +134,9 @@ export class UserNameEditor {
 		onSaved?: () => void,
 	): Promise<void> {
 		const previousName = user.name;
-		const result = await this.controller.updateUserName(user.id, name);
+		const result = await this.#controller.updateUserName(user.id, name);
 		if (
-			generation !== this.saveGenerations.get(user.id) ||
+			generation !== this.#saveGenerations.get(user.id) ||
 			!statusEl.isConnected
 		) {
 			return;
@@ -144,7 +150,7 @@ export class UserNameEditor {
 		}
 
 		user.name = result.value.name;
-		this.directory.replace(result.value);
+		this.#directory.replace(result.value);
 		inputEl.value = result.value.name;
 		statusEl.setText(t('settings.users.nameSaved'));
 		onSaved?.();

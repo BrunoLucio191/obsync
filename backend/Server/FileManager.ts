@@ -10,12 +10,12 @@ import { systemPaths } from "../paths.ts";
  * root first, so callers cannot escape the vault via absolute paths or `..` segments.
  */
 export class FileManager {
-  private vaultPath!: string;
-  private vaultExitPath!: string;
+  #vaultPath!: string;
+  #vaultExitPath!: string;
 
   constructor() {
-    this.vaultPath = systemPaths.vault;
-    this.vaultExitPath = systemPaths.vaultExit;
+    this.#vaultPath = systemPaths.vault;
+    this.#vaultExitPath = systemPaths.vaultExit;
   }
 
   /**
@@ -25,7 +25,7 @@ export class FileManager {
    * @returns The absolute, resolved path inside the vault.
    * @throws If `relativePath` is empty, absolute, or resolves outside the vault root.
    */
-  private resolveVaultPath(relativePath: string): string {
+  #resolveVaultPath(relativePath: string): string {
     if (typeof relativePath !== "string" || !relativePath.trim()) {
       throw new Error("The file path is required.");
     }
@@ -33,7 +33,7 @@ export class FileManager {
     if (path.isAbsolute(relativePath)) {
       throw new Error("Absolute paths are not allowed.");
     }
-    const vaultRoot = path.resolve(this.vaultPath);
+    const vaultRoot = path.resolve(this.#vaultPath);
 
     const fullPath = path.resolve(vaultRoot, relativePath);
 
@@ -63,7 +63,7 @@ export class FileManager {
     filePath: string,
     content: string | Buffer<ArrayBuffer>,
   ): Promise<void> {
-    const fullPath = this.resolveVaultPath(filePath);
+    const fullPath = this.#resolveVaultPath(filePath);
     const dirName = path.dirname(fullPath);
 
     await fsPromises.mkdir(dirName, { recursive: true });
@@ -75,7 +75,7 @@ export class FileManager {
    * @param folderPath - Vault-relative path of the folder to create.
    */
   public async createFolder(folderPath: string): Promise<void> {
-    const fullPath = this.resolveVaultPath(folderPath);
+    const fullPath = this.#resolveVaultPath(folderPath);
     await fsPromises.mkdir(fullPath, { recursive: true });
   }
 
@@ -84,7 +84,7 @@ export class FileManager {
    * @param targetPath - Vault-relative path to delete.
    */
   public async deletePath(targetPath: string): Promise<void> {
-    const fullPath = this.resolveVaultPath(targetPath);
+    const fullPath = this.#resolveVaultPath(targetPath);
     await fsPromises.rm(fullPath, { recursive: true, force: true });
   }
 
@@ -94,8 +94,8 @@ export class FileManager {
    * @param newPath - Destination vault-relative path.
    */
   public async rename(oldPath: string, newPath: string): Promise<void> {
-    const fullOld = this.resolveVaultPath(oldPath);
-    const fullNew = this.resolveVaultPath(newPath);
+    const fullOld = this.#resolveVaultPath(oldPath);
+    const fullNew = this.#resolveVaultPath(newPath);
     const newDirName = path.dirname(fullNew);
 
     await fsPromises.mkdir(newDirName, { recursive: true });
@@ -110,7 +110,7 @@ export class FileManager {
    */
   public async directoryZiped(): Promise<void> {
     return new Promise((resolve, reject) => {
-      const output = createWriteStream(this.vaultExitPath);
+      const output = createWriteStream(this.#vaultExitPath);
       const archive = new ZipArchive({
         zlib: { level: 9 },
       });
@@ -121,7 +121,7 @@ export class FileManager {
       archive.pipe(output);
 
       archive.glob("**/*", {
-        cwd: this.vaultPath,
+        cwd: this.#vaultPath,
         ignore: ["**/.*", "**/.*/**"],
       });
 

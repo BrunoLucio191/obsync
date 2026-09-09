@@ -19,13 +19,13 @@ import { dbEvents } from "./DBEvents.ts";
  */
 export class DBServices {
   /** Facade for emitting/subscribing to authorization-change notifications. */
-  private readonly event;
+  readonly #event;
   /** Underlying SQLite-backed user store. */
-  private readonly userDB: UserDB;
+  readonly #userDB: UserDB;
 
   constructor(userDB: UserDB) {
-    this.userDB = userDB;
-    this.event = dbEvents();
+    this.#userDB = userDB;
+    this.#event = dbEvents();
   }
 
   /** Type guard checking whether a value is a valid {@link UserRole}. */
@@ -39,8 +39,8 @@ export class DBServices {
    * @param userId - id of the user to look up.
    * @returns The row, or `null` if no user with that id exists.
    */
-  private getUserRow(userId: number): Omit<StoredUserRow, "password_hash"> | null {
-    const row = this.userDB
+  #getUserRow(userId: number): Omit<StoredUserRow, "password_hash"> | null {
+    const row = this.#userDB
       .prepare("SELECT id, email, name, role, active FROM users WHERE id = ?")
       .get(userId) as Omit<StoredUserRow, "password_hash"> | undefined;
     return row ?? null;
@@ -52,8 +52,8 @@ export class DBServices {
    *
    * @returns The number of active administrators.
    */
-  private activeAdminCount(): number {
-    const row = this.userDB
+  #activeAdminCount(): number {
+    const row = this.#userDB
       .prepare("SELECT COUNT(*) AS count FROM users WHERE role = 'admin' AND active = 1")
       .get() as { count: number };
     return Number(row.count);
@@ -68,13 +68,13 @@ export class DBServices {
    * @throws Re-throws any error from `operation` after rolling back.
    */
   public runImmediateTransaction<T>(operation: () => T): T {
-    this.userDB.exec("BEGIN IMMEDIATE");
+    this.#userDB.exec("BEGIN IMMEDIATE");
     try {
       const result = operation();
-      this.userDB.exec("COMMIT");
+      this.#userDB.exec("COMMIT");
       return result;
     } catch (error) {
-      this.userDB.exec("ROLLBACK");
+      this.#userDB.exec("ROLLBACK");
       throw error;
     }
   }
@@ -112,7 +112,7 @@ export class DBServices {
     userId: number,
     includeInactive = false,
   ): Promise<AuthenticatedUser | null> {
-    const row = this.getUserRow(userId);
+    const row = this.#getUserRow(userId);
     if (!row || (!includeInactive && row.active !== 1)) return null;
     return this.rowToUser(row);
   }
@@ -123,7 +123,7 @@ export class DBServices {
    * @returns All users.
    */
   public async listUsers(): Promise<AuthenticatedUser[]> {
-    const rows = this.userDB
+    const rows = this.#userDB
       .prepare(
         `SELECT id, email, name, role, active
          FROM users
@@ -157,17 +157,17 @@ export class DBServices {
     const passwordHash = await hashPassword(password);
 
     const result = this.runImmediateTransaction<CreateUserResult>(() => {
-      const existingEmail = this.userDB
+      const existingEmail = this.#userDB
         .prepare("SELECT id FROM users WHERE email = ?")
         .get(emailKey);
       if (existingEmail) return { ok: false, reason: "email_exists" };
 
-      const existingName = this.userDB
+      const existingName = this.#userDB
         .prepare("SELECT id FROM users WHERE name_key = ?")
         .get(nameKey);
       if (existingName) return { ok: false, reason: "name_exists" };
 
-      this.userDB
+      this.#userDB
         .prepare(
           `INSERT INTO users
            (email, name, name_key, password_hash, role, active)
@@ -175,7 +175,7 @@ export class DBServices {
         )
         .run(normalizedEmail, normalizedName, nameKey, passwordHash, role);
 
-      const row = this.userDB
+      const row = this.#userDB
         .prepare("SELECT id, email, name, role, active FROM users WHERE email = ?")
         .get(emailKey) as Omit<StoredUserRow, "password_hash"> | undefined;
       if (!row) throw new Error("The created user could not be loaded.");
@@ -198,24 +198,24 @@ export class DBServices {
     const normalizedName = normalizeName(name);
     const nameKey = normalizeNameKey(normalizedName);
     const result = this.runImmediateTransaction<UserMutationResult>(() => {
-      const row = this.getUserRow(userId);
+      const row = this.#getUserRow(userId);
       if (!row) return { ok: false, reason: "NOT_FOUND" };
 
-      const existing = this.userDB
+      const existing = this.#userDB
         .prepare("SELECT id FROM users WHERE name_key = ? AND id != ?")
         .get(nameKey, userId);
       if (existing) return { ok: false, reason: "NAME_EXISTS" };
 
-      this.userDB
+      this.#userDB
         .prepare("UPDATE users SET name = ?, name_key = ? WHERE id = ?")
         .run(normalizedName, nameKey, userId);
 
-      const updated = this.getUserRow(userId);
+      const updated = this.#getUserRow(userId);
       if (!updated) return { ok: false, reason: "NOT_FOUND" };
       return { ok: true, user: this.rowToUser(updated) };
     });
 
-    if (result.ok) this.event.emitAuthorizationChanged(userId);
+    if (result.ok) this.#event.emitAuthorizationChanged(userId);
     return result;
   }
 
@@ -232,27 +232,27 @@ export class DBServices {
     if (!this.isUserRole(role)) return { ok: false, reason: "INVALID_ROLE" };
 
     const result = this.runImmediateTransaction<UserMutationResult>(() => {
-      const row = this.getUserRow(userId);
+      const row = this.#getUserRow(userId);
       if (!row) return { ok: false, reason: "NOT_FOUND" };
 
       if (
         row.role === "admin" &&
         row.active === 1 &&
         role === "user" &&
-        this.activeAdminCount() <= 1
+        this.#activeAdminCount() <= 1
       ) {
         return { ok: false, reason: "LAST_ADMIN" };
       }
 
-      this.userDB.prepare("UPDATE users SET role = ? WHERE id = ?").run(role, userId);
-      const updated = this.getUserRow(userId);
+      this.#userDB.prepare("UPDATE users SET role = ? WHERE id = ?").run(role, userId);
+      const updated = this.#getUserRow(userId);
 
       if (!updated) return { ok: false, reason: "NOT_FOUND" };
 
       return { ok: true, user: this.rowToUser(updated) };
     });
 
-    if (result.ok) this.event.emitAuthorizationChanged(userId);
+    if (result.ok) this.#event.emitAuthorizationChanged(userId);
     return result;
   }
 
@@ -267,19 +267,19 @@ export class DBServices {
    */
   public async updateUserStatus(userId: number, active: boolean): Promise<UserMutationResult> {
     const result = this.runImmediateTransaction<UserMutationResult>(() => {
-      const row = this.getUserRow(userId);
+      const row = this.#getUserRow(userId);
       if (!row) return { ok: false, reason: "NOT_FOUND" };
-      if (row.role === "admin" && row.active === 1 && !active && this.activeAdminCount() <= 1) {
+      if (row.role === "admin" && row.active === 1 && !active && this.#activeAdminCount() <= 1) {
         return { ok: false, reason: "LAST_ADMIN" };
       }
 
-      this.userDB.prepare("UPDATE users SET active = ? WHERE id = ?").run(active ? 1 : 0, userId);
-      const updated = this.getUserRow(userId);
+      this.#userDB.prepare("UPDATE users SET active = ? WHERE id = ?").run(active ? 1 : 0, userId);
+      const updated = this.#getUserRow(userId);
       if (!updated) return { ok: false, reason: "NOT_FOUND" };
       return { ok: true, user: this.rowToUser(updated) };
     });
 
-    if (result.ok) this.event.emitAuthorizationChanged(userId);
+    if (result.ok) this.#event.emitAuthorizationChanged(userId);
     return result;
   }
 
@@ -297,7 +297,7 @@ export class DBServices {
     currentPassword: string,
     newPassword: string,
   ): Promise<UserMutationResult> {
-    const row = this.userDB
+    const row = this.#userDB
       .prepare("SELECT id, email, name, password_hash, role, active FROM users WHERE id = ?")
       .get(userId) as StoredUserRow | undefined;
     if (!row) return { ok: false, reason: "NOT_FOUND" };
@@ -309,10 +309,10 @@ export class DBServices {
     const passwordHash = await hashPassword(newPassword);
 
     return this.runImmediateTransaction<UserMutationResult>(() => {
-      const current = this.getUserRow(userId);
+      const current = this.#getUserRow(userId);
       if (!current) return { ok: false, reason: "NOT_FOUND" };
 
-      this.userDB
+      this.#userDB
         .prepare("UPDATE users SET password_hash = ? WHERE id = ?")
         .run(passwordHash, userId);
 
@@ -335,10 +335,10 @@ export class DBServices {
     const passwordHash = await hashPassword(newPassword);
 
     return this.runImmediateTransaction<UserMutationResult>(() => {
-      const current = this.getUserRow(userId);
+      const current = this.#getUserRow(userId);
       if (!current) return { ok: false, reason: "NOT_FOUND" };
 
-      this.userDB
+      this.#userDB
         .prepare("UPDATE users SET password_hash = ? WHERE id = ?")
         .run(passwordHash, userId);
 
@@ -355,19 +355,19 @@ export class DBServices {
    */
   public async deleteUser(userId: number): Promise<UserMutationResult> {
     const result = this.runImmediateTransaction<UserMutationResult>(() => {
-      const row = this.getUserRow(userId);
+      const row = this.#getUserRow(userId);
       if (!row) return { ok: false, reason: "NOT_FOUND" };
 
-      if (row.role === "admin" && row.active === 1 && this.activeAdminCount() <= 1) {
+      if (row.role === "admin" && row.active === 1 && this.#activeAdminCount() <= 1) {
         return { ok: false, reason: "LAST_ADMIN" };
       }
 
       const user = this.rowToUser(row);
-      this.userDB.prepare("DELETE FROM users WHERE id = ?").run(userId);
+      this.#userDB.prepare("DELETE FROM users WHERE id = ?").run(userId);
       return { ok: true, user };
     });
 
-    if (result.ok) this.event.emitAuthorizationChanged(userId);
+    if (result.ok) this.#event.emitAuthorizationChanged(userId);
     return result;
   }
 }

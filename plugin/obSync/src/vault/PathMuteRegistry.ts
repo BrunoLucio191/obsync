@@ -5,14 +5,18 @@
  * back to the server. Mutes expire automatically after a short duration.
  */
 export class PathMuteRegistry {
-	private readonly mutedPaths = new Map<string, number>();
-	constructor(private readonly muteDurationMs = 2_000) {}
+	readonly #mutedPaths = new Map<string, number>();
+	readonly #muteDurationMs: number;
+
+	constructor(muteDurationMs = 2_000) {
+		this.#muteDurationMs = muteDurationMs;
+	}
 	/**
-	 * Marks a path as muted for {@link muteDurationMs}.
+	 * Marks a path as muted for {@link #muteDurationMs}.
 	 * @param path - Vault-relative path to mute.
 	 */
 	public mute(path: string): void {
-		this.mutedPaths.set(path, Date.now() + this.muteDurationMs);
+		this.#mutedPaths.set(path, Date.now() + this.#muteDurationMs);
 	}
 
 	/**
@@ -22,9 +26,9 @@ export class PathMuteRegistry {
 	 * @returns `true` if the path (or an ancestor of it) is muted and not yet expired.
 	 */
 	public isMuted(path: string): boolean {
-		this.removeExpiredEntries();
+		this.#removeExpiredEntries();
 
-		for (const mutedPath of this.mutedPaths.keys()) {
+		for (const mutedPath of this.#mutedPaths.keys()) {
 			if (PathMuteRegistry.contains(mutedPath, path)) return true;
 		}
 
@@ -32,7 +36,7 @@ export class PathMuteRegistry {
 	}
 
 	public clear(): void {
-		this.mutedPaths.clear();
+		this.#mutedPaths.clear();
 	}
 
 	/**
@@ -46,10 +50,10 @@ export class PathMuteRegistry {
 	}
 
 	/** Purges muted paths whose expiry timestamp has passed. */
-	private removeExpiredEntries(): void {
+	#removeExpiredEntries(): void {
 		const now = Date.now();
-		for (const [path, expiresAt] of this.mutedPaths) {
-			if (expiresAt < now) this.mutedPaths.delete(path);
+		for (const [path, expiresAt] of this.#mutedPaths) {
+			if (expiresAt < now) this.#mutedPaths.delete(path);
 		}
 	}
 }

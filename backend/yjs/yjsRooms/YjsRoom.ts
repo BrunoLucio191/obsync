@@ -26,7 +26,7 @@ export class YjsRoom {
   public closingPromise: Promise<void> | null = null;
 
   /** Guards {@link attachListeners} so document/awareness listeners are only wired once per room. */
-  private listenersAttached = false;
+  #listenersAttached = false;
 
   public constructor(docName: string, filePath: string) {
     this.docName = docName;
@@ -41,8 +41,8 @@ export class YjsRoom {
    * broadcasts for a document that was invalidated by a path deletion mid-flight.
    */
   public attachListeners(isInvalidated: () => boolean): void {
-    if (this.listenersAttached) return;
-    this.listenersAttached = true;
+    if (this.#listenersAttached) return;
+    this.#listenersAttached = true;
 
     this.doc.on("update", (update: Uint8Array) => {
       if (isInvalidated()) return;

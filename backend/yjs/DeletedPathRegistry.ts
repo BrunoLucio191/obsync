@@ -7,8 +7,8 @@ import { isSamePathOrChild, normalizeVaultPath } from "./yjsUtils/vaultPath.util
  * a race with an in-flight room creation or persistence flush is still resolving.
  */
 export class DeletedPathRegistry {
-  private readonly deletedRoots = new Set<string>();
-  private readonly invalidatedDocuments = new WeakSet<Y.Doc>();
+  readonly #deletedRoots = new Set<string>();
+  readonly #invalidatedDocuments = new WeakSet<Y.Doc>();
 
   /**
    * Checks whether a path is deleted, either directly or because it is nested under a deleted folder.
@@ -18,7 +18,7 @@ export class DeletedPathRegistry {
   public isPathDeleted(filePath: string): boolean {
     const normalized = normalizeVaultPath(filePath);
 
-    for (const root of this.deletedRoots) {
+    for (const root of this.#deletedRoots) {
       if (isSamePathOrChild(root, normalized)) return true;
     }
 
@@ -34,13 +34,13 @@ export class DeletedPathRegistry {
   public markDeleted(targetPath: string): string {
     const normalizedTarget = normalizeVaultPath(targetPath);
 
-    for (const root of this.deletedRoots) {
+    for (const root of this.#deletedRoots) {
       if (isSamePathOrChild(normalizedTarget, root)) {
-        this.deletedRoots.delete(root);
+        this.#deletedRoots.delete(root);
       }
     }
 
-    this.deletedRoots.add(normalizedTarget);
+    this.#deletedRoots.add(normalizedTarget);
     return normalizedTarget;
   }
 
@@ -52,9 +52,9 @@ export class DeletedPathRegistry {
   public clearDeleted(targetPath: string): void {
     const normalizedTarget = normalizeVaultPath(targetPath);
 
-    for (const root of this.deletedRoots) {
+    for (const root of this.#deletedRoots) {
       if (isSamePathOrChild(root, normalizedTarget) || isSamePathOrChild(normalizedTarget, root)) {
-        this.deletedRoots.delete(root);
+        this.#deletedRoots.delete(root);
       }
     }
   }
@@ -65,7 +65,7 @@ export class DeletedPathRegistry {
    * @returns `true` if the document was invalidated.
    */
   public isDocumentInvalidated(doc: Y.Doc): boolean {
-    return this.invalidatedDocuments.has(doc);
+    return this.#invalidatedDocuments.has(doc);
   }
 
   /**
@@ -73,6 +73,6 @@ export class DeletedPathRegistry {
    * @param doc - Yjs document instance to invalidate.
    */
   public invalidateDocument(doc: Y.Doc): void {
-    this.invalidatedDocuments.add(doc);
+    this.#invalidatedDocuments.add(doc);
   }
 }

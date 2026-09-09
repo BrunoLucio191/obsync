@@ -20,19 +20,25 @@ export interface CollaborationAuth {
 export class CollaborationController {
 	/** CodeMirror extensions currently registered for the active room's editor (empty when no room is open). */
 	public readonly editorExtensions: Extension[] = [];
-	private activePath: string | null = null;
+	#activePath: string | null = null;
 	/** Monotonically incremented on every disconnect/join to invalidate in-flight async work from a stale attempt. */
-	private roomGeneration = 0;
-	private roomSyncTimer: number | null = null;
-	private readonly privateModeNotices = new Set<string>();
+	#roomGeneration = 0;
+	#roomSyncTimer: number | null = null;
+	readonly #privateModeNotices = new Set<string>();
+	readonly #app: App;
+	readonly #auth: CollaborationAuth;
+
 	public constructor(
-		private readonly app: App,
-		private readonly auth: CollaborationAuth,
-	) {}
+		app: App,
+		auth: CollaborationAuth,
+	) {
+		this.#app = app;
+		this.#auth = auth;
+	}
 
 	/** Vault path of the file whose collaboration room is currently open, or `null` if none. */
 	public get currentPath(): string | null {
-		return this.activePath;
+		return this.#activePath;
 	}
 
 	/**
@@ -41,14 +47,14 @@ export class CollaborationController {
 	 * `getActiveFile()` reflects the change.
 	 */
 	public scheduleActiveRoomSync(): void {
-		if (this.roomSyncTimer !== null) {
-			window.clearTimeout(this.roomSyncTimer);
+		if (this.#roomSyncTimer !== null) {
+			window.clearTimeout(this.#roomSyncTimer);
 		}
 
 		// Workspace events may fire before getActiveFile() is updated.
-		this.roomSyncTimer = window.setTimeout(() => {
-			this.roomSyncTimer = null;
-			this.syncWithActiveFile();
+		this.#roomSyncTimer = window.setTimeout(() => {
+			this.#roomSyncTimer = null;
+			this.#syncWithActiveFile();
 		}, 0);
 	}
 
@@ -58,24 +64,24 @@ export class CollaborationController {
 	 * new identity.
 	 */
 	public refreshAfterProfileChange(): void {
-		const activeFile = this.app.workspace.getActiveFile();
+		const activeFile = this.#app.workspace.getActiveFile();
 		this.disconnect();
 		if (activeFile?.extension === 'md') void this.join(activeFile.path);
 	}
 
 	/** Closes the currently active collaboration room, if any, and clears its editor extensions. */
 	public disconnect(): void {
-		this.roomGeneration += 1;
+		this.#roomGeneration += 1;
 
-		if (!this.activePath && this.editorExtensions.length === 0) {
+		if (!this.#activePath && this.editorExtensions.length === 0) {
 			closeCollabRoom();
 			return;
 		}
 
 		this.editorExtensions.length = 0;
-		this.app.workspace.updateOptions();
+		this.#app.workspace.updateOptions();
 		closeCollabRoom();
-		this.activePath = null;
+		this.#activePath = null;
 	}
 
 	/**
@@ -84,7 +90,7 @@ export class CollaborationController {
 	 * @param path - The vault path that changed.
 	 */
 	public disconnectIfAffected(path: string): void {
-		if (this.activePath && PathMuteRegistry.contains(path, this.activePath)) {
+		if (this.#activePath && PathMuteRegistry.contains(path, this.#activePath)) {
 			this.disconnect();
 		}
 	}
@@ -97,17 +103,17 @@ export class CollaborationController {
 	 * @param filePath - Vault-relative path of the file to join.
 	 */
 	public async join(filePath: string): Promise<void> {
-		const user = this.auth.user;
-		if (!user || this.activePath === filePath) return;
+		const user = this.#auth.user;
+		if (!user || this.#activePath === filePath) return;
 
 		this.disconnect();
-		const generation = ++this.roomGeneration;
-		this.activePath = filePath;
+		const generation = ++this.#roomGeneration;
+		this.#activePath = filePath;
 
 		try {
-			this.showPrivateModeNotice(filePath);
+			this.#showPrivateModeNotice(filePath);
 
-			const initialView = this.app.workspace.getActiveViewOfType(MarkdownView);
+			const initialView = this.#app.workspace.getActiveViewOfType(MarkdownView);
 			if (!initialView || initialView.file?.path !== filePath) {
 				this.disconnect();
 				return;
@@ -116,14 +122,14 @@ export class CollaborationController {
 			const preparedRoom = await setupCollabRoom(
 				filePath,
 				user,
-				this.requestYjsWebSocketTicket,
+				this.#requestYjsWebSocketTicket,
 				(name) => {
-					if (this.activePath === filePath) {
+					if (this.#activePath === filePath) {
 						new Notice(t('collab.userJoinedNote', { name }));
 					}
 				},
 				(name) => {
-					if (this.activePath === filePath) {
+					if (this.#activePath === filePath) {
 						new Notice(t('collab.userLeftNote', { name }));
 					}
 				},
@@ -131,24 +137,24 @@ export class CollaborationController {
 
 			if (
 				!preparedRoom ||
-				generation !== this.roomGeneration ||
-				this.activePath !== filePath
+				generation !== this.#roomGeneration ||
+				this.#activePath !== filePath
 			) {
 				return;
 			}
 
-			const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+			const activeView = this.#app.workspace.getActiveViewOfType(MarkdownView);
 			if (!activeView || activeView.file?.path !== filePath) {
 				this.disconnect();
 				return;
 			}
 
-			this.restoreEditorText(activeView, preparedRoom.initialText);
+			this.#restoreEditorText(activeView, preparedRoom.initialText);
 			this.editorExtensions.push(preparedRoom.extension);
-			this.app.workspace.updateOptions();
+			this.#app.workspace.updateOptions();
 			preparedRoom.connect();
 		} catch (error) {
-			if (generation !== this.roomGeneration) return;
+			if (generation !== this.#roomGeneration) return;
 
 			console.error(t('collab.couldNotInitializeCollaboration', { filePath }), error);
 			this.disconnect();
@@ -158,30 +164,30 @@ export class CollaborationController {
 
 	/** Cancels any pending sync timer and disconnects the active room; call when the plugin unloads. */
 	public destroy(): void {
-		if (this.roomSyncTimer !== null) {
-			window.clearTimeout(this.roomSyncTimer);
-			this.roomSyncTimer = null;
+		if (this.#roomSyncTimer !== null) {
+			window.clearTimeout(this.#roomSyncTimer);
+			this.#roomSyncTimer = null;
 		}
 		this.disconnect();
 	}
 
 	/** Requests a fresh websocket auth ticket for the `yjs` channel, bound to the current auth service. */
-	private readonly requestYjsWebSocketTicket = (): Promise<string | null> =>
-		this.auth.createWebSocketTicket('yjs');
+	readonly #requestYjsWebSocketTicket = (): Promise<string | null> =>
+		this.#auth.createWebSocketTicket('yjs');
 
 	/**
 	 * Joins or disconnects the collaboration room to match the workspace's
 	 * currently active file (only Markdown files get a room).
 	 */
-	private syncWithActiveFile(): void {
-		const activeFile = this.app.workspace.getActiveFile();
+	#syncWithActiveFile(): void {
+		const activeFile = this.#app.workspace.getActiveFile();
 
 		if (!activeFile || activeFile.extension !== 'md') {
 			this.disconnect();
 			return;
 		}
 
-		if (this.activePath !== activeFile.path) {
+		if (this.#activePath !== activeFile.path) {
 			void this.join(activeFile.path);
 		}
 	}
@@ -191,12 +197,12 @@ export class CollaborationController {
 	 * a file in private/read-only collaboration mode.
 	 * @param filePath - The file being opened, used to dedupe repeat notices.
 	 */
-	private showPrivateModeNotice(filePath: string): void {
-		if (!this.auth.isReadOnlyUser() || this.privateModeNotices.has(filePath)) {
+	#showPrivateModeNotice(filePath: string): void {
+		if (!this.#auth.isReadOnlyUser() || this.#privateModeNotices.has(filePath)) {
 			return;
 		}
 
-		this.privateModeNotices.add(filePath);
+		this.#privateModeNotices.add(filePath);
 		new Notice(t('collab.privateModeNotice'));
 	}
 
@@ -206,7 +212,7 @@ export class CollaborationController {
 	 * @param view - The Markdown view whose editor content is being restored.
 	 * @param initialText - Text to restore into the editor.
 	 */
-	private restoreEditorText(view: MarkdownView, initialText: string): void {
+	#restoreEditorText(view: MarkdownView, initialText: string): void {
 		if (view.editor.getValue() === initialText) return;
 
 		const cursorOffset = view.editor.posToOffset(view.editor.getCursor());

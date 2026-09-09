@@ -12,15 +12,15 @@ import { YjsRoom } from "./YjsRoom.ts";
  */
 export class YjsRoomRegistry {
   /** Active rooms keyed by their encoded `docName`. */
-  private readonly rooms = new Map<string, YjsRoom>();
+  readonly #rooms = new Map<string, YjsRoom>();
   /** Shared registry of deleted vault paths, consulted when creating/invalidating rooms. */
-  private readonly deletedPaths: DeletedPathRegistry;
+  readonly #deletedPaths: DeletedPathRegistry;
   /** Persistence backend used to hydrate/flush room documents. */
-  private readonly persistence: YjsPersistenceGateway;
+  readonly #persistence: YjsPersistenceGateway;
 
   public constructor(deletedPaths: DeletedPathRegistry, persistence: YjsPersistenceGateway) {
-    this.deletedPaths = deletedPaths;
-    this.persistence = persistence;
+    this.#deletedPaths = deletedPaths;
+    this.#persistence = persistence;
   }
 
   /**
@@ -31,7 +31,7 @@ export class YjsRoomRegistry {
    * @returns The room, or `null` if it is currently being torn down (caller should retry later).
    */
   public reserve(docName: string, filePath: string): YjsRoom | null {
-    const existing = this.rooms.get(docName);
+    const existing = this.#rooms.get(docName);
 
     if (existing) {
       // A new connection during the final flush should reconnect a moment
@@ -42,7 +42,7 @@ export class YjsRoomRegistry {
       return existing;
     }
 
-    return this.create(docName, filePath);
+    return this.#create(docName, filePath);
   }
 
   /**
@@ -52,7 +52,7 @@ export class YjsRoomRegistry {
    */
   public release(room: YjsRoom, connection: WebSocket): void {
     room.releaseConnection(connection);
-    this.scheduleCleanup(room);
+    this.#scheduleCleanup(room);
   }
 
   /**
@@ -61,10 +61,10 @@ export class YjsRoomRegistry {
    * @param targetPath - Normalized vault path (file or folder) that was deleted.
    */
   public invalidateUnderPath(targetPath: string): void {
-    for (const room of this.rooms.values()) {
+    for (const room of this.#rooms.values()) {
       if (!isSamePathOrChild(targetPath, room.filePath)) continue;
 
-      this.deletedPaths.invalidateDocument(room.doc);
+      this.#deletedPaths.invalidateDocument(room.doc);
 
       for (const connection of room.connections.keys()) {
         closeConnection(connection, 1008, "Path deleted");
@@ -80,16 +80,16 @@ export class YjsRoomRegistry {
    * @param filePath - Normalized vault-relative file path the document represents.
    * @returns The newly created room (not yet guaranteed to be `ready`).
    */
-  private create(docName: string, filePath: string): YjsRoom {
+  #create(docName: string, filePath: string): YjsRoom {
     const room = new YjsRoom(docName, filePath);
-    this.rooms.set(docName, room);
+    this.#rooms.set(docName, room);
 
     room.ready = (async () => {
-      await this.persistence.bindState(docName, room.doc);
-      room.attachListeners(() => this.deletedPaths.isDocumentInvalidated(room.doc));
+      await this.#persistence.bindState(docName, room.doc);
+      room.attachListeners(() => this.#deletedPaths.isDocumentInvalidated(room.doc));
     })().catch((error: unknown) => {
-      if (this.rooms.get(docName) === room) {
-        this.rooms.delete(docName);
+      if (this.#rooms.get(docName) === room) {
+        this.#rooms.delete(docName);
       }
 
       for (const connection of room.connections.keys()) {
@@ -110,7 +110,7 @@ export class YjsRoomRegistry {
    * to prevent concurrent teardown/reservation races. Errors are logged, not thrown.
    * @param room - Room to consider for cleanup.
    */
-  private scheduleCleanup(room: YjsRoom): void {
+  #scheduleCleanup(room: YjsRoom): void {
     if (room.connections.size > 0 || room.reservations > 0 || room.closingPromise) {
       return;
     }
@@ -123,13 +123,13 @@ export class YjsRoomRegistry {
       }
 
       await room.ready;
-      await this.persistence.writeState(room.docName, room.doc);
+      await this.#persistence.writeState(room.docName, room.doc);
 
       if (room.connections.size > 0 || room.reservations > 0) return;
-      if (this.rooms.get(room.docName) !== room) return;
+      if (this.#rooms.get(room.docName) !== room) return;
 
-      this.rooms.delete(room.docName);
-      await this.persistence.destroyState(room.docName, room.doc);
+      this.#rooms.delete(room.docName);
+      await this.#persistence.destroyState(room.docName, room.doc);
       room.destroyDocument();
     })()
       .catch((error: unknown) => {

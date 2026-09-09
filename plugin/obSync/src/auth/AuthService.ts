@@ -35,15 +35,15 @@ type AuthServiceDependencies = {
  * changes.
  */
 export class AuthService {
-	private readonly app: App;
-	private readonly getConfig: () => ObSyncConfig;
-	private readonly saveConfig: () => Promise<void>;
-	private readonly onSessionChanged: AuthServiceDependencies['onSessionChanged'];
-	private accessToken: string;
-	private refreshToken: string;
-	private accessRefreshTimer: number | null = null;
-	private sessionRefreshTimer: number | null = null;
-	private refreshPromise: Promise<boolean> | null = null;
+	readonly #app: App;
+	readonly #getConfig: () => ObSyncConfig;
+	readonly #saveConfig: () => Promise<void>;
+	readonly #onSessionChanged: AuthServiceDependencies['onSessionChanged'];
+	#accessToken: string;
+	#refreshToken: string;
+	#accessRefreshTimer: number | null = null;
+	#sessionRefreshTimer: number | null = null;
+	#refreshPromise: Promise<boolean> | null = null;
 
 	/** Unique id for this plugin instance, sent to the backend to distinguish this client's own**
 	 * broadcasted changes from other clients. */
@@ -55,23 +55,23 @@ export class AuthService {
 	 * @param dependencies - Collaborators for storage, config persistence, and session-change notification.
 	 */
 	public constructor(dependencies: AuthServiceDependencies) {
-		this.app = dependencies.app;
-		this.getConfig = dependencies.getConfig;
-		this.saveConfig = dependencies.saveConfig;
-		this.onSessionChanged = dependencies.onSessionChanged;
-		this.accessToken = this.app.secretStorage.getSecret(ACCESS_TOKEN_SECRET_ID) ?? '';
-		this.refreshToken = this.app.secretStorage.getSecret(REFRESH_TOKEN_SECRET_ID) ?? '';
-		this.scheduleAccessRefresh();
+		this.#app = dependencies.app;
+		this.#getConfig = dependencies.getConfig;
+		this.#saveConfig = dependencies.saveConfig;
+		this.#onSessionChanged = dependencies.onSessionChanged;
+		this.#accessToken = this.#app.secretStorage.getSecret(ACCESS_TOKEN_SECRET_ID) ?? '';
+		this.#refreshToken = this.#app.secretStorage.getSecret(REFRESH_TOKEN_SECRET_ID) ?? '';
+		this.#scheduleAccessRefresh();
 	}
 
 	/** The currently authenticated user's profile, or `null` when signed out. */
 	public get user(): AuthenticatedUser | null {
-		return this.getConfig().user;
+		return this.#getConfig().user;
 	}
 
 	/** @returns Whether both tokens and a user profile are present locally. */
 	public isAuthenticated(): boolean {
-		return Boolean(this.accessToken && this.refreshToken && this.user);
+		return Boolean(this.#accessToken && this.#refreshToken && this.user);
 	}
 	/** @returns true if the user is an admin */
 	public isAdmin(): boolean {
@@ -86,14 +86,14 @@ export class AuthService {
 	public headers(): Record<string, string> {
 		return {
 			'Content-Type': 'application/json',
-			Authorization: `Bearer ${this.accessToken}`,
+			Authorization: `Bearer ${this.#accessToken}`,
 			'X-ObSync-Client': this.clientId,
 		};
 	}
 
 	public Authheaders(): Record<string, string> {
 		return {
-			Authorization: `Bearer ${this.accessToken}`,
+			Authorization: `Bearer ${this.#accessToken}`,
 			'X-ObSync-Client': this.clientId,
 		};
 	}
@@ -104,7 +104,7 @@ export class AuthService {
 	 * @returns Whether a usable access token is available.
 	 */
 	public prepareAuthenticatedRequest(): Promise<boolean> {
-		return this.ensureFreshAccessToken();
+		return this.#ensureFreshAccessToken();
 	}
 
 	/**
@@ -113,14 +113,14 @@ export class AuthService {
 	 * @returns Whether the user ended up authenticated.
 	 */
 	public async ensureAuthenticated(): Promise<boolean> {
-		if (await this.restoreStoredSession()) return true;
+		if (await this.#restoreStoredSession()) return true;
 
-		await this.clearLocalSession();
+		await this.#clearLocalSession();
 
 		return new Promise((resolve) => {
 			new LoginModal(
-				this.app,
-				(email, password) => this.login(email, password),
+				this.#app,
+				(email, password) => this.#login(email, password),
 				resolve,
 			).open();
 		});
@@ -133,11 +133,11 @@ export class AuthService {
 	 * @returns The ticket string, or `null` if it couldn't be obtained.
 	 */
 	public async createWebSocketTicket(channel: WebSocketChannel): Promise<string | null> {
-		if (!(await this.ensureFreshAccessToken())) return null;
+		if (!(await this.#ensureFreshAccessToken())) return null;
 
-		let response = await this.requestWebSocketTicket(channel);
-		if (response.status === 401 && (await this.refreshAccessToken())) {
-			response = await this.requestWebSocketTicket(channel);
+		let response = await this.#requestWebSocketTicket(channel);
+		if (response.status === 401 && (await this.#refreshAccessToken())) {
+			response = await this.#requestWebSocketTicket(channel);
 		}
 		if (response.status !== 200) return null;
 
@@ -155,14 +155,14 @@ export class AuthService {
 		currentPassword: string,
 		newPassword: string,
 	): Promise<UserActionResult<null>> {
-		if (!(await this.ensureFreshAccessToken())) {
+		if (!(await this.#ensureFreshAccessToken())) {
 			return { ok: false, error: t('auth.sessionExpired') };
 		}
 
 		try {
-			let response = await this.requestChangePassword(currentPassword, newPassword);
-			if (response.status === 401 && (await this.refreshAccessToken())) {
-				response = await this.requestChangePassword(currentPassword, newPassword);
+			let response = await this.#requestChangePassword(currentPassword, newPassword);
+			if (response.status === 401 && (await this.#refreshAccessToken())) {
+				response = await this.#requestChangePassword(currentPassword, newPassword);
 			}
 
 			if (response.status === 200) return { ok: true, value: null };
@@ -190,12 +190,12 @@ export class AuthService {
 	 * collapse into a single request.
 	 */
 	public scheduleSessionRefresh(): void {
-		if (this.sessionRefreshTimer !== null) {
-			window.clearTimeout(this.sessionRefreshTimer);
+		if (this.#sessionRefreshTimer !== null) {
+			window.clearTimeout(this.#sessionRefreshTimer);
 		}
 
-		this.sessionRefreshTimer = window.setTimeout(() => {
-			this.sessionRefreshTimer = null;
+		this.#sessionRefreshTimer = window.setTimeout(() => {
+			this.#sessionRefreshTimer = null;
 			void this.refreshSession();
 		}, 250);
 	}
@@ -207,24 +207,24 @@ export class AuthService {
 	 * to be invalid.
 	 */
 	public async refreshSession(): Promise<void> {
-		if (!(await this.ensureFreshAccessToken())) return;
+		if (!(await this.#ensureFreshAccessToken())) return;
 
 		try {
-			let response = await this.requestCurrentUser();
-			if (response.status === 401 && (await this.refreshAccessToken())) {
-				response = await this.requestCurrentUser();
+			let response = await this.#requestCurrentUser();
+			if (response.status === 401 && (await this.#refreshAccessToken())) {
+				response = await this.#requestCurrentUser();
 			}
 
 			if (response.status !== 200) {
 				if (response.status === 401) {
-					await this.clearLocalSession();
+					await this.#clearLocalSession();
 					new Notice(t('auth.sessionExpiredNotice'));
 				}
 				return;
 			}
 
 			const payload = response.json as { user?: AuthenticatedUser };
-			if (payload.user) await this.updateCurrentUser(payload.user);
+			if (payload.user) await this.#updateCurrentUser(payload.user);
 		} catch (error) {
 			console.error(t('auth.sessionRefreshFailed'), error);
 		}
@@ -235,7 +235,7 @@ export class AuthService {
 	 * local session regardless of whether that request succeeds.
 	 */
 	public async logout(): Promise<void> {
-		const refreshToken = this.refreshToken;
+		const refreshToken = this.#refreshToken;
 		try {
 			if (refreshToken) {
 				await requestUrl({
@@ -249,24 +249,24 @@ export class AuthService {
 		} catch (error) {
 			console.error(t('auth.sessionRevokeFailed'), error);
 		} finally {
-			await this.clearLocalSession();
+			await this.#clearLocalSession();
 		}
 	}
 
 	/** Clears the local session (tokens and user) without contacting the backend. */
 	public async clearSession(): Promise<void> {
-		await this.clearLocalSession();
+		await this.#clearLocalSession();
 	}
 
 	/** Cancels any pending refresh timers. Must be called when the plugin unloads to avoid leaking timers. */
 	public destroy(): void {
-		if (this.accessRefreshTimer !== null) {
-			window.clearTimeout(this.accessRefreshTimer);
-			this.accessRefreshTimer = null;
+		if (this.#accessRefreshTimer !== null) {
+			window.clearTimeout(this.#accessRefreshTimer);
+			this.#accessRefreshTimer = null;
 		}
-		if (this.sessionRefreshTimer !== null) {
-			window.clearTimeout(this.sessionRefreshTimer);
-			this.sessionRefreshTimer = null;
+		if (this.#sessionRefreshTimer !== null) {
+			window.clearTimeout(this.#sessionRefreshTimer);
+			this.#sessionRefreshTimer = null;
 		}
 	}
 
@@ -275,16 +275,16 @@ export class AuthService {
 	 * expired, falling back to a refresh-token exchange.
 	 * @returns Whether a valid session is now in place.
 	 */
-	private async restoreStoredSession(): Promise<boolean> {
+	async #restoreStoredSession(): Promise<boolean> {
 		if (
-			this.accessToken &&
-			this.getConfig().accessTokenExpiresAt > Date.now() &&
-			(await this.validateCurrentToken())
+			this.#accessToken &&
+			this.#getConfig().accessTokenExpiresAt > Date.now() &&
+			(await this.#validateCurrentToken())
 		) {
 			return true;
 		}
 
-		return this.refreshAccessToken();
+		return this.#refreshAccessToken();
 	}
 
 	/**
@@ -294,7 +294,7 @@ export class AuthService {
 	 * @param password - The account's password.
 	 * @returns Whether login succeeded.
 	 */
-	private async login(email: string, password: string): Promise<boolean> {
+	async #login(email: string, password: string): Promise<boolean> {
 		try {
 			const response = await requestUrl({
 				url: `${getApiBaseUrl()}/api/auth/login`,
@@ -306,9 +306,9 @@ export class AuthService {
 
 			if (response.status !== 200) return false;
 			const session = response.json as AuthSession;
-			if (!this.isValidSession(session)) return false;
+			if (!this.#isValidSession(session)) return false;
 
-			await this.acceptSession(session);
+			await this.#acceptSession(session);
 			return true;
 		} catch (error) {
 			console.error(error);
@@ -321,14 +321,14 @@ export class AuthService {
 	 * backend, refreshing the cached user profile if so.
 	 * @returns Whether the token is still valid.
 	 */
-	private async validateCurrentToken(): Promise<boolean> {
+	async #validateCurrentToken(): Promise<boolean> {
 		try {
-			const response = await this.requestCurrentUser();
+			const response = await this.#requestCurrentUser();
 			if (response.status !== 200) return false;
 
 			const payload = response.json as { user?: AuthenticatedUser };
 			if (!payload.user) return false;
-			await this.updateCurrentUser(payload.user);
+			await this.#updateCurrentUser(payload.user);
 			return true;
 		} catch {
 			return false;
@@ -340,14 +340,14 @@ export class AuthService {
 	 * lifetime, otherwise triggers a refresh-token exchange.
 	 * @returns Whether a fresh-enough access token is available afterward.
 	 */
-	private ensureFreshAccessToken(): Promise<boolean> {
+	#ensureFreshAccessToken(): Promise<boolean> {
 		if (
-			this.accessToken &&
-			this.getConfig().accessTokenExpiresAt > Date.now() + REFRESH_EARLY_MS
+			this.#accessToken &&
+			this.#getConfig().accessTokenExpiresAt > Date.now() + REFRESH_EARLY_MS
 		) {
 			return Promise.resolve(true);
 		}
-		return this.refreshAccessToken();
+		return this.#refreshAccessToken();
 	}
 
 	/**
@@ -356,13 +356,13 @@ export class AuthService {
 	 * each trigger their own refresh.
 	 * @returns Whether the refresh succeeded.
 	 */
-	private refreshAccessToken(): Promise<boolean> {
-		if (this.refreshPromise) return this.refreshPromise;
+	#refreshAccessToken(): Promise<boolean> {
+		if (this.#refreshPromise) return this.#refreshPromise;
 
-		this.refreshPromise = this.exchangeRefreshToken().finally(() => {
-			this.refreshPromise = null;
+		this.#refreshPromise = this.#exchangeRefreshToken().finally(() => {
+			this.#refreshPromise = null;
 		});
-		return this.refreshPromise;
+		return this.#refreshPromise;
 	}
 
 	/**
@@ -371,29 +371,29 @@ export class AuthService {
 	 * rejected.
 	 * @returns Whether the refresh succeeded.
 	 */
-	private async exchangeRefreshToken(): Promise<boolean> {
-		if (!this.refreshToken) return false;
+	async #exchangeRefreshToken(): Promise<boolean> {
+		if (!this.#refreshToken) return false;
 
 		try {
 			const response = await requestUrl({
 				url: `${getApiBaseUrl()}/api/auth/refresh`,
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ refreshToken: this.refreshToken }),
+				body: JSON.stringify({ refreshToken: this.#refreshToken }),
 				throw: false,
 			});
 
 			if (response.status !== 200) {
 				if (response.status === 401) {
-					await this.clearLocalSession();
+					await this.#clearLocalSession();
 					new Notice(t('auth.sessionExpiredNotice'));
 				}
 				return false;
 			}
 
 			const session = response.json as AuthSession;
-			if (!this.isValidSession(session)) return false;
-			await this.acceptSession(session);
+			if (!this.#isValidSession(session)) return false;
+			await this.#acceptSession(session);
 			return true;
 		} catch (error) {
 			console.error(t('auth.sessionRenewFailed'), error);
@@ -404,24 +404,24 @@ export class AuthService {
 	/**
 	 * Persists a newly received session: stores tokens in secret storage,
 	 * updates the plugin config, reschedules the proactive refresh timer,
-	 * and fires {@link onSessionChanged} if the signed-in user actually changed.
+	 * and fires {@link #onSessionChanged} if the signed-in user actually changed.
 	 * @param session - The session returned by a login or refresh call.
 	 */
-	private async acceptSession(session: AuthSession): Promise<void> {
+	async #acceptSession(session: AuthSession): Promise<void> {
 		const previousUser = this.user;
-		this.accessToken = session.token;
-		this.refreshToken = session.refreshToken;
-		this.app.secretStorage.setSecret(ACCESS_TOKEN_SECRET_ID, this.accessToken);
-		this.app.secretStorage.setSecret(REFRESH_TOKEN_SECRET_ID, this.refreshToken);
+		this.#accessToken = session.token;
+		this.#refreshToken = session.refreshToken;
+		this.#app.secretStorage.setSecret(ACCESS_TOKEN_SECRET_ID, this.#accessToken);
+		this.#app.secretStorage.setSecret(REFRESH_TOKEN_SECRET_ID, this.#refreshToken);
 
-		const config = this.getConfig();
+		const config = this.#getConfig();
 		config.accessTokenExpiresAt = Date.now() + session.expiresIn * 1_000;
 		config.user = session.user;
-		await this.saveConfig();
-		this.scheduleAccessRefresh();
+		await this.#saveConfig();
+		this.#scheduleAccessRefresh();
 
-		if (this.usersDiffer(previousUser, session.user)) {
-			this.onSessionChanged(previousUser, session.user);
+		if (this.#usersDiffer(previousUser, session.user)) {
+			this.#onSessionChanged(previousUser, session.user);
 		}
 	}
 
@@ -430,13 +430,13 @@ export class AuthService {
 	 * profile actually changed.
 	 * @param user - The freshly fetched user profile.
 	 */
-	private async updateCurrentUser(user: AuthenticatedUser): Promise<void> {
+	async #updateCurrentUser(user: AuthenticatedUser): Promise<void> {
 		const previousUser = this.user;
-		if (!this.usersDiffer(previousUser, user)) return;
+		if (!this.#usersDiffer(previousUser, user)) return;
 
-		this.getConfig().user = user;
-		await this.saveConfig();
-		this.onSessionChanged(previousUser, user);
+		this.#getConfig().user = user;
+		await this.#saveConfig();
+		this.#onSessionChanged(previousUser, user);
 	}
 
 	/**
@@ -444,25 +444,25 @@ export class AuthService {
 	 * config, cancels the refresh timer, and notifies listeners if there
 	 * was actually a session to clear.
 	 */
-	private async clearLocalSession(): Promise<void> {
+	async #clearLocalSession(): Promise<void> {
 		const previousUser = this.user;
-		const hadSession = Boolean(this.accessToken || this.refreshToken || previousUser);
-		this.accessToken = '';
-		this.refreshToken = '';
-		this.app.secretStorage.setSecret(ACCESS_TOKEN_SECRET_ID, '');
-		this.app.secretStorage.setSecret(REFRESH_TOKEN_SECRET_ID, '');
+		const hadSession = Boolean(this.#accessToken || this.#refreshToken || previousUser);
+		this.#accessToken = '';
+		this.#refreshToken = '';
+		this.#app.secretStorage.setSecret(ACCESS_TOKEN_SECRET_ID, '');
+		this.#app.secretStorage.setSecret(REFRESH_TOKEN_SECRET_ID, '');
 
-		if (this.accessRefreshTimer !== null) {
-			window.clearTimeout(this.accessRefreshTimer);
-			this.accessRefreshTimer = null;
+		if (this.#accessRefreshTimer !== null) {
+			window.clearTimeout(this.#accessRefreshTimer);
+			this.#accessRefreshTimer = null;
 		}
-		const config = this.getConfig();
+		const config = this.#getConfig();
 		config.accessTokenExpiresAt = 0;
 		config.user = null;
 		if (!hadSession) return;
 
-		await this.saveConfig();
-		this.onSessionChanged(previousUser, null);
+		await this.#saveConfig();
+		this.#onSessionChanged(previousUser, null);
 	}
 
 	/**
@@ -470,22 +470,22 @@ export class AuthService {
 	 * shortly before it expires, so most requests never have to react to a
 	 * 401.
 	 */
-	private scheduleAccessRefresh(): void {
-		if (this.accessRefreshTimer !== null) {
-			window.clearTimeout(this.accessRefreshTimer);
-			this.accessRefreshTimer = null;
+	#scheduleAccessRefresh(): void {
+		if (this.#accessRefreshTimer !== null) {
+			window.clearTimeout(this.#accessRefreshTimer);
+			this.#accessRefreshTimer = null;
 		}
 
-		const expiresAt = this.getConfig().accessTokenExpiresAt;
-		if (!this.refreshToken || expiresAt <= 0) return;
+		const expiresAt = this.#getConfig().accessTokenExpiresAt;
+		if (!this.#refreshToken || expiresAt <= 0) return;
 		const delay = Math.max(1_000, expiresAt - Date.now() - REFRESH_EARLY_MS);
-		this.accessRefreshTimer = window.setTimeout(() => {
-			this.accessRefreshTimer = null;
-			void this.refreshAccessToken();
+		this.#accessRefreshTimer = window.setTimeout(() => {
+			this.#accessRefreshTimer = null;
+			void this.#refreshAccessToken();
 		}, delay);
 	}
 
-	private requestCurrentUser() {
+	#requestCurrentUser() {
 		return requestUrl({
 			url: `${getApiBaseUrl()}/api/auth/me`,
 			headers: this.headers(),
@@ -494,7 +494,7 @@ export class AuthService {
 	}
 
 	/** Sends a change-password request to the backend. */
-	private requestChangePassword(currentPassword: string, newPassword: string) {
+	#requestChangePassword(currentPassword: string, newPassword: string) {
 		return requestUrl({
 			url: `${getApiBaseUrl()}/api/auth/change-password`,
 			method: 'POST',
@@ -505,7 +505,7 @@ export class AuthService {
 	}
 
 	/** Requests a WebSocket authentication ticket for the given channel. */
-	private requestWebSocketTicket(channel: WebSocketChannel) {
+	#requestWebSocketTicket(channel: WebSocketChannel) {
 		return requestUrl({
 			url: `${getApiBaseUrl()}/api/auth/ws-ticket`,
 			method: 'POST',
@@ -521,7 +521,7 @@ export class AuthService {
 	 * @param session - The partially-typed, untrusted response payload.
 	 * @returns Whether `session` is a complete, well-formed session.
 	 */
-	private isValidSession(session: Partial<AuthSession>): session is AuthSession {
+	#isValidSession(session: Partial<AuthSession>): session is AuthSession {
 		return (
 			typeof session.token === 'string' &&
 			Boolean(session.token) &&
@@ -540,7 +540,7 @@ export class AuthService {
 	 * @param right - The newly fetched user, or `null`.
 	 * @returns Whether any user-visible field differs.
 	 */
-	private usersDiffer(left: AuthenticatedUser | null, right: AuthenticatedUser | null): boolean {
+	#usersDiffer(left: AuthenticatedUser | null, right: AuthenticatedUser | null): boolean {
 		return (
 			left?.id !== right?.id ||
 			left?.name !== right?.name ||

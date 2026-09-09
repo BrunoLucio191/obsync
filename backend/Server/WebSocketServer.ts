@@ -23,16 +23,16 @@ const TICKET_PROTOCOL_PREFIX = "obsync-ticket.";
 export class WebSocketServer {
   public readonly wssSystem: WsServer;
   public readonly wssYjs: WsServer;
-  private readonly event;
-  private readonly tokenService: TokenService;
-  private readonly collaborationServer: YjsCollaborationServer;
-  private readonly authenticatedConnections = new Map<WebSocket, WebSocketAuthorization>();
-  private readonly aliveConnections = new WeakSet<WebSocket>();
-  private readonly unsubscribeAuthorizationChanges: () => void;
-  private readonly unsubscribeSessionRevocations: () => void;
-  private readonly requireTls: boolean;
-  private readonly trustProxy: boolean;
-  private heartbeatTimer: NodeJS.Timeout | null = null;
+  readonly #event;
+  readonly #tokenService: TokenService;
+  readonly #collaborationServer: YjsCollaborationServer;
+  readonly #authenticatedConnections = new Map<WebSocket, WebSocketAuthorization>();
+  readonly #aliveConnections = new WeakSet<WebSocket>();
+  readonly #unsubscribeAuthorizationChanges: () => void;
+  readonly #unsubscribeSessionRevocations: () => void;
+  readonly #requireTls: boolean;
+  readonly #trustProxy: boolean;
+  #heartbeatTimer: NodeJS.Timeout | null = null;
 
   /**
    * Sets up both WebSocket servers (in `noServer` mode) and hooks the shared HTTP server's
@@ -51,7 +51,7 @@ export class WebSocketServer {
     trustProxy: boolean,
     collaborationServer: YjsCollaborationServer,
   ) {
-    this.collaborationServer = collaborationServer;
+    this.#collaborationServer = collaborationServer;
     this.wssSystem = new WsServer({
       noServer: true,
       maxPayload: MAX_WS_MESSAGE_BYTES,
@@ -62,30 +62,30 @@ export class WebSocketServer {
       maxPayload: MAX_WS_MESSAGE_BYTES,
       perMessageDeflate: false,
     });
-    this.event = dbEvents();
-    this.tokenService = tokenService;
-    this.requireTls = requireTls;
-    this.trustProxy = trustProxy;
+    this.#event = dbEvents();
+    this.#tokenService = tokenService;
+    this.#requireTls = requireTls;
+    this.#trustProxy = trustProxy;
 
-    this.unsubscribeAuthorizationChanges = this.event.onAuthorizationChanged((userId) =>
-      this.closeUserConnections(userId),
+    this.#unsubscribeAuthorizationChanges = this.#event.onAuthorizationChanged((userId) =>
+      this.#closeUserConnections(userId),
     );
-    this.unsubscribeSessionRevocations = tokenService.onSessionRevoked((sessionId) =>
-      this.closeSessionConnections(sessionId),
+    this.#unsubscribeSessionRevocations = tokenService.onSessionRevoked((sessionId) =>
+      this.#closeSessionConnections(sessionId),
     );
 
     server.on("upgrade", (request, socket, head) => {
       try {
-        this.handleUpgrade(request, socket, head);
+        this.#handleUpgrade(request, socket, head);
       } catch (err) {
         console.error(err);
       }
     });
 
     server.once("close", () => {
-      this.stopHeartbeat();
-      this.unsubscribeAuthorizationChanges();
-      this.unsubscribeSessionRevocations();
+      this.#stopHeartbeat();
+      this.#unsubscribeAuthorizationChanges();
+      this.#unsubscribeSessionRevocations();
     });
   }
 
@@ -97,12 +97,12 @@ export class WebSocketServer {
    * @param socket - The raw duplex socket to upgrade (or reject and destroy).
    * @param head - The first packet of the upgraded stream, passed through to `handleUpgrade`.
    */
-  private async handleUpgrade(
+  async #handleUpgrade(
     request: IncomingMessage,
     socket: Duplex,
     head: Buffer,
   ): Promise<void> {
-    if (this.requireTls && !this.isSecureRequest(request)) {
+    if (this.#requireTls && !this.#isSecureRequest(request)) {
       socket.write("HTTP/1.1 426 Upgrade Required\r\n\r\n");
       socket.destroy();
       return;
@@ -118,8 +118,8 @@ export class WebSocketServer {
     }
 
     const channel: WebSocketChannel = url.pathname === "/system" ? "system" : "yjs";
-    const ticket = this.readTicketProtocol(request);
-    const authorization = await this.tokenService.consumeWebSocketTicket(ticket, channel);
+    const ticket = this.#readTicketProtocol(request);
+    const authorization = await this.#tokenService.consumeWebSocketTicket(ticket, channel);
     if (!authorization) {
       socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
       socket.destroy();
@@ -129,7 +129,7 @@ export class WebSocketServer {
     const targetServer = channel === "system" ? this.wssSystem : this.wssYjs;
 
     targetServer.handleUpgrade(request, socket, head, (webSocket) => {
-      this.authenticatedConnections.set(webSocket, authorization);
+      this.#authenticatedConnections.set(webSocket, authorization);
       const expirationTimer = setTimeout(
         () => {
           webSocket.close(4003, "Access token expired");
@@ -139,7 +139,7 @@ export class WebSocketServer {
       expirationTimer.unref();
       webSocket.once("close", () => {
         clearTimeout(expirationTimer);
-        this.authenticatedConnections.delete(webSocket);
+        this.#authenticatedConnections.delete(webSocket);
       });
 
       targetServer.emit("connection", webSocket, request);
@@ -156,10 +156,10 @@ export class WebSocketServer {
     const yjsPersistence = new YjsPersistence(
       systemPaths.vault,
       systemPaths.yjsState,
-      this.collaborationServer,
+      this.#collaborationServer,
     );
 
-    this.collaborationServer.setPersistence({
+    this.#collaborationServer.setPersistence({
       bindState: (docName, ydoc) => yjsPersistence.bindState(docName, ydoc),
       writeState: (docName, ydoc) => yjsPersistence.writeState(docName, ydoc),
       destroyState: (docName, ydoc) => yjsPersistence.destroyState(docName, ydoc),
@@ -168,15 +168,15 @@ export class WebSocketServer {
     });
 
     this.wssYjs.on("connection", (webSocket, request) => {
-      this.registerHeartbeat(webSocket);
-      const authorization = this.authenticatedConnections.get(webSocket);
+      this.#registerHeartbeat(webSocket);
+      const authorization = this.#authenticatedConnections.get(webSocket);
       if (!authorization) {
         webSocket.close(1008, "Missing authenticated user");
         return;
       }
       const { user } = authorization;
 
-      void this.collaborationServer
+      void this.#collaborationServer
         .setupConnection(webSocket, request, {
           userId: user.id,
           userName: user.name,
@@ -190,8 +190,8 @@ export class WebSocketServer {
     });
 
     this.wssSystem.on("connection", (webSocket) => {
-      this.registerHeartbeat(webSocket);
-      const authorization = this.authenticatedConnections.get(webSocket);
+      this.#registerHeartbeat(webSocket);
+      const authorization = this.#authenticatedConnections.get(webSocket);
       if (!authorization) {
         webSocket.close(1008, "Missing authenticated user");
         return;
@@ -217,27 +217,27 @@ export class WebSocketServer {
       }
     });
 
-    this.startHeartbeat();
+    this.#startHeartbeat();
   }
 
   /** Closes every authenticated connection belonging to a given user (e.g. after their role/status changed). */
-  private closeUserConnections(userId: number): void {
-    for (const [connection, authorization] of this.authenticatedConnections) {
+  #closeUserConnections(userId: number): void {
+    for (const [connection, authorization] of this.#authenticatedConnections) {
       if (authorization.user.id !== userId) continue;
-      this.closeAuthorizationChangedConnection(connection);
+      this.#closeAuthorizationChangedConnection(connection);
     }
   }
 
   /** Closes every authenticated connection tied to a given session id (e.g. after logout or token revocation). */
-  private closeSessionConnections(sessionId: string): void {
-    for (const [connection, authorization] of this.authenticatedConnections) {
+  #closeSessionConnections(sessionId: string): void {
+    for (const [connection, authorization] of this.#authenticatedConnections) {
       if (authorization.sessionId !== sessionId) continue;
-      this.closeAuthorizationChangedConnection(connection);
+      this.#closeAuthorizationChangedConnection(connection);
     }
   }
 
   /** Closes (or terminates, if still connecting) a socket whose authorization is no longer valid, using close code 4003. */
-  private closeAuthorizationChangedConnection(connection: WebSocket): void {
+  #closeAuthorizationChangedConnection(connection: WebSocket): void {
     if (connection.readyState === WebSocket.OPEN) {
       connection.close(4003, "Authorization changed");
     } else if (connection.readyState === WebSocket.CONNECTING) {
@@ -251,7 +251,7 @@ export class WebSocketServer {
    * @param request - The upgrade request to read the header from.
    * @returns The extracted ticket if present and well-formed (43 base64url characters), otherwise `null`.
    */
-  private readTicketProtocol(request: IncomingMessage): string | null {
+  #readTicketProtocol(request: IncomingMessage): string | null {
     const header = request.headers["sec-websocket-protocol"];
     const values = Array.isArray(header) ? header : [header];
 
@@ -270,10 +270,10 @@ export class WebSocketServer {
   }
 
   /** Determines whether an upgrade request arrived over a secure (TLS) connection, trusting `X-Forwarded-Proto` only when `trustProxy` is enabled. */
-  private isSecureRequest(request: IncomingMessage): boolean {
+  #isSecureRequest(request: IncomingMessage): boolean {
     const encrypted = (request.socket as { encrypted?: boolean }).encrypted;
     if (encrypted) return true;
-    if (!this.trustProxy) return false;
+    if (!this.#trustProxy) return false;
 
     const forwardedProtocol = request.headers["x-forwarded-proto"];
     const value = Array.isArray(forwardedProtocol) ? forwardedProtocol[0] : forwardedProtocol;
@@ -281,25 +281,25 @@ export class WebSocketServer {
   }
 
   /** Marks a new connection as alive and keeps marking it alive on every `pong` reply. */
-  private registerHeartbeat(webSocket: WebSocket): void {
-    this.aliveConnections.add(webSocket);
-    webSocket.on("pong", () => this.aliveConnections.add(webSocket));
+  #registerHeartbeat(webSocket: WebSocket): void {
+    this.#aliveConnections.add(webSocket);
+    webSocket.on("pong", () => this.#aliveConnections.add(webSocket));
   }
 
   /** Starts the periodic ping loop that detects and terminates dead connections. Idempotent. */
-  private startHeartbeat(): void {
-    if (this.heartbeatTimer) return;
-    this.heartbeatTimer = setInterval(() => {
-      this.pingServerClients(this.wssYjs);
-      this.pingServerClients(this.wssSystem);
+  #startHeartbeat(): void {
+    if (this.#heartbeatTimer) return;
+    this.#heartbeatTimer = setInterval(() => {
+      this.#pingServerClients(this.wssYjs);
+      this.#pingServerClients(this.wssSystem);
     }, HEARTBEAT_INTERVAL_MS);
-    this.heartbeatTimer.unref();
+    this.#heartbeatTimer.unref();
   }
 
-  private stopHeartbeat(): void {
-    if (!this.heartbeatTimer) return;
-    clearInterval(this.heartbeatTimer);
-    this.heartbeatTimer = null;
+  #stopHeartbeat(): void {
+    if (!this.#heartbeatTimer) return;
+    clearInterval(this.#heartbeatTimer);
+    this.#heartbeatTimer = null;
   }
 
   /**
@@ -307,14 +307,14 @@ export class WebSocketServer {
    * previous ping, then pings all remaining clients.
    * @param server - The WebSocket server whose clients should be pinged.
    */
-  private pingServerClients(server: WsServer): void {
+  #pingServerClients(server: WsServer): void {
     for (const client of server.clients) {
-      if (!this.aliveConnections.has(client)) {
+      if (!this.#aliveConnections.has(client)) {
         client.terminate();
         continue;
       }
 
-      this.aliveConnections.delete(client);
+      this.#aliveConnections.delete(client);
       try {
         client.ping();
       } catch {

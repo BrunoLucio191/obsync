@@ -23,12 +23,12 @@ export type RouteAuthConstructor = {
  * ticket issuance, and self-service password change. */
 export class RouteAuth {
   public router: express.Router = express.Router();
-  private readonly accountLoginRateLimiter: LoginRateLimiter;
-  private readonly ipLoginRateLimiter: LoginRateLimiter;
-  private readonly passwordChangeRateLimiter: LoginRateLimiter;
-  private readonly tokenService: TokenService;
-  private readonly authService: AuthService;
-  private readonly dbService: DBServices;
+  readonly #accountLoginRateLimiter: LoginRateLimiter;
+  readonly #ipLoginRateLimiter: LoginRateLimiter;
+  readonly #passwordChangeRateLimiter: LoginRateLimiter;
+  readonly #tokenService: TokenService;
+  readonly #authService: AuthService;
+  readonly #dbService: DBServices;
   constructor({
     accountLoginRateLimiter,
     ipLoginRateLimiter,
@@ -37,21 +37,21 @@ export class RouteAuth {
     authService,
     dbService,
   }: RouteAuthConstructor) {
-    this.accountLoginRateLimiter = accountLoginRateLimiter;
-    this.ipLoginRateLimiter = ipLoginRateLimiter;
-    this.passwordChangeRateLimiter = passwordChangeRateLimiter;
-    this.tokenService = tokenService;
-    this.authService = authService;
-    this.dbService = dbService;
+    this.#accountLoginRateLimiter = accountLoginRateLimiter;
+    this.#ipLoginRateLimiter = ipLoginRateLimiter;
+    this.#passwordChangeRateLimiter = passwordChangeRateLimiter;
+    this.#tokenService = tokenService;
+    this.#authService = authService;
+    this.#dbService = dbService;
   }
 
   /** Middleware: resolves the bearer access token and rejects the request with 401 if it's
-   * missing/invalid. Must run before any route reading {@link currentUser} or
+   * missing/invalid. Must run before any route reading {@link #currentUser} or
    * `res.locals.accessToken`. */
-  private requireAuth = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  #requireAuth = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     const token = req.header("Authorization")?.replace(/^Bearer\s+/i, "");
 
-    const authenticatedUser = await this.tokenService.verifyToken(token);
+    const authenticatedUser = await this.#tokenService.verifyToken(token);
 
     if (!authenticatedUser) {
       res.status(401).json({ error: "Unauthorized." });
@@ -64,8 +64,8 @@ export class RouteAuth {
     next();
   };
 
-  /** Reads the authenticated user previously attached to the request by {@link requireAuth}. */
-  private currentUser(res: Response): AuthenticatedUser {
+  /** Reads the authenticated user previously attached to the request by {@link #requireAuth}. */
+  #currentUser(res: Response): AuthenticatedUser {
     return res.locals.authenticatedUser as AuthenticatedUser;
   }
 
@@ -104,8 +104,8 @@ export class RouteAuth {
       }
 
       const { accountKey, ipKey } = loginRateLimitKeys(req, email);
-      const accountLimit = this.accountLoginRateLimiter.check(accountKey);
-      const ipLimit = this.ipLoginRateLimiter.check(ipKey);
+      const accountLimit = this.#accountLoginRateLimiter.check(accountKey);
+      const ipLimit = this.#ipLoginRateLimiter.check(ipKey);
 
       if (!accountLimit.allowed || !ipLimit.allowed) {
         res.setHeader(
@@ -117,11 +117,11 @@ export class RouteAuth {
         return;
       }
 
-      const session = await this.authService.login(email, password);
+      const session = await this.#authService.login(email, password);
 
       if (!session) {
-        const updatedAccountLimit = this.accountLoginRateLimiter.recordFailure(accountKey);
-        const updatedIpLimit = this.ipLoginRateLimiter.recordFailure(ipKey);
+        const updatedAccountLimit = this.#accountLoginRateLimiter.recordFailure(accountKey);
+        const updatedIpLimit = this.#ipLoginRateLimiter.recordFailure(ipKey);
 
         if (!updatedAccountLimit.allowed || !updatedIpLimit.allowed) {
           res.setHeader(
@@ -136,14 +136,14 @@ export class RouteAuth {
 
         return;
       }
-      this.accountLoginRateLimiter.reset(accountKey);
+      this.#accountLoginRateLimiter.reset(accountKey);
       res.json(session);
     });
 
     this.router.post("/refresh", async (req: Request, res: Response): Promise<void> => {
       const refreshToken = req.body?.refreshToken;
 
-      const session = await this.tokenService.refreshSession(
+      const session = await this.#tokenService.refreshSession(
         typeof refreshToken === "string" ? refreshToken : null,
       );
 
@@ -158,18 +158,18 @@ export class RouteAuth {
 
     this.router.post("/logout", (req: Request, res: Response): void => {
       const refreshToken = req.body?.refreshToken;
-      this.tokenService.revokeSession(typeof refreshToken === "string" ? refreshToken : null);
+      this.#tokenService.revokeSession(typeof refreshToken === "string" ? refreshToken : null);
 
       res.sendStatus(204);
     });
 
-    this.router.get("/me", this.requireAuth, (_req: Request, res: Response): void => {
-      res.json({ user: this.currentUser(res) });
+    this.router.get("/me", this.#requireAuth, (_req: Request, res: Response): void => {
+      res.json({ user: this.#currentUser(res) });
     });
 
     this.router.post(
       "/ws-ticket",
-      this.requireAuth,
+      this.#requireAuth,
       async (req: Request, res: Response): Promise<void> => {
         const channel = req.body?.channel;
 
@@ -183,7 +183,7 @@ export class RouteAuth {
           return;
         }
 
-        const ticket = await this.tokenService.issueWebSocketTicket(
+        const ticket = await this.#tokenService.issueWebSocketTicket(
           res.locals.accessToken,
           channel,
         );
@@ -198,7 +198,7 @@ export class RouteAuth {
 
     this.router.post(
       "/change-password",
-      this.requireAuth,
+      this.#requireAuth,
       async (req: Request, res: Response): Promise<void> => {
         const { currentPassword, newPassword } = req.body ?? {};
         if (
@@ -214,9 +214,9 @@ export class RouteAuth {
           return;
         }
 
-        const currentAuthenticatedUser = this.currentUser(res);
+        const currentAuthenticatedUser = this.#currentUser(res);
         const rateLimitKey = String(currentAuthenticatedUser.id);
-        const limit = this.passwordChangeRateLimiter.check(rateLimitKey);
+        const limit = this.#passwordChangeRateLimiter.check(rateLimitKey);
         if (!limit.allowed) {
           res.setHeader("Retry-After", limit.retryAfterSeconds);
           res.status(429).json({
@@ -226,15 +226,15 @@ export class RouteAuth {
           return;
         }
 
-        const result = await this.dbService.updateUserPassword(
+        const result = await this.#dbService.updateUserPassword(
           currentAuthenticatedUser.id,
           currentPassword,
           newPassword,
         );
 
         if (!result.ok) {
-          if (result.reason === "invalid_current_password") {
-            this.passwordChangeRateLimiter.recordFailure(rateLimitKey);
+          if (result.reason === "INVALID_CURRENT_PASSWORD") {
+            this.#passwordChangeRateLimiter.recordFailure(rateLimitKey);
           }
           res.status(userMutationErrorStatus(result)).json({
             error: UserMutationErrorMessage(result),
@@ -243,7 +243,7 @@ export class RouteAuth {
           return;
         }
 
-        this.passwordChangeRateLimiter.reset(rateLimitKey);
+        this.#passwordChangeRateLimiter.reset(rateLimitKey);
         res.json({ user: result.user });
       },
     );

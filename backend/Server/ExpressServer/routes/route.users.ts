@@ -21,13 +21,13 @@ type RouteUsersContructor = {
 
 export class RouteUsers {
   public router: express.Router = express.Router();
-  private readonly tokenService: TokenService;
-  private readonly dbService: DBServices;
-  private readonly queueManager: QueueManager;
+  readonly #tokenService: TokenService;
+  readonly #dbService: DBServices;
+  readonly #queueManager: QueueManager;
   constructor({ tokenService, dbService, queueManager }: RouteUsersContructor) {
-    this.tokenService = tokenService;
-    this.dbService = dbService;
-    this.queueManager = queueManager;
+    this.#tokenService = tokenService;
+    this.#dbService = dbService;
+    this.#queueManager = queueManager;
   }
 
   /**
@@ -35,21 +35,21 @@ export class RouteUsers {
    * @param value - The raw `:id` route param.
    * @returns The parsed id, or `null` if it's missing, an array, non-numeric, or not positive.
    */
-  private parseUserId(value: string | string[] | undefined): number | null {
+  #parseUserId(value: string | string[] | undefined): number | null {
     if (Array.isArray(value)) return null;
     const userId = Number(value);
     return userId > 0 ? userId : null;
   }
 
   /** Extracts the vault path an audited request targeted (`path`, `oldPath`, or `newPath`),
-   * normalizing slashes, for {@link auditDenied} log entries. */
-  private requestPath(req: Request): string | undefined {
+   * normalizing slashes, for {@link #auditDenied} log entries. */
+  #requestPath(req: Request): string | undefined {
     const value = req.body?.path ?? req.body?.oldPath ?? req.body?.newPath;
     return typeof value === "string" ? value.replace(/\\/g, "/") : undefined;
   }
 
-  /** Logs an audit warning for an operation denied by {@link requireAdmin}. */
-  private auditDenied(
+  /** Logs an audit warning for an operation denied by {@link #requireAdmin}. */
+  #auditDenied(
     user: AuthenticatedUser,
     operation: string,
     route: string,
@@ -66,18 +66,18 @@ export class RouteUsers {
     });
   }
 
-  /** Reads the authenticated user previously attached to the request by {@link requireAuth}. */
-  private currentUser(res: Response): AuthenticatedUser {
+  /** Reads the authenticated user previously attached to the request by {@link #requireAuth}. */
+  #currentUser(res: Response): AuthenticatedUser {
     return res.locals.authenticatedUser as AuthenticatedUser;
   }
 
   /** Middleware: resolves the bearer access token and rejects the request with 401 if it's
-   * missing/invalid. Must run before {@link requireAdmin} or any route reading
-   * {@link currentUser}. */
-  private requireAuth = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+   * missing/invalid. Must run before requireAdmin or any route reading currentUser.
+   */
+  #requireAuth = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     const token = req.header("Authorization")?.replace(/^Bearer\s+/i, "");
 
-    const authenticatedUser = await this.tokenService.verifyToken(token);
+    const authenticatedUser = await this.#tokenService.verifyToken(token);
 
     if (!authenticatedUser) {
       res.status(401).json({ error: "Authentication required" });
@@ -90,12 +90,12 @@ export class RouteUsers {
   };
 
   /** Middleware: rejects the request with 403 (and logs an audit entry) unless the
-   * authenticated user is an admin. Must run after {@link requireAuth}. */
-  private requireAdmin = (req: Request, res: Response, next: NextFunction): void => {
-    const user = this.currentUser(res);
+   * authenticated user is an admin. Must run after requireAuth. */
+  #requireAdmin = (req: Request, res: Response, next: NextFunction): void => {
+    const user = this.#currentUser(res);
 
     if (user.role !== "admin") {
-      this.auditDenied(user, req.method, req.path, this.requestPath(req));
+      this.#auditDenied(user, req.method, req.path, this.#requestPath(req));
       res.status(403).json({ error: "[Users] Only administrators can perform this action." });
 
       return;
@@ -104,14 +104,14 @@ export class RouteUsers {
     next();
   };
 
-  /** Registers this router's routes on {@link router}. Must be called once before mounting. */
+  /** Must be called once before mounting. */
   public startRoute() {
     this.router.patch(
       "/:id/name",
-      this.requireAuth,
-      this.requireAdmin,
+      this.#requireAuth,
+      this.#requireAdmin,
       async (req: Request, res: Response): Promise<void> => {
-        const userId = this.parseUserId(req.params.id);
+        const userId = this.#parseUserId(req.params.id);
         const normalizedName = typeof req.body?.name === "string" ? req.body.name.trim() : "";
         const { ["x-obsync-client"]: clientId } = req.headers;
 
@@ -133,11 +133,9 @@ export class RouteUsers {
           });
           return;
         }
-        const actor = this.currentUser(res);
-        const target = await this.dbService.getUserById(userId, true);
-        const taskKey = `${userId}:${normalizedName}`;
-        const queue = this.queueManager.creatDBQueueOrReturn(String(clientId), taskKey);
-        const getIfTaskExiste = this.queueManager.isTaskDone(String(clientId), taskKey);
+        const actor = this.#currentUser(res);
+        const target = await this.#dbService.getUserById(userId, true);
+        const queue = this.#queueManager.creatDBQueueOrReturn(String(clientId));
 
         queue.addTask(async () => {
           try {
@@ -154,7 +152,7 @@ export class RouteUsers {
               return;
             }
 
-            const result = await this.dbService.updateUserName(userId, normalizedName);
+            const result = await this.#dbService.updateUserName(userId, normalizedName);
             if (!result.ok) {
               res.status(userMutationErrorStatus(result)).json({
                 error: UserMutationErrorMessage(result),
@@ -169,16 +167,16 @@ export class RouteUsers {
               error: "Something happened while changing some user name",
             });
           }
-        }, taskKey);
+        }, `user:${userId}:renameUser`);
       },
     );
 
     this.router.patch(
       "/:id/password",
-      this.requireAuth,
-      this.requireAdmin,
+      this.#requireAuth,
+      this.#requireAdmin,
       async (req: Request, res: Response): Promise<void> => {
-        const userId = this.parseUserId(req.params.id);
+        const userId = this.#parseUserId(req.params.id);
         const newPassword = req.body?.newPassword;
         const { ["x-obsync-client"]: clientId } = req.headers;
 
@@ -199,8 +197,8 @@ export class RouteUsers {
           return;
         }
 
-        const target = await this.dbService.getUserById(userId, true);
-        const queue = this.queueManager.creatDBQueueOrReturn(String(clientId));
+        const target = await this.#dbService.getUserById(userId, true);
+        const queue = this.#queueManager.creatDBQueueOrReturn(String(clientId));
 
         queue.addTask(async () => {
           try {
@@ -219,7 +217,7 @@ export class RouteUsers {
               return;
             }
 
-            const result = await this.dbService.adminSetUserPassword(userId, newPassword);
+            const result = await this.#dbService.adminSetUserPassword(userId, newPassword);
             if (!result.ok) {
               res.status(userMutationErrorStatus(result)).json({
                 error: UserMutationErrorMessage(result),
@@ -235,28 +233,28 @@ export class RouteUsers {
               error: "Something happened while changing some user password",
             });
           }
-        });
+        }, `user:${userId}:changePassword`);
       },
     );
 
     this.router.get(
       "/",
-      this.requireAuth,
-      this.requireAdmin,
+      this.#requireAuth,
+      this.#requireAdmin,
       async (_req: Request, res: Response): Promise<void> => {
-        res.json({ users: await this.dbService.listUsers() });
+        res.json({ users: await this.#dbService.listUsers() });
       },
     );
 
     this.router.post(
       "/",
-      this.requireAuth,
-      this.requireAdmin,
+      this.#requireAuth,
+      this.#requireAdmin,
       async (req: Request, res: Response): Promise<void> => {
         const { name, email, password, role } = req.body ?? {};
         const normalizedName = typeof name === "string" ? name.trim() : "";
         const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
-        const normalizedRole: UserRole = this.dbService.isUserRole(role) ? role : "user";
+        const normalizedRole: UserRole = this.#dbService.isUserRole(role) ? role : "user";
         const { ["x-obsync-client"]: clientId } = req.headers;
 
         if (typeof clientId !== "string" || clientId === undefined) {
@@ -280,10 +278,10 @@ export class RouteUsers {
           });
           return;
         }
-        const queue = this.queueManager.creatDBQueueOrReturn(String(clientId));
+        const queue = this.#queueManager.creatDBQueueOrReturn(String(clientId));
         queue.addTask(async () => {
           try {
-            const result = await this.dbService.createUser(
+            const result = await this.#dbService.createUser(
               normalizedName,
               normalizedEmail,
               password,
@@ -306,16 +304,16 @@ export class RouteUsers {
               error: "Something happened while creating a new user",
             });
           }
-        });
+        }, `user:create:${normalizedEmail}`);
       },
     );
 
     this.router.patch(
       "/:id/role",
-      this.requireAuth,
-      this.requireAdmin,
+      this.#requireAuth,
+      this.#requireAdmin,
       async (req: Request, res: Response): Promise<void> => {
-        const userId = this.parseUserId(req.params.id);
+        const userId = this.#parseUserId(req.params.id);
         const { ["x-obsync-client"]: clientId } = req.headers;
         const role = req.body?.role;
 
@@ -323,15 +321,15 @@ export class RouteUsers {
           console.warn("[Users] Missing clientId inside the header");
           res.send(400).json({ error: "Missing clientId inside the header" });
         }
-        if (!userId || !this.dbService.isUserRole(role)) {
+        if (!userId || !this.#dbService.isUserRole(role)) {
           console.warn("[Users] Invalid userId or role in request body");
           res.status(400).json({ error: "Invalid user or role." });
           return;
         }
-        const queue = this.queueManager.creatDBQueueOrReturn(String(clientId));
+        const queue = this.#queueManager.creatDBQueueOrReturn(String(clientId));
         queue.addTask(async () => {
           try {
-            const result = await this.dbService.updateUserRole(userId, role);
+            const result = await this.#dbService.updateUserRole(userId, role);
             if (!result.ok) {
               res.status(userMutationErrorStatus(result)).json({
                 error: UserMutationErrorMessage(result),
@@ -346,16 +344,16 @@ export class RouteUsers {
               error: "Something happened while updating a user role",
             });
           }
-        });
+        }, `user:${userId}:changeRole`);
       },
     );
 
     this.router.patch(
       "/:id/status",
-      this.requireAuth,
-      this.requireAdmin,
+      this.#requireAuth,
+      this.#requireAdmin,
       async (req: Request, res: Response): Promise<void> => {
-        const userId = this.parseUserId(req.params.id);
+        const userId = this.#parseUserId(req.params.id);
         const active = req.body?.active;
         const { ["x-obsync-client"]: clientId } = req.headers;
 
@@ -370,10 +368,10 @@ export class RouteUsers {
           return;
         }
 
-        const queue = this.queueManager.creatDBQueueOrReturn(String(clientId));
+        const queue = this.#queueManager.creatDBQueueOrReturn(String(clientId));
         queue.addTask(async () => {
           try {
-            const result = await this.dbService.updateUserStatus(userId, active);
+            const result = await this.#dbService.updateUserStatus(userId, active);
             if (!result.ok) {
               res.status(userMutationErrorStatus(result)).json({
                 error: UserMutationErrorMessage(result),
@@ -389,16 +387,16 @@ export class RouteUsers {
               error: "Something happened while updating a user status",
             });
           }
-        });
+        }, `user:${userId}:changeStatus`);
       },
     );
 
     this.router.delete(
       "/:id",
-      this.requireAuth,
-      this.requireAdmin,
+      this.#requireAuth,
+      this.#requireAdmin,
       async (req: Request, res: Response): Promise<void> => {
-        const userId = this.parseUserId(req.params.id);
+        const userId = this.#parseUserId(req.params.id);
         const { ["x-obsync-client"]: clientId } = req.headers;
 
         if (typeof clientId !== "string" || clientId === undefined) {
@@ -412,11 +410,11 @@ export class RouteUsers {
           return;
         }
 
-        const queue = this.queueManager.creatDBQueueOrReturn(String(clientId));
+        const queue = this.#queueManager.creatDBQueueOrReturn(String(clientId));
 
         queue.addTask(async () => {
           try {
-            const result = await this.dbService.deleteUser(userId);
+            const result = await this.#dbService.deleteUser(userId);
             if (!result.ok) {
               res.status(userMutationErrorStatus(result)).json({
                 error: UserMutationErrorMessage(result),
@@ -432,7 +430,7 @@ export class RouteUsers {
               error: "Something happened while deleting a user ",
             });
           }
-        });
+        }, `user:${userId}:deleteUser`);
       },
     );
   }

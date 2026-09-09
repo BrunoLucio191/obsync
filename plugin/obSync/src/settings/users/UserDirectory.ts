@@ -7,19 +7,19 @@ import type { AuthenticatedUser } from '../../auth/auth.types.ts';
  * to re-fetch the whole list after every action.
  */
 export class UserDirectory {
-	private users: AuthenticatedUser[] = [];
+	#users: AuthenticatedUser[] = [];
 
 	/** Replaces the entire cache, e.g. after a fresh `listUsers()` fetch. */
 	public replaceAll(users: AuthenticatedUser[]): void {
-		this.users = [...users].sort((first, second) => first.id - second.id);
+		this.#users = [...users].sort((first, second) => first.id - second.id);
 	}
 
 	/** Overwrites a single cached user, matched by `id`; no-op if the id isn't cached. */
 	public replace(updatedUser: AuthenticatedUser): void {
-		const index = this.users.findIndex(
+		const index = this.#users.findIndex(
 			(user) => user.id === updatedUser.id,
 		);
-		if (index !== -1) this.users[index] = updatedUser;
+		if (index !== -1) this.#users[index] = updatedUser;
 	}
 
 	/**
@@ -28,29 +28,29 @@ export class UserDirectory {
 	 * cached, so a stale double-call can't create a duplicate row.
 	 */
 	public add(newUser: AuthenticatedUser): void {
-		if (this.users.some((user) => user.id === newUser.id)) return;
+		if (this.#users.some((user) => user.id === newUser.id)) return;
 
-		const insertAt = this.users.findIndex((user) => user.id > newUser.id);
+		const insertAt = this.#users.findIndex((user) => user.id > newUser.id);
 		if (insertAt === -1) {
-			this.users.push(newUser);
+			this.#users.push(newUser);
 		} else {
-			this.users.splice(insertAt, 0, newUser);
+			this.#users.splice(insertAt, 0, newUser);
 		}
 	}
 
 	public remove(userId: number): void {
-		this.users = this.users.filter((user) => user.id !== userId);
+		this.#users = this.#users.filter((user) => user.id !== userId);
 	}
 
 	/** Filters cached users by a case/accent-insensitive match against name or email; an empty query returns every user. */
 	public search(query: string): AuthenticatedUser[] {
-		const normalizedQuery = this.normalizeSearch(query);
+		const normalizedQuery = this.#normalizeSearch(query);
 		if (!normalizedQuery) return this.all();
 
-		return this.users.filter(
+		return this.#users.filter(
 			(user) =>
-				this.normalizeSearch(user.name).includes(normalizedQuery) ||
-				this.normalizeSearch(user.email).includes(normalizedQuery),
+				this.#normalizeSearch(user.name).includes(normalizedQuery) ||
+				this.#normalizeSearch(user.email).includes(normalizedQuery),
 		);
 	}
 
@@ -63,13 +63,13 @@ export class UserDirectory {
 		name: string,
 		exceptUserId?: number,
 	): AuthenticatedUser | undefined {
-		const key = this.normalizeUniqueName(name);
+		const key = this.#normalizeUniqueName(name);
 		if (!key) return undefined;
 
-		return this.users.find(
+		return this.#users.find(
 			(user) =>
 				user.id !== exceptUserId &&
-				this.normalizeUniqueName(user.name) === key,
+				this.#normalizeUniqueName(user.name) === key,
 		);
 	}
 
@@ -78,7 +78,7 @@ export class UserDirectory {
 		const key = email.normalize('NFKC').trim().toLocaleLowerCase();
 		if (!key) return undefined;
 
-		return this.users.find(
+		return this.#users.find(
 			(user) =>
 				user.email.normalize('NFKC').trim().toLocaleLowerCase() === key,
 		);
@@ -86,17 +86,17 @@ export class UserDirectory {
 
 	/** The number of active admins, used to prevent demoting/deactivating/deleting the last remaining one. */
 	public activeAdminCount(): number {
-		return this.users.filter(
+		return this.#users.filter(
 			(user) => user.active && user.role === 'admin',
 		).length;
 	}
 
 	public all(): AuthenticatedUser[] {
-		return [...this.users];
+		return [...this.#users];
 	}
 
 	public get size(): number {
-		return this.users.length;
+		return this.#users.length;
 	}
 
 	/**
@@ -104,7 +104,7 @@ export class UserDirectory {
 	 * normalization, trimming, collapsing internal whitespace, and
 	 * locale-aware (`pt-BR`) lowercasing.
 	 */
-	private normalizeUniqueName(value: string): string {
+	#normalizeUniqueName(value: string): string {
 		return value
 			.normalize('NFKC')
 			.trim()
@@ -113,7 +113,7 @@ export class UserDirectory {
 	}
 
 	/** Normalizes a string for accent/case-insensitive substring search by stripping diacritics after Unicode decomposition. */
-	private normalizeSearch(value: string): string {
+	#normalizeSearch(value: string): string {
 		return value
 			.normalize('NFD')
 			.replace(/[\u0300-\u036f]/g, '')

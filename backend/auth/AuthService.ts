@@ -7,9 +7,9 @@ import type { TokenService } from "./TokenService.ts";
 
 /** Handles credential-based login, turning an email/password pair into an {@link AuthSession}. */
 export class AuthService {
-  private readonly dbService: DBServices;
-  private readonly userDB: UserDB;
-  private readonly tokenService: TokenService;
+  readonly #dbService: DBServices;
+  readonly #userDB: UserDB;
+  readonly #tokenService: TokenService;
 
   /**
    * @param userDB - Raw database handle used to look up the user row by email.
@@ -17,9 +17,9 @@ export class AuthService {
    * @param tokenService - Service used to mint the session's tokens once credentials are verified.
    */
   constructor(userDB: UserDB, dbService: DBServices, tokenService: TokenService) {
-    this.dbService = dbService;
-    this.userDB = userDB;
-    this.tokenService = tokenService;
+    this.#dbService = dbService;
+    this.#userDB = userDB;
+    this.#tokenService = tokenService;
   }
 
   /**
@@ -29,7 +29,7 @@ export class AuthService {
    * @returns A new {@link AuthSession} if the credentials match an active user, otherwise `null`.
    */
   public async login(email: string, password: string): Promise<AuthSession | null | undefined> {
-    const row = this.userDB
+    const row = this.#userDB
       .prepare(
         `SELECT id, email, name, password_hash, role, active
          FROM users WHERE email = ? AND active = 1`,
@@ -39,6 +39,6 @@ export class AuthService {
       return null;
     }
 
-    return this.tokenService.sessionFor(this.dbService.rowToUser(row));
+    return this.#tokenService.sessionFor(this.#dbService.rowToUser(row));
   }
 }

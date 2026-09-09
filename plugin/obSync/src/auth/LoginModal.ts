@@ -7,9 +7,15 @@ import { t } from '../i18n/i18n.ts';
  * whether the user ended up authenticated when the modal closes.
  */
 export class LoginModal extends Modal {
-	private email = '';
-	private password = '';
-	private authenticated = false;
+	#email = '';
+	#password = '';
+	#authenticated = false;
+
+	readonly #submitLogin: (
+		email: string,
+		password: string,
+	) => Promise<boolean>;
+	readonly #onFinished: (authenticated: boolean) => void;
 
 	/**
 	 * @param app - The Obsidian app instance, forwarded to `Modal`.
@@ -18,13 +24,15 @@ export class LoginModal extends Modal {
 	 */
 	constructor(
 		app: App,
-		private readonly submitLogin: (
+		submitLogin: (
 			email: string,
 			password: string,
 		) => Promise<boolean>,
-		private readonly onFinished: (authenticated: boolean) => void,
+		onFinished: (authenticated: boolean) => void,
 	) {
 		super(app);
+		this.#submitLogin = submitLogin;
+		this.#onFinished = onFinished;
 	}
 
 	/** Builds the modal's e-mail/password form and wires up the sign-in button. */
@@ -37,14 +45,14 @@ export class LoginModal extends Modal {
 		new Setting(this.contentEl).setName(t('auth.email')).addText((text) =>
 			text
 				.setPlaceholder(t('auth.emailPlaceholder'))
-				.setValue(this.email)
-				.onChange((value) => (this.email = value)),
+				.setValue(this.#email)
+				.onChange((value) => (this.#email = value)),
 		);
 
 		new Setting(this.contentEl).setName(t('auth.password')).addText((text) => {
 			text.inputEl.type = 'password';
 			text.setPlaceholder(t('auth.password')).onChange(
-				(value) => (this.password = value),
+				(value) => (this.#password = value),
 			);
 		});
 
@@ -54,24 +62,24 @@ export class LoginModal extends Modal {
 				.setCta()
 				.onClick(async () => {
 					button.setDisabled(true);
-					const success = await this.submitLogin(
-						this.email,
-						this.password,
+					const success = await this.#submitLogin(
+						this.#email,
+						this.#password,
 					);
 					button.setDisabled(false);
 					if (!success) {
 						new Notice(t('auth.invalidCredentials'));
 						return;
 					}
-					this.authenticated = true;
+					this.#authenticated = true;
 					this.close();
 				}),
 		);
 	}
 
-	/** Clears the modal's DOM and reports the final authentication outcome to {@link onFinished}. */
+	/** Clears the modal's DOM and reports the final authentication outcome to {@link #onFinished}. */
 	onClose(): void {
 		this.contentEl.empty();
-		this.onFinished(this.authenticated);
+		this.#onFinished(this.#authenticated);
 	}
 }

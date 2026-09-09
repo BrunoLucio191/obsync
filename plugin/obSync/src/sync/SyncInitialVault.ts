@@ -9,12 +9,20 @@ import { Boss } from '../Workers/Boss.ts';
  * a vault to the backend (or needs to re-baseline it).
  */
 export class SyncInitialVault {
-	private boss!: Boss;
+	#boss!: Boss;
+	readonly #app: App;
+	readonly #auth: AuthService;
+	readonly #mutedPaths: PathMuteRegistry;
+
 	constructor(
-		private readonly app: App,
-		private readonly auth: AuthService,
-		private readonly mutedPaths: PathMuteRegistry,
-	) {}
+		app: App,
+		auth: AuthService,
+		mutedPaths: PathMuteRegistry,
+	) {
+		this.#app = app;
+		this.#auth = auth;
+		this.#mutedPaths = mutedPaths;
+	}
 
 	/**
 	 * Fetches the remote vault snapshot as a zip archive and extracts it into
@@ -25,7 +33,7 @@ export class SyncInitialVault {
 	 * re-published back to the server. Shows a success or failure Notice.
 	 */
 	public async sync(): Promise<void> {
-		this.boss = new Boss(new ZipWorkerSon(this.app, this.mutedPaths, this.auth));
-		await this.boss.startWorking();
+		this.#boss = new Boss(new ZipWorkerSon(this.#app, this.#mutedPaths, this.#auth));
+		await this.#boss.startWorking();
 	}
 }

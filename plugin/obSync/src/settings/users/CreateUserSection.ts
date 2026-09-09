@@ -10,16 +10,24 @@ import type { UserDirectory } from './UserDirectory.ts';
  * name/email duplicates before calling the backend.
  */
 export class CreateUserSection {
-	private name = '';
-	private email = '';
-	private password = '';
-	private role: UserRole = 'user';
+	#name = '';
+	#email = '';
+	#password = '';
+	#role: UserRole = 'user';
+
+	readonly #controller: SettingsController;
+	readonly #directory: UserDirectory;
+	readonly #refresh: () => void;
 
 	public constructor(
-		private readonly controller: SettingsController,
-		private readonly directory: UserDirectory,
-		private readonly refresh: () => void,
-	) {}
+		controller: SettingsController,
+		directory: UserDirectory,
+		refresh: () => void,
+	) {
+		this.#controller = controller;
+		this.#directory = directory;
+		this.#refresh = refresh;
+	}
 
 	public definition(): SettingDefinitionGroup {
 		return {
@@ -33,8 +41,8 @@ export class CreateUserSection {
 						setting.addText((text) =>
 							text
 								.setPlaceholder(t('settings.users.namePlaceholder'))
-								.setValue(this.name)
-								.onChange((value) => (this.name = value)),
+								.setValue(this.#name)
+								.onChange((value) => (this.#name = value)),
 						),
 				},
 				{
@@ -44,8 +52,8 @@ export class CreateUserSection {
 						setting.addText((text) =>
 							text
 								.setPlaceholder(t('settings.users.emailPlaceholder'))
-								.setValue(this.email)
-								.onChange((value) => (this.email = value)),
+								.setValue(this.#email)
+								.onChange((value) => (this.#email = value)),
 						),
 				},
 				{
@@ -55,8 +63,8 @@ export class CreateUserSection {
 						setting.addText((text) => {
 							text.inputEl.type = 'password';
 							text.setPlaceholder(t('settings.users.minCharsPlaceholder'))
-								.setValue(this.password)
-								.onChange((value) => (this.password = value));
+								.setValue(this.#password)
+								.onChange((value) => (this.#password = value));
 						});
 					},
 				},
@@ -68,9 +76,9 @@ export class CreateUserSection {
 							dropdown
 								.addOption('user', t('settings.users.user'))
 								.addOption('admin', t('settings.users.admin'))
-								.setValue(this.role)
+								.setValue(this.#role)
 								.onChange(
-									(value) => (this.role = value as UserRole),
+									(value) => (this.#role = value as UserRole),
 								),
 						),
 				},
@@ -84,8 +92,8 @@ export class CreateUserSection {
 								.setButtonText(t('settings.users.createUser'))
 								.setCta()
 								.onClick(async () => {
-									const duplicateName = this.directory.findByName(
-										this.name,
+									const duplicateName = this.#directory.findByName(
+										this.#name,
 									);
 									if (duplicateName) {
 										new Notice(
@@ -96,7 +104,7 @@ export class CreateUserSection {
 										return;
 									}
 
-									if (this.directory.findByEmail(this.email)) {
+									if (this.#directory.findByEmail(this.#email)) {
 										new Notice(
 											t('userAdmin.emailAlreadyExists'),
 										);
@@ -104,11 +112,11 @@ export class CreateUserSection {
 									}
 
 									button.setDisabled(true);
-									const result = await this.controller.createUser({
-										name: this.name,
-										email: this.email,
-										password: this.password,
-										role: this.role,
+									const result = await this.#controller.createUser({
+										name: this.#name,
+										email: this.#email,
+										password: this.#password,
+										role: this.#role,
 									});
 									button.setDisabled(false);
 
@@ -117,14 +125,14 @@ export class CreateUserSection {
 										return;
 									}
 
-									this.directory.add(result.value);
-									this.reset();
+									this.#directory.add(result.value);
+									this.#reset();
 									new Notice(
 										t('userAdmin.userCreated', {
 											email: result.value.email,
 										}),
 									);
-									this.refresh();
+									this.#refresh();
 								}),
 						);
 					},
@@ -134,10 +142,10 @@ export class CreateUserSection {
 	}
 
 	/** Clears the form fields back to their defaults after a successful create. */
-	private reset(): void {
-		this.name = '';
-		this.email = '';
-		this.password = '';
-		this.role = 'user';
+	#reset(): void {
+		this.#name = '';
+		this.#email = '';
+		this.#password = '';
+		this.#role = 'user';
 	}
 }

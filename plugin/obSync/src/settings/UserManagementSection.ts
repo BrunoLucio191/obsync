@@ -15,32 +15,32 @@ import { UserNameEditor } from './users/UserNameEditor.ts';
  * debounced-save logic.
  */
 export class UserManagementSection {
-	private readonly directory: UserDirectory;
-	private readonly nameEditor: UserNameEditor;
-	private readonly list: UserListSection;
-	private readonly createForm: CreateUserSection;
+	readonly #directory: UserDirectory;
+	readonly #nameEditor: UserNameEditor;
+	readonly #list: UserListSection;
+	readonly #createForm: CreateUserSection;
 
 	public constructor(
 		controller: SettingsController,
 		refresh: () => void,
 	) {
-		this.directory = new UserDirectory();
-		this.nameEditor = new UserNameEditor(controller, this.directory);
-		this.list = new UserListSection(
+		this.#directory = new UserDirectory();
+		this.#nameEditor = new UserNameEditor(controller, this.#directory);
+		this.#list = new UserListSection(
 			controller,
-			this.directory,
-			this.nameEditor,
+			this.#directory,
+			this.#nameEditor,
 			refresh,
 		);
-		this.createForm = new CreateUserSection(
+		this.#createForm = new CreateUserSection(
 			controller,
-			this.directory,
+			this.#directory,
 			refresh,
 		);
 	}
 
 	public definitions(): SettingDefinitionItem[] {
-		return [...this.list.definitions(), this.createForm.definition()];
+		return [...this.#list.definitions(), this.#createForm.definition()];
 	}
 
 	/** Renders an editable display-name field, delegating to the shared `UserNameEditor` (debounced autosave, duplicate checks). */
@@ -48,7 +48,7 @@ export class UserManagementSection {
 		setting: Setting,
 		user: AuthenticatedUser,
 	): void {
-		this.nameEditor.render(
+		this.#nameEditor.render(
 			setting,
 			user,
 			t('settings.account.yourDisplayName'),
@@ -58,7 +58,7 @@ export class UserManagementSection {
 
 	/** Tears down pending timers/state in the list and name-editor sub-sections. */
 	public destroy(): void {
-		this.list.destroy();
-		this.nameEditor.destroy();
+		this.#list.destroy();
+		this.#nameEditor.destroy();
 	}
 }

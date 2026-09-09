@@ -21,27 +21,31 @@ type ApiResponse = {
  * afterward when it affects the currently signed-in user.
  */
 export class UserAdminService {
-	public constructor(private readonly auth: AuthService) {}
+	readonly #auth: AuthService;
+
+	public constructor(auth: AuthService) {
+		this.#auth = auth;
+	}
 
 	/**
 	 * Fetches the full list of registered users.
 	 * @returns The user list, or a localized error if the request fails or the caller isn't authenticated.
 	 */
 	public async listUsers(): Promise<UserActionResult<AuthenticatedUser[]>> {
-		if (!this.hasSession() || !(await this.auth.prepareAuthenticatedRequest())) {
+		if (!this.#hasSession() || !(await this.#auth.prepareAuthenticatedRequest())) {
 			return { ok: false, error: t('userAdmin.signInToViewUsers') };
 		}
 
 		try {
 			const response = await requestUrl({
 				url: `${getApiBaseUrl()}/api/users`,
-				headers: this.auth.headers(),
+				headers: this.#auth.headers(),
 				throw: false,
 			});
 			if (response.status !== 200) {
 				return {
 					ok: false,
-					error: this.apiError(response, t('userAdmin.couldNotLoadUsers')),
+					error: this.#apiError(response, t('userAdmin.couldNotLoadUsers')),
 				};
 			}
 
@@ -56,7 +60,7 @@ export class UserAdminService {
 		} catch (error) {
 			return {
 				ok: false,
-				error: this.unknownRequestError(
+				error: this.#unknownRequestError(
 					error,
 					t('userAdmin.couldNotLoadUsers'),
 				),
@@ -75,7 +79,7 @@ export class UserAdminService {
 		password: string;
 		role: UserRole;
 	}): Promise<UserActionResult<AuthenticatedUser>> {
-		if (!this.hasSession() || !(await this.auth.prepareAuthenticatedRequest())) {
+		if (!this.#hasSession() || !(await this.#auth.prepareAuthenticatedRequest())) {
 			return { ok: false, error: t('userAdmin.signInToCreateUsers') };
 		}
 
@@ -83,14 +87,14 @@ export class UserAdminService {
 			const response = await requestUrl({
 				url: `${getApiBaseUrl()}/api/users`,
 				method: 'POST',
-				headers: this.auth.headers(),
+				headers: this.#auth.headers(),
 				body: JSON.stringify(input),
 				throw: false,
 			});
 			if (response.status !== 201) {
 				return {
 					ok: false,
-					error: this.apiError(response, t('userAdmin.couldNotCreateUser')),
+					error: this.#apiError(response, t('userAdmin.couldNotCreateUser')),
 				};
 			}
 
@@ -101,7 +105,7 @@ export class UserAdminService {
 		} catch (error) {
 			return {
 				ok: false,
-				error: this.unknownRequestError(
+				error: this.#unknownRequestError(
 					error,
 					t('userAdmin.couldNotCreateUser'),
 				),
@@ -114,7 +118,7 @@ export class UserAdminService {
 		userId: number,
 		role: UserRole,
 	): Promise<UserActionResult<AuthenticatedUser>> {
-		return this.mutateUser(
+		return this.#mutateUser(
 			`/api/users/${userId}/role`,
 			'PATCH',
 			{ role },
@@ -127,7 +131,7 @@ export class UserAdminService {
 		userId: number,
 		active: boolean,
 	): Promise<UserActionResult<AuthenticatedUser>> {
-		return this.mutateUser(
+		return this.#mutateUser(
 			`/api/users/${userId}/status`,
 			'PATCH',
 			{ active },
@@ -139,7 +143,7 @@ export class UserAdminService {
 	public deleteUser(
 		userId: number,
 	): Promise<UserActionResult<AuthenticatedUser>> {
-		return this.mutateUser(
+		return this.#mutateUser(
 			`/api/users/${userId}`,
 			'DELETE',
 			undefined,
@@ -152,7 +156,7 @@ export class UserAdminService {
 		userId: number,
 		name: string,
 	): Promise<UserActionResult<AuthenticatedUser>> {
-		return this.mutateUser(
+		return this.#mutateUser(
 			`/api/users/${userId}/name`,
 			'PATCH',
 			{ name },
@@ -165,7 +169,7 @@ export class UserAdminService {
 		userId: number,
 		newPassword: string,
 	): Promise<UserActionResult<AuthenticatedUser>> {
-		return this.mutateUser(
+		return this.#mutateUser(
 			`/api/users/${userId}/password`,
 			'PATCH',
 			{ newPassword },
@@ -185,16 +189,16 @@ export class UserAdminService {
 	 * @param fallback - The localized error message to use if the backend didn't provide a more specific one.
 	 * @returns The updated user, or a localized error on failure.
 	 */
-	private async mutateUser(
+	async #mutateUser(
 		path: string,
 		method: 'PATCH' | 'DELETE',
 		body: Record<string, unknown> | undefined,
 		fallback: string,
 	): Promise<UserActionResult<AuthenticatedUser>> {
 		if (
-			!this.auth.isAdmin() ||
-			!(await this.auth.prepareAuthenticatedRequest()) ||
-			!this.auth.isAdmin()
+			!this.#auth.isAdmin() ||
+			!(await this.#auth.prepareAuthenticatedRequest()) ||
+			!this.#auth.isAdmin()
 		) {
 			return {
 				ok: false,
@@ -206,12 +210,12 @@ export class UserAdminService {
 			const response = await requestUrl({
 				url: `${getApiBaseUrl()}${path}`,
 				method,
-				headers: this.auth.headers(),
+				headers: this.#auth.headers(),
 				body: body ? JSON.stringify(body) : undefined,
 				throw: false,
 			});
 			if (response.status !== 200) {
-				return { ok: false, error: this.apiError(response, fallback) };
+				return { ok: false, error: this.#apiError(response, fallback) };
 			}
 
 			const payload = response.json as { user?: AuthenticatedUser };
@@ -222,21 +226,21 @@ export class UserAdminService {
 				};
 			}
 
-			if (payload.user.id === this.auth.user?.id) {
-				await this.auth.refreshSession();
+			if (payload.user.id === this.#auth.user?.id) {
+				await this.#auth.refreshSession();
 			}
 			return { ok: true, value: payload.user };
 		} catch (error) {
 			return {
 				ok: false,
-				error: this.unknownRequestError(error, fallback),
+				error: this.#unknownRequestError(error, fallback),
 			};
 		}
 	}
 
 	/** @returns Whether the caller currently has a locally-stored session. */
-	private hasSession(): boolean {
-		return this.auth.isAuthenticated();
+	#hasSession(): boolean {
+		return this.#auth.isAuthenticated();
 	}
 
 	/**
@@ -246,7 +250,7 @@ export class UserAdminService {
 	 * @param fallback - The message to use if the response has no usable error text.
 	 * @returns The localized (or fallback) error message.
 	 */
-	private apiError(response: ApiResponse, fallback: string): string {
+	#apiError(response: ApiResponse, fallback: string): string {
 		const payload = response.json as { error?: unknown; reason?: unknown };
 		const raw =
 			typeof payload?.error === 'string' && payload.error.trim()
@@ -263,7 +267,7 @@ export class UserAdminService {
 	 * @param fallback - The message to use if `error` has no usable message.
 	 * @returns The error message to show the user.
 	 */
-	private unknownRequestError(error: unknown, fallback: string): string {
+	#unknownRequestError(error: unknown, fallback: string): string {
 		return error instanceof Error && error.message
 			? error.message
 			: fallback;

@@ -1,10 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
-import {
-  normalizeEmailKey,
-  normalizeName,
-  normalizeNameKey,
-} from "./userNormalization.ts";
+import { normalizeEmailKey, normalizeName, normalizeNameKey } from "./userNormalization.ts";
 import { hashPassword } from "../auth/PasswordUtil.ts";
 
 /** A user created by the initial database seed, with its one-time plaintext password. */
@@ -12,7 +8,6 @@ type SeededUser = { id: number; email: string; password: string };
 
 /**
  * Generates a random, URL-safe temporary password for seeded accounts.
- *
  * @returns A base64url-encoded random password string.
  */
 function generateTemporaryPassword(): string {
@@ -25,7 +20,6 @@ function generateTemporaryPassword(): string {
  * can treat it as a ready-to-query users database.
  */
 export class UserDB extends DatabaseSync {
-  /** Opens (or creates) the SQLite file at the given path. */
   constructor(path: string) {
     super(path);
   }
@@ -36,11 +30,11 @@ export class UserDB extends DatabaseSync {
    * administrator, and prints the generated credentials to the console.
    */
   public async setup(): Promise<void> {
-    this.createSchema();
-    this.configDataBase();
-    const seeded = await this.createInitialUsers();
-    const adminId = this.ensureInitialAdministrator();
-    this.printSeedSummary(seeded, adminId);
+    this.#createSchema();
+    this.#configDataBase();
+    const seeded = await this.#createInitialUsers();
+    const adminId = this.#ensureInitialAdministrator();
+    this.#printSeedSummary(seeded, adminId);
   }
 
   /**
@@ -67,16 +61,16 @@ export class UserDB extends DatabaseSync {
       throw new Error("There is no active administrator in the database.");
     }
 
-    this.configDataBase();
+    this.#configDataBase();
   }
 
   /** Applies runtime SQLite pragmas (enables WAL journal mode for better concurrency). */
-  private configDataBase(): void {
+  #configDataBase(): void {
     this.exec("PRAGMA journal_mode = WAL");
   }
 
   /** Creates the `users` table and its indexes if they don't already exist. */
-  private createSchema(): void {
+  #createSchema(): void {
     this.exec(`
         CREATE TABLE IF NOT EXISTS users (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -108,7 +102,7 @@ export class UserDB extends DatabaseSync {
    * their plaintext temporary passwords (only available at this moment —
    * they are not recoverable once seeding completes).
    */
-  private async createInitialUsers(): Promise<SeededUser[]> {
+  async #createInitialUsers(): Promise<SeededUser[]> {
     const users = [
       { email: "thiago@gmail.com", name: "Thiago" },
       { email: "brunoestudos6@gmail.com", name: "Bruno" },
@@ -125,12 +119,7 @@ export class UserDB extends DatabaseSync {
       const email = normalizeEmailKey(user.email);
       const name = normalizeName(user.name);
       const password = generateTemporaryPassword();
-      const result = insert.run(
-        email,
-        name,
-        normalizeNameKey(name),
-        await hashPassword(password),
-      );
+      const result = insert.run(email, name, normalizeNameKey(name), await hashPassword(password));
 
       if (result.changes > 0) {
         seeded.push({ id: Number(result.lastInsertRowid), email, password });
@@ -147,14 +136,12 @@ export class UserDB extends DatabaseSync {
    * @returns The id of the user promoted to administrator.
    * @throws If there is no active user available to promote.
    */
-  private ensureInitialAdministrator(): number {
+  #ensureInitialAdministrator(): number {
     const first = this.prepare(
       "SELECT id FROM users WHERE active = 1 ORDER BY id LIMIT 1",
     ).get() as { id: number } | undefined;
     if (!first) {
-      throw new Error(
-        "There is no active user to promote to administrator.",
-      );
+      throw new Error("There is no active user to promote to administrator.");
     }
     this.prepare("UPDATE users SET role = 'admin' WHERE id = ?").run(first.id);
     return first.id;
@@ -167,13 +154,11 @@ export class UserDB extends DatabaseSync {
    * @param seeded - Accounts created during this seeding run.
    * @param adminId - id of the account promoted to administrator, used to label it in the printout.
    */
-  private printSeedSummary(seeded: SeededUser[], adminId: number): void {
+  #printSeedSummary(seeded: SeededUser[], adminId: number): void {
     console.log("[Database] Seed: initial accounts created.");
     for (const user of seeded) {
       const role = user.id === adminId ? "admin" : "user";
-      console.log(
-        `[Database]   ${user.email} — temporary password (${role}): ${user.password}`,
-      );
+      console.log(`[Database]   ${user.email} — temporary password (${role}): ${user.password}`);
     }
     console.log(
       "[Database] Save these passwords now: they will not be shown again. " +

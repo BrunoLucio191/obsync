@@ -13,14 +13,22 @@ import { ZipWorkerMessage } from './zip.worker.ts';
  * vault once the worker reports its result.
  */
 export class ZipWorkerSon {
-	private zipWoker!: Worker;
+	#zipWoker!: Worker;
+	readonly #app: App;
+	readonly #mutedPath: PathMuteRegistry;
+	readonly #auth: AuthService;
+
 	constructor(
-		private readonly app: App,
-		private readonly mutedPath: PathMuteRegistry,
-		private readonly auth: AuthService,
-	) {}
+		app: App,
+		mutedPath: PathMuteRegistry,
+		auth: AuthService,
+	) {
+		this.#app = app;
+		this.#mutedPath = mutedPath;
+		this.#auth = auth;
+	}
 	public async startWorking(): Promise<void> {
-		if (!(await this.auth.prepareAuthenticatedRequest())) {
+		if (!(await this.#auth.prepareAuthenticatedRequest())) {
 			new Notice(t('sync.initialSyncFailed'));
 			return;
 		}
@@ -28,7 +36,7 @@ export class ZipWorkerSon {
 		const response = await requestUrl({
 			url: `${getApiBaseUrl()}/api/sync/initSync`,
 			method: 'POST',
-			headers: this.auth.headers(),
+			headers: this.#auth.headers(),
 			body: JSON.stringify({ myFlag: true, name: 'obsidian ready to sync' }),
 			throw: false,
 		});
@@ -42,21 +50,21 @@ export class ZipWorkerSon {
 		}
 
 		const blob = new Blob([zipWorkerSource], { type: 'application/javascript' });
-		this.zipWoker = new Worker(URL.createObjectURL(blob));
+		this.#zipWoker = new Worker(URL.createObjectURL(blob));
 
-		this.app.workspace.onLayoutReady(() => {
-			this.zipWoker.onmessage = (event: MessageEvent<ZipWorkerMessage>) => {
-				void this.handleZipResult(event.data);
+		this.#app.workspace.onLayoutReady(() => {
+			this.#zipWoker.onmessage = (event: MessageEvent<ZipWorkerMessage>) => {
+				void this.#handleZipResult(event.data);
 			};
 		});
 
-		this.zipWoker.onerror = (event) => {
+		this.#zipWoker.onerror = (event) => {
 			console.error(t('sync.initialSyncError'), event.error ?? event.message);
 			new Notice(t('sync.initialSyncFailed'));
 		};
 
 		const zipData = response.arrayBuffer;
-		this.zipWoker.postMessage(zipData, [zipData]);
+		this.#zipWoker.postMessage(zipData, [zipData]);
 	}
 
 	/**
@@ -66,8 +74,8 @@ export class ZipWorkerSon {
 	 * the latest file content; non-admins only get files that don't already exist
 	 * locally, so local-only content survives for read-only users.
 	 */
-	private async handleZipResult(message: ZipWorkerMessage) {
-		this.zipWoker.terminate();
+	async #handleZipResult(message: ZipWorkerMessage) {
+		this.#zipWoker.terminate();
 
 		if (message.status === 'error') {
 			console.error(t('sync.initialSyncError'), message.message);
@@ -75,12 +83,12 @@ export class ZipWorkerSon {
 			return;
 		}
 
-		const adapter = this.app.vault.adapter;
+		const adapter = this.#app.vault.adapter;
 
 		for (const entry of message.entries) {
 			if (entry.isDir) {
 				if (!(await adapter.exists(entry.path))) {
-					this.mutedPath.mute(entry.path);
+					this.#mutedPath.mute(entry.path);
 					await adapter.mkdir(entry.path);
 				}
 				continue;
@@ -88,11 +96,11 @@ export class ZipWorkerSon {
 
 			const parentPath = entry.path.substring(0, entry.path.lastIndexOf('/'));
 			if (parentPath && !(await adapter.exists(parentPath))) {
-				this.mutedPath.mute(parentPath);
+				this.#mutedPath.mute(parentPath);
 				await adapter.mkdir(parentPath);
 			}
-			if (this.auth.isAdmin() || !(await adapter.exists(entry.path))) {
-				this.mutedPath.mute(entry.path);
+			if (this.#auth.isAdmin() || !(await adapter.exists(entry.path))) {
+				this.#mutedPath.mute(entry.path);
 				await adapter.writeBinary(entry.path, entry.content);
 			}
 		}

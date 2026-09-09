@@ -8,14 +8,14 @@ import type { YjsPersistenceAdapter } from "./yjs.types.ts";
  */
 export class YjsPersistenceGateway {
   /** The currently configured persistence backend, if any. */
-  private adapter: YjsPersistenceAdapter | undefined;
+  #adapter: YjsPersistenceAdapter | undefined;
 
   /**
    * Installs the persistence backend used by all subsequent calls.
    * @param adapter - Concrete storage implementation to delegate to.
    */
   public setAdapter(adapter: YjsPersistenceAdapter): void {
-    this.adapter = adapter;
+    this.#adapter = adapter;
   }
 
   /**
@@ -24,7 +24,7 @@ export class YjsPersistenceGateway {
    * @param doc - In-memory Yjs document to hydrate.
    */
   public async bindState(docName: string, doc: Y.Doc): Promise<void> {
-    await this.adapter?.bindState(docName, doc);
+    await this.#adapter?.bindState(docName, doc);
   }
 
   /**
@@ -33,7 +33,7 @@ export class YjsPersistenceGateway {
    * @param doc - In-memory Yjs document whose state should be saved.
    */
   public async writeState(docName: string, doc: Y.Doc): Promise<void> {
-    await this.adapter?.writeState(docName, doc);
+    await this.#adapter?.writeState(docName, doc);
   }
 
   /**
@@ -42,7 +42,7 @@ export class YjsPersistenceGateway {
    * @param doc - In-memory Yjs document being discarded.
    */
   public async destroyState(docName: string, doc: Y.Doc): Promise<void> {
-    await this.adapter?.destroyState?.(docName, doc);
+    await this.#adapter?.destroyState?.(docName, doc);
   }
 
   /**
@@ -50,7 +50,7 @@ export class YjsPersistenceGateway {
    * @param targetPath - Normalized vault path that was deleted.
    */
   public async deleteStateUnderPath(targetPath: string): Promise<void> {
-    await this.adapter?.deleteStateUnderPath?.(targetPath);
+    await this.#adapter?.deleteStateUnderPath?.(targetPath);
   }
 
   /**
@@ -62,6 +62,6 @@ export class YjsPersistenceGateway {
     oldPath: string,
     newPath: string,
   ): Promise<void> {
-    await this.adapter?.renameStatePath?.(oldPath, newPath);
+    await this.#adapter?.renameStatePath?.(oldPath, newPath);
   }
 }

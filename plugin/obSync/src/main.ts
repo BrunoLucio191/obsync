@@ -27,16 +27,16 @@ type StorageConfig = (Partial<ObSyncConfig> & { token?: unknown }) | null;
 export default class ObSync extends Plugin {
 	public config!: ObSyncConfig;
 	static obsyncApp: ObSync;
-	private auth!: AuthService;
-	private userAdmin!: UserAdminService;
-	private collaboration!: CollaborationController;
-	private mutedPaths!: PathMuteRegistry;
-	private remoteChanges!: RemoteVaultChangeService;
-	private systemChannel!: SystemChannel;
-	private initialVaultSync!: SyncInitialVault;
-	private vaultChangeSync!: SyncVaultChanges;
-	private settingTab: ObSyncSettingTab | null = null;
-	private synchronizationStarted = false;
+	#auth!: AuthService;
+	#userAdmin!: UserAdminService;
+	#collaboration!: CollaborationController;
+	#mutedPaths!: PathMuteRegistry;
+	#remoteChanges!: RemoteVaultChangeService;
+	#systemChannel!: SystemChannel;
+	#initialVaultSync!: SyncInitialVault;
+	#vaultChangeSync!: SyncVaultChanges;
+	#settingTab: ObSyncSettingTab | null = null;
+	#synchronizationStarted = false;
 
 	/**
 	 * Obsidian lifecycle hook: loads persisted config, applies the saved
@@ -47,27 +47,27 @@ export default class ObSync extends Plugin {
 	public async onload(): Promise<void> {
 		ObSync.obsyncApp = this;
 		initI18n();
-		await this.loadSettings();
+		await this.#loadSettings();
 		try {
-			this.applyBackendUrl(this.config.backendUrl);
+			this.#applyBackendUrl(this.config.backendUrl);
 		} catch (error) {
 			console.error(t('settings.backend.notConfigured'), error);
 		}
-		this.composeServices();
+		this.#composeServices();
 
-		this.settingTab = new ObSyncSettingTab(this.app, this, this);
-		this.addSettingTab(this.settingTab);
+		this.#settingTab = new ObSyncSettingTab(this.app, this, this);
+		this.addSettingTab(this.#settingTab);
 		this.app.workspace.onLayoutReady(() => {
-			void this.initializeSynchronization();
+			void this.#initializeSynchronization();
 		});
 	}
 
 	/** Obsidian lifecycle hook: tears down active connections and timers when the plugin is disabled/unloaded. */
 	public onunload(): void {
-		this.systemChannel.disconnect();
-		this.collaboration.destroy();
-		this.auth.destroy();
-		this.mutedPaths.clear();
+		this.#systemChannel.disconnect();
+		this.#collaboration.destroy();
+		this.#auth.destroy();
+		this.#mutedPaths.clear();
 	}
 
 	/**
@@ -77,22 +77,22 @@ export default class ObSync extends Plugin {
 	 * @returns Whether the user ended up authenticated.
 	 */
 	public async openLogin(): Promise<boolean> {
-		const authenticated = await this.auth.ensureAuthenticated();
+		const authenticated = await this.#auth.ensureAuthenticated();
 		if (!authenticated) return false;
 
-		if (!this.synchronizationStarted) {
-			this.synchronizationStarted = true;
+		if (!this.#synchronizationStarted) {
+			this.#synchronizationStarted = true;
 			try {
-				this.startSynchronization();
+				this.#startSynchronization();
 			} catch (error) {
-				this.synchronizationStarted = false;
+				this.#synchronizationStarted = false;
 				console.error(t('plugin.syncStartFailed'), error);
 				new Notice(t('plugin.loginCompletedSyncFailed'));
 				return false;
 			}
 		} else {
-			this.systemChannel.connect();
-			this.collaboration.scheduleActiveRoomSync();
+			this.#systemChannel.connect();
+			this.#collaboration.scheduleActiveRoomSync();
 		}
 
 		return true;
@@ -103,24 +103,24 @@ export default class ObSync extends Plugin {
 	 * immediately, reconnects synchronization for the new session.
 	 */
 	public async logout(): Promise<void> {
-		await this.auth.logout();
+		await this.#auth.logout();
 		this.app.workspace.updateOptions();
 
-		if (!(await this.auth.ensureAuthenticated())) {
+		if (!(await this.#auth.ensureAuthenticated())) {
 			new Notice(t('plugin.signedOut'));
 			return;
 		}
 
-		this.systemChannel.connect();
-		this.collaboration.scheduleActiveRoomSync();
+		this.#systemChannel.connect();
+		this.#collaboration.scheduleActiveRoomSync();
 	}
 
 	public isAuthenticated(): boolean {
-		return this.auth.isAuthenticated();
+		return this.#auth.isAuthenticated();
 	}
 
 	public listUsers(): Promise<UserActionResult<AuthenticatedUser[]>> {
-		return this.userAdmin.listUsers();
+		return this.#userAdmin.listUsers();
 	}
 
 	public createUser(input: {
@@ -129,46 +129,46 @@ export default class ObSync extends Plugin {
 		password: string;
 		role: UserRole;
 	}): Promise<UserActionResult<AuthenticatedUser>> {
-		return this.userAdmin.createUser(input);
+		return this.#userAdmin.createUser(input);
 	}
 
 	public updateUserRole(
 		userId: number,
 		role: UserRole,
 	): Promise<UserActionResult<AuthenticatedUser>> {
-		return this.userAdmin.updateUserRole(userId, role);
+		return this.#userAdmin.updateUserRole(userId, role);
 	}
 
 	public updateUserStatus(
 		userId: number,
 		active: boolean,
 	): Promise<UserActionResult<AuthenticatedUser>> {
-		return this.userAdmin.updateUserStatus(userId, active);
+		return this.#userAdmin.updateUserStatus(userId, active);
 	}
 
 	public deleteUser(userId: number): Promise<UserActionResult<AuthenticatedUser>> {
-		return this.userAdmin.deleteUser(userId);
+		return this.#userAdmin.deleteUser(userId);
 	}
 
 	public updateUserName(
 		userId: number,
 		name: string,
 	): Promise<UserActionResult<AuthenticatedUser>> {
-		return this.userAdmin.updateUserName(userId, name);
+		return this.#userAdmin.updateUserName(userId, name);
 	}
 
 	public resetUserPassword(
 		userId: number,
 		newPassword: string,
 	): Promise<UserActionResult<AuthenticatedUser>> {
-		return this.userAdmin.resetUserPassword(userId, newPassword);
+		return this.#userAdmin.resetUserPassword(userId, newPassword);
 	}
 
 	public changePassword(
 		currentPassword: string,
 		newPassword: string,
 	): Promise<UserActionResult<null>> {
-		return this.auth.changePassword(currentPassword, newPassword);
+		return this.#auth.changePassword(currentPassword, newPassword);
 	}
 
 	/**
@@ -184,7 +184,7 @@ export default class ObSync extends Plugin {
 		const wasConfigured = isApiEndpointConfigured();
 
 		try {
-			this.applyBackendUrl(url);
+			this.#applyBackendUrl(url);
 		} catch (error) {
 			return {
 				ok: false,
@@ -193,12 +193,12 @@ export default class ObSync extends Plugin {
 		}
 
 		this.config.backendUrl = url.trim();
-		await this.saveSettings();
+		await this.#saveSettings();
 
 		// Switching to a different backend invalidates any session tied to the
 		// previous one; drop it instead of sending its tokens somewhere new.
 		if (wasConfigured && previousUrl !== this.config.backendUrl) {
-			await this.auth.clearSession();
+			await this.#auth.clearSession();
 		}
 
 		return { ok: true, value: null };
@@ -210,7 +210,7 @@ export default class ObSync extends Plugin {
 	 * @param url - The backend URL to apply.
 	 * @throws Whatever {@link configureApiEndpoint} throws on an invalid URL.
 	 */
-	private applyBackendUrl(url: string): void {
+	#applyBackendUrl(url: string): void {
 		if (!url.trim()) {
 			clearApiEndpoint();
 			return;
@@ -219,30 +219,30 @@ export default class ObSync extends Plugin {
 	}
 
 	/** Constructs and wires together all of the plugin's services, in dependency order. */
-	private composeServices(): void {
-		this.auth = new AuthService({
+	#composeServices(): void {
+		this.#auth = new AuthService({
 			app: this.app,
 			getConfig: () => this.config,
-			saveConfig: () => this.saveSettings(),
+			saveConfig: () => this.#saveSettings(),
 			onSessionChanged: (previousUser, currentUser) =>
-				this.handleSessionChanged(previousUser, currentUser),
+				this.#handleSessionChanged(previousUser, currentUser),
 		});
-		this.userAdmin = new UserAdminService(this.auth);
-		this.mutedPaths = new PathMuteRegistry();
-		this.collaboration = new CollaborationController(this.app, this.auth);
-		this.remoteChanges = new RemoteVaultChangeService(
+		this.#userAdmin = new UserAdminService(this.#auth);
+		this.#mutedPaths = new PathMuteRegistry();
+		this.#collaboration = new CollaborationController(this.app, this.#auth);
+		this.#remoteChanges = new RemoteVaultChangeService(
 			this.app,
-			this.auth,
-			this.mutedPaths,
-			this.collaboration,
+			this.#auth,
+			this.#mutedPaths,
+			this.#collaboration,
 		);
-		this.systemChannel = new SystemChannel(this.auth, this.remoteChanges);
-		this.initialVaultSync = new SyncInitialVault(this.app, this.auth, this.mutedPaths);
-		this.vaultChangeSync = new SyncVaultChanges(
+		this.#systemChannel = new SystemChannel(this.#auth, this.#remoteChanges);
+		this.#initialVaultSync = new SyncInitialVault(this.app, this.#auth, this.#mutedPaths);
+		this.#vaultChangeSync = new SyncVaultChanges(
 			this,
-			this.auth,
-			this.mutedPaths,
-			this.collaboration,
+			this.#auth,
+			this.#mutedPaths,
+			this.#collaboration,
 		);
 	}
 
@@ -251,19 +251,19 @@ export default class ObSync extends Plugin {
 	 * a session can be established silently; otherwise leaves it to the
 	 * user to configure the backend or sign in explicitly.
 	 */
-	private async initializeSynchronization(): Promise<void> {
-		if (this.synchronizationStarted) return;
+	async #initializeSynchronization(): Promise<void> {
+		if (this.#synchronizationStarted) return;
 		// Without a configured backend, ensureAuthenticated() would pop the
 		// login modal on every startup with no server to actually log in to.
 		// Let the settings tab collect the backend URL first.
 		if (!isApiEndpointConfigured()) return;
-		if (!(await this.auth.ensureAuthenticated())) {
+		if (!(await this.#auth.ensureAuthenticated())) {
 			new Notice(t('plugin.signInToSync'));
 			return;
 		}
 
-		this.synchronizationStarted = true;
-		this.startSynchronization();
+		this.#synchronizationStarted = true;
+		this.#startSynchronization();
 	}
 
 	/**
@@ -271,22 +271,22 @@ export default class ObSync extends Plugin {
 	 * extensions and vault-change listeners, and kicks off the initial
 	 * full-vault sync.
 	 */
-	private startSynchronization(): void {
-		this.systemChannel.connect();
-		this.registerEditorExtension(this.collaboration.editorExtensions);
+	#startSynchronization(): void {
+		this.#systemChannel.connect();
+		this.registerEditorExtension(this.#collaboration.editorExtensions);
 		this.registerEvent(
 			this.app.workspace.on('active-leaf-change', () => {
-				this.collaboration.scheduleActiveRoomSync();
+				this.#collaboration.scheduleActiveRoomSync();
 			}),
 		);
 		this.registerEvent(
 			this.app.workspace.on('file-open', () => {
-				this.collaboration.scheduleActiveRoomSync();
+				this.#collaboration.scheduleActiveRoomSync();
 			}),
 		);
-		this.vaultChangeSync.initialize();
-		this.collaboration.scheduleActiveRoomSync();
-		void this.initialVaultSync.sync();
+		this.#vaultChangeSync.initialize();
+		this.#collaboration.scheduleActiveRoomSync();
+		void this.#initialVaultSync.sync();
 	}
 
 	/**
@@ -296,28 +296,28 @@ export default class ObSync extends Plugin {
 	 * @param previousUser - The user before the change, or `null` if there wasn't one.
 	 * @param currentUser - The user after the change, or `null` if now signed out.
 	 */
-	private handleSessionChanged(
+	#handleSessionChanged(
 		previousUser: AuthenticatedUser | null,
 		currentUser: AuthenticatedUser | null,
 	): void {
-		this.refreshSettingsTab();
+		this.#refreshSettingsTab();
 
 		if (!currentUser) {
-			this.collaboration.disconnect();
-			this.systemChannel.disconnect();
+			this.#collaboration.disconnect();
+			this.#systemChannel.disconnect();
 			return;
 		}
 
-		if (!this.synchronizationStarted || previousUser === null) return;
-		this.systemChannel.connect();
-		this.collaboration.refreshAfterProfileChange();
+		if (!this.#synchronizationStarted || previousUser === null) return;
+		this.#systemChannel.connect();
+		this.#collaboration.refreshAfterProfileChange();
 	}
 
 	/** Re-renders the settings tab if it's currently mounted in the DOM. */
 
-	private refreshSettingsTab(): void {
-		if (this.settingTab?.containerEl.isConnected) {
-			this.settingTab.update();
+	#refreshSettingsTab(): void {
+		if (this.#settingTab?.containerEl.isConnected) {
+			this.#settingTab.update();
 		}
 	}
 
@@ -327,12 +327,12 @@ export default class ObSync extends Plugin {
 	 * used a different auth storage scheme).
 	 */
 
-	private async loadSettings(): Promise<void> {
+	async #loadSettings(): Promise<void> {
 		const storedConfig = (await this.loadData()) as StorageConfig;
 		this.config = Object.assign({}, DEFAULT_CONFIG, storedConfig ?? {});
 	}
 
-	private async saveSettings(): Promise<void> {
+	async #saveSettings(): Promise<void> {
 		await this.saveData(this.config);
 	}
 	static sameAppIntance() {

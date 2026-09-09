@@ -10,12 +10,22 @@ import { PathMuteRegistry } from '../vault/PathMuteRegistry.ts';
  * change. Non-admin edits are never published (admins own the shared vault).
  */
 export class SyncVaultChanges {
+	readonly #plugin: Plugin;
+	readonly #auth: AuthService;
+	readonly #mutedPaths: PathMuteRegistry;
+	readonly #collaboration: CollaborationController;
+
 	public constructor(
-		private readonly plugin: Plugin,
-		private readonly auth: AuthService,
-		private readonly mutedPaths: PathMuteRegistry,
-		private readonly collaboration: CollaborationController,
-	) {}
+		plugin: Plugin,
+		auth: AuthService,
+		mutedPaths: PathMuteRegistry,
+		collaboration: CollaborationController,
+	) {
+		this.#plugin = plugin;
+		this.#auth = auth;
+		this.#mutedPaths = mutedPaths;
+		this.#collaboration = collaboration;
+	}
 
 	/**
 	 * Registers the vault event listeners (`create`, `delete`, `modify`,
@@ -24,13 +34,13 @@ export class SyncVaultChanges {
 	 * update) are skipped to avoid echoing changes back to their origin.
 	 */
 	public initialize(): void {
-		this.plugin.registerEvent(
-			this.plugin.app.vault.on('create', async (file) => {
-				if (!(await this.canPublish(file.path))) return;
+		this.#plugin.registerEvent(
+			this.#plugin.app.vault.on('create', async (file) => {
+				if (!(await this.#canPublish(file.path))) return;
 				const isFolder = file instanceof TFolder;
 				const content =
 					!isFolder && file instanceof TFile
-						? await this.plugin.app.vault.read(file)
+						? await this.#plugin.app.vault.read(file)
 						: null;
 
 				let imageBuffer: ArrayBuffer = new ArrayBuffer(0);
@@ -43,7 +53,7 @@ export class SyncVaultChanges {
 						case 'gif':
 						case 'png':
 						case 'webp':
-							imageBuffer = await this.plugin.app.vault.readBinary(file);
+							imageBuffer = await this.#plugin.app.vault.readBinary(file);
 					}
 				}
 				const binary = imageBuffer.byteLength > 0;
@@ -53,7 +63,7 @@ export class SyncVaultChanges {
 						url: `${getApiBaseUrl()}/api/sync/createFile`,
 						method: 'POST',
 						headers: {
-							...this.auth.Authheaders(),
+							...this.#auth.Authheaders(),
 							'Content-Type': 'application/octet-stream',
 							'X-ObSync-filePath': file.path,
 						},
@@ -63,7 +73,7 @@ export class SyncVaultChanges {
 					await requestUrl({
 						url: `${getApiBaseUrl()}/api/sync/create`,
 						method: 'POST',
-						headers: this.auth.headers(),
+						headers: this.#auth.headers(),
 						body: JSON.stringify({
 							path: file.path,
 							isFolder,
@@ -74,56 +84,56 @@ export class SyncVaultChanges {
 			}),
 		);
 
-		this.plugin.registerEvent(
-			this.plugin.app.vault.on('delete', async (file) => {
-				if (!(await this.canPublish(file.path))) return;
+		this.#plugin.registerEvent(
+			this.#plugin.app.vault.on('delete', async (file) => {
+				if (!(await this.#canPublish(file.path))) return;
 
 				const isFolder = file instanceof TFolder;
-				this.collaboration.disconnectIfAffected(file.path);
+				this.#collaboration.disconnectIfAffected(file.path);
 
 				await requestUrl({
 					url: `${getApiBaseUrl()}/api/sync/delete`,
 					method: 'DELETE',
-					headers: this.auth.headers(),
+					headers: this.#auth.headers(),
 					body: JSON.stringify({ path: file.path, isFolder }),
 				});
 			}),
 		);
 
-		this.plugin.registerEvent(
-			this.plugin.app.vault.on('modify', async (file) => {
-				if (!(await this.canPublish(file.path))) return;
-				const activeFile = this.plugin.app.workspace.getActiveFile();
+		this.#plugin.registerEvent(
+			this.#plugin.app.vault.on('modify', async (file) => {
+				if (!(await this.#canPublish(file.path))) return;
+				const activeFile = this.#plugin.app.workspace.getActiveFile();
 				// Yjs takes care of the active file, so we don't fire the PUT for it
 				if (activeFile && file.path === activeFile.path) return;
 
 				if (file instanceof TFile) {
-					const content = await this.plugin.app.vault.read(file);
+					const content = await this.#plugin.app.vault.read(file);
 					await requestUrl({
 						url: `${getApiBaseUrl()}/api/sync/modify`,
 						method: 'PUT',
-						headers: this.auth.headers(),
+						headers: this.#auth.headers(),
 						body: JSON.stringify({ path: file.path, content }),
 					});
 				}
 			}),
 		);
-		this.plugin.registerEvent(
-			this.plugin.app.vault.on('rename', async (file, oldPath) => {
-				if (!(await this.canPublish(file.path, oldPath))) return;
+		this.#plugin.registerEvent(
+			this.#plugin.app.vault.on('rename', async (file, oldPath) => {
+				if (!(await this.#canPublish(file.path, oldPath))) return;
 
 				await requestUrl({
 					url: `${getApiBaseUrl()}/api/sync/rename`,
 					method: 'PUT',
-					headers: this.auth.headers(),
+					headers: this.#auth.headers(),
 					body: JSON.stringify({ oldPath, newPath: file.path }),
 				});
 
 				if (
-					this.collaboration.currentPath &&
-					PathMuteRegistry.contains(oldPath, this.collaboration.currentPath)
+					this.#collaboration.currentPath &&
+					PathMuteRegistry.contains(oldPath, this.#collaboration.currentPath)
 				) {
-					this.collaboration.scheduleActiveRoomSync();
+					this.#collaboration.scheduleActiveRoomSync();
 				}
 			}),
 		);
@@ -136,15 +146,15 @@ export class SyncVaultChanges {
 	 * @param paths - One or more vault paths involved in the change (e.g. old and new path for a rename).
 	 * @returns `true` if the change should be published.
 	 */
-	private async canPublish(...paths: string[]): Promise<boolean> {
+	async #canPublish(...paths: string[]): Promise<boolean> {
 		if (
-			!this.auth.isAdmin() ||
-			paths.some((path) => this.mutedPaths.isMuted(path)) ||
-			!(await this.auth.prepareAuthenticatedRequest())
+			!this.#auth.isAdmin() ||
+			paths.some((path) => this.#mutedPaths.isMuted(path)) ||
+			!(await this.#auth.prepareAuthenticatedRequest())
 		) {
 			return false;
 		}
 
-		return this.auth.isAdmin();
+		return this.#auth.isAdmin();
 	}
 }

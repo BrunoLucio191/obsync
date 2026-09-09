@@ -21,19 +21,29 @@ import type { UserNameEditor } from './UserNameEditor.ts';
  * protects the last remaining active admin from being locked out.
  */
 export class UserListSection {
-	private loadGeneration = 0;
-	private loading = false;
-	private loaded = false;
-	private loadError: string | null = null;
-	private searchQuery = '';
+	#loadGeneration = 0;
+	#loading = false;
+	#loaded = false;
+	#loadError: string | null = null;
+	#searchQuery = '';
+
+	readonly #controller: SettingsController;
+	readonly #directory: UserDirectory;
+	readonly #nameEditor: UserNameEditor;
+	readonly #refresh: () => void;
 
 	/** @param nameEditor - Shared debounced name-editor used for the inline rename field. */
 	public constructor(
-		private readonly controller: SettingsController,
-		private readonly directory: UserDirectory,
-		private readonly nameEditor: UserNameEditor,
-		private readonly refresh: () => void,
-	) {}
+		controller: SettingsController,
+		directory: UserDirectory,
+		nameEditor: UserNameEditor,
+		refresh: () => void,
+	) {
+		this.#controller = controller;
+		this.#directory = directory;
+		this.#nameEditor = nameEditor;
+		this.#refresh = refresh;
+	}
 
 	/**
 	 * Builds the `[infoGroup, listGroup]` setting definitions for the user
@@ -52,24 +62,24 @@ export class UserListSection {
 				},
 				{
 					name: t('settings.users.registeredAccounts'),
-					desc: this.listStatusDescription(),
+					desc: this.#listStatusDescription(),
 					searchable: false,
 					render: (setting) => {
 						setting
 							.setName(t('settings.users.registeredAccounts'))
-							.setDesc(this.listStatusDescription());
-						if (this.loadError) {
+							.setDesc(this.#listStatusDescription());
+						if (this.#loadError) {
 							setting.addButton((button) =>
 								button
 									.setButtonText(t('common.retry'))
 									.onClick(() => {
-										this.loadError = null;
-										this.ensureLoaded();
-										this.refresh();
+										this.#loadError = null;
+										this.#ensureLoaded();
+										this.#refresh();
 									}),
 							);
 						} else {
-							this.ensureLoaded();
+							this.#ensureLoaded();
 						}
 					},
 				},
@@ -86,10 +96,10 @@ export class UserListSection {
 						setting.addSearch((search) => {
 							search
 								.setPlaceholder(t('settings.users.searchPlaceholder'))
-								.setValue(this.searchQuery)
+								.setValue(this.#searchQuery)
 								.onChange((value) => {
-									this.searchQuery = value;
-									this.refresh();
+									this.#searchQuery = value;
+									this.#refresh();
 								});
 						});
 					},
@@ -98,13 +108,13 @@ export class UserListSection {
 		};
 
 		const userItems: SettingDefinition[] = [];
-		if (this.loaded) {
-			const currentUser = this.controller.config.user;
-			const activeAdminCount = this.directory.activeAdminCount();
-			for (const user of this.directory.all()) {
-				if (!this.matchesQuery(user, this.searchQuery)) continue;
+		if (this.#loaded) {
+			const currentUser = this.#controller.config.user;
+			const activeAdminCount = this.#directory.activeAdminCount();
+			for (const user of this.#directory.all()) {
+				if (!this.#matchesQuery(user, this.#searchQuery)) continue;
 				userItems.push(
-					...this.userDefinitions(user, currentUser, activeAdminCount),
+					...this.#userDefinitions(user, currentUser, activeAdminCount),
 				);
 			}
 		}
@@ -114,7 +124,7 @@ export class UserListSection {
 		const listGroup: SettingDefinitionGroup = {
 			type: 'group',
 			cls: 'obsync-user-list-scroll',
-			visible: () => this.loaded,
+			visible: () => this.#loaded,
 			items: userItems,
 		};
 
@@ -126,16 +136,16 @@ export class UserListSection {
 	 * counter) so the list re-fetches next time the tab is opened.
 	 */
 	public destroy(): void {
-		this.loadGeneration += 1;
-		this.loading = false;
-		this.loaded = false;
-		this.loadError = null;
+		this.#loadGeneration += 1;
+		this.#loading = false;
+		this.#loaded = false;
+		this.#loadError = null;
 	}
 
 	/** Kicks off `load()` if the list hasn't been loaded yet and isn't already loading or errored. */
-	private ensureLoaded(): void {
-		if (this.loading || this.loaded || this.loadError) return;
-		void this.load();
+	#ensureLoaded(): void {
+		if (this.#loading || this.#loaded || this.#loadError) return;
+		void this.#load();
 	}
 
 	/**
@@ -143,33 +153,33 @@ export class UserListSection {
 	 * Uses a generation counter so a stale in-flight request (e.g. after
 	 * `destroy()`) can't clobber newer state on resolution.
 	 */
-	private async load(): Promise<void> {
-		const generation = ++this.loadGeneration;
-		this.loading = true;
-		this.loadError = null;
+	async #load(): Promise<void> {
+		const generation = ++this.#loadGeneration;
+		this.#loading = true;
+		this.#loadError = null;
 
-		const result = await this.controller.listUsers();
-		if (generation !== this.loadGeneration) return;
+		const result = await this.#controller.listUsers();
+		if (generation !== this.#loadGeneration) return;
 
-		this.loading = false;
+		this.#loading = false;
 		if (!result.ok) {
-			this.loadError = result.error;
-			this.refresh();
+			this.#loadError = result.error;
+			this.#refresh();
 			return;
 		}
 
-		this.directory.replaceAll(result.value);
-		this.loaded = true;
-		this.refresh();
+		this.#directory.replaceAll(result.value);
+		this.#loaded = true;
+		this.#refresh();
 	}
 
 	/** The description text for the "Registered accounts" row: the load error, a loading message, or the current account count. */
-	private listStatusDescription(): string {
-		if (this.loadError) return this.loadError;
-		if (!this.loaded) return t('settings.users.loading');
+	#listStatusDescription(): string {
+		if (this.#loadError) return this.#loadError;
+		if (!this.#loaded) return t('settings.users.loading');
 
 		return t('settings.users.registeredAccountsDesc', {
-			count: this.directory.size,
+			count: this.#directory.size,
 		});
 	}
 
@@ -181,7 +191,7 @@ export class UserListSection {
 	 * @param currentUser - The signed-in user, used to detect and special-case "this is you".
 	 * @returns One `SettingDefinition` for the identity row, plus a second for the edit sub-row when applicable.
 	 */
-	private userDefinitions(
+	#userDefinitions(
 		user: AuthenticatedUser,
 		currentUser: AuthenticatedUser | null,
 		activeAdminCount: number,
@@ -199,12 +209,12 @@ export class UserListSection {
 				const statusEl = setting.descEl.createDiv({
 					cls: 'obsync-settings-user-status',
 				});
-				this.updateDescription(statusEl, user, isCurrent);
+				this.#updateDescription(statusEl, user, isCurrent);
 
 				if (!isCurrent) {
-					this.addStatusControl(setting, user, protectsLastAdmin);
-					this.addRoleControl(setting, user, protectsLastAdmin);
-					this.addDeleteControl(setting, user, protectsLastAdmin);
+					this.#addStatusControl(setting, user, protectsLastAdmin);
+					this.#addRoleControl(setting, user, protectsLastAdmin);
+					this.#addDeleteControl(setting, user, protectsLastAdmin);
 				}
 			},
 		};
@@ -221,8 +231,8 @@ export class UserListSection {
 				setting
 					.setName(t('settings.users.displayName'))
 					.setClass('obsync-settings-user-subrow');
-				this.addNameControl(setting, user);
-				this.addPasswordResetControl(setting, user);
+				this.#addNameControl(setting, user);
+				this.#addPasswordResetControl(setting, user);
 			},
 		};
 
@@ -230,7 +240,7 @@ export class UserListSection {
 	}
 
 	/** Renders the inline display-name text field for a user row, delegating autosave to the shared `UserNameEditor`. */
-	private addNameControl(
+	#addNameControl(
 		setting: Setting,
 		user: AuthenticatedUser,
 	): void {
@@ -242,19 +252,19 @@ export class UserListSection {
 			text.setValue(user.name)
 				.setPlaceholder(t('settings.users.displayName'))
 				.onChange((value) => {
-					this.nameEditor.scheduleSave(
+					this.#nameEditor.scheduleSave(
 						user,
 						value,
 						nameStatus,
 						text.inputEl,
-						this.refresh,
+						this.#refresh,
 					);
 				});
 		});
 	}
 
 	/** Renders a password field plus a "Reset password" button, validating length before submitting the reset to the backend. */
-	private addPasswordResetControl(
+	#addPasswordResetControl(
 		setting: Setting,
 		user: AuthenticatedUser,
 	): void {
@@ -273,7 +283,7 @@ export class UserListSection {
 				}
 
 				button.setDisabled(true);
-				const result = await this.controller.resetUserPassword(
+				const result = await this.#controller.resetUserPassword(
 					user.id,
 					newPassword,
 				);
@@ -287,7 +297,7 @@ export class UserListSection {
 				new Notice(
 					t('userAdmin.passwordReset', { email: result.value.email }),
 				);
-				this.refresh();
+				this.#refresh();
 			}),
 		);
 	}
@@ -297,7 +307,7 @@ export class UserListSection {
 	 * toggle and showing an error notice if the backend update fails.
 	 * @param protectsLastAdmin - Whether toggling would remove the last active admin; disables the control if true.
 	 */
-	private addStatusControl(
+	#addStatusControl(
 		setting: Setting,
 		user: AuthenticatedUser,
 		protectsLastAdmin: boolean,
@@ -309,7 +319,7 @@ export class UserListSection {
 				.setDisabled(protectsLastAdmin)
 				.onChange(async (active) => {
 					toggle.setDisabled(true);
-					const mutation = await this.controller.updateUserStatus(
+					const mutation = await this.#controller.updateUserStatus(
 						user.id,
 						active,
 					);
@@ -320,13 +330,13 @@ export class UserListSection {
 						return;
 					}
 
-					this.directory.replace(mutation.value);
+					this.#directory.replace(mutation.value);
 					new Notice(
 						active
 							? t('userAdmin.userActivated')
 							: t('userAdmin.userDeactivated'),
 					);
-					this.refresh();
+					this.#refresh();
 				});
 		});
 	}
@@ -336,7 +346,7 @@ export class UserListSection {
 	 * selection and showing an error notice if the backend update fails.
 	 * @param protectsLastAdmin - Whether changing the role would remove the last active admin; disables the control if true.
 	 */
-	private addRoleControl(
+	#addRoleControl(
 		setting: Setting,
 		user: AuthenticatedUser,
 		protectsLastAdmin: boolean,
@@ -350,7 +360,7 @@ export class UserListSection {
 				.setDisabled(protectsLastAdmin)
 				.onChange(async (value) => {
 					dropdown.setDisabled(true);
-					const mutation = await this.controller.updateUserRole(
+					const mutation = await this.#controller.updateUserRole(
 						user.id,
 						value as UserRole,
 					);
@@ -361,15 +371,15 @@ export class UserListSection {
 						return;
 					}
 
-					this.directory.replace(mutation.value);
+					this.#directory.replace(mutation.value);
 					new Notice(t('userAdmin.roleUpdated'));
-					this.refresh();
+					this.#refresh();
 				});
 		});
 	}
 
 	/** @param protectsLastAdmin - Whether deleting would remove the last active admin; disables the control if true. */
-	private addDeleteControl(
+	#addDeleteControl(
 		setting: Setting,
 		user: AuthenticatedUser,
 		protectsLastAdmin: boolean,
@@ -381,16 +391,16 @@ export class UserListSection {
 				.setDisabled(protectsLastAdmin)
 				.onClick(async () => {
 					button.setDisabled(true);
-					const mutation = await this.controller.deleteUser(user.id);
+					const mutation = await this.#controller.deleteUser(user.id);
 					if (!mutation.ok) {
 						button.setDisabled(false);
 						new Notice(mutation.error);
 						return;
 					}
 
-					this.directory.remove(user.id);
+					this.#directory.remove(user.id);
 					new Notice(t('userAdmin.userDeleted', { email: user.email }));
-					this.refresh();
+					this.#refresh();
 				}),
 		);
 	}
@@ -400,7 +410,7 @@ export class UserListSection {
 	 * status element.
 	 * @param isCurrent - Whether this row belongs to the signed-in user, to append a "your account" marker.
 	 */
-	private updateDescription(
+	#updateDescription(
 		statusEl: HTMLElement,
 		user: AuthenticatedUser,
 		isCurrent: boolean,
@@ -419,7 +429,7 @@ export class UserListSection {
 	}
 
 	/** Case/accent-insensitive check for whether a user's name or email contains the search query; an empty query always matches. */
-	private matchesQuery(user: AuthenticatedUser, query: string): boolean {
+	#matchesQuery(user: AuthenticatedUser, query: string): boolean {
 		const normalizedQuery = query.normalize('NFKC').trim().toLowerCase();
 		if (!normalizedQuery) return true;
 

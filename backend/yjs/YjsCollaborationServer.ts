@@ -24,18 +24,18 @@ import { syncMessageHandler } from "./SyncMessageHandler.ts";
  * events (delete/rename), and accepting new authenticated WebSocket connections.
  */
 export class YjsCollaborationServer {
-  private readonly deletedPaths = new DeletedPathRegistry();
-  private readonly persistence = new YjsPersistenceGateway();
-  private readonly rooms = new YjsRoomRegistry(this.deletedPaths, this.persistence);
-  private readonly syncHandler: SyncMessageHandlerFn = syncMessageHandler;
-  private readonly awarenessGuard = new AwarenessOwnershipGuard();
+  readonly #deletedPaths = new DeletedPathRegistry();
+  readonly #persistence = new YjsPersistenceGateway();
+  readonly #rooms = new YjsRoomRegistry(this.#deletedPaths, this.#persistence);
+  readonly #syncHandler: SyncMessageHandlerFn = syncMessageHandler;
+  readonly #awarenessGuard = new AwarenessOwnershipGuard();
 
   /**
    * Configures the storage backend used to persist Yjs documents.
    * @param adapter - Concrete persistence implementation to use.
    */
   public setPersistence(adapter: YjsPersistenceAdapter): void {
-    this.persistence.setAdapter(adapter);
+    this.#persistence.setAdapter(adapter);
   }
 
   /**
@@ -44,7 +44,7 @@ export class YjsCollaborationServer {
    * @returns `true` if the path (or an ancestor folder) was marked deleted.
    */
   public isPathDeleted(filePath: string): boolean {
-    return this.deletedPaths.isPathDeleted(filePath);
+    return this.#deletedPaths.isPathDeleted(filePath);
   }
 
   /**
@@ -53,7 +53,7 @@ export class YjsCollaborationServer {
    * @returns `true` if the document was invalidated.
    */
   public isDocumentInvalidated(doc: Y.Doc): boolean {
-    return this.deletedPaths.isDocumentInvalidated(doc);
+    return this.#deletedPaths.isDocumentInvalidated(doc);
   }
 
   /**
@@ -62,8 +62,8 @@ export class YjsCollaborationServer {
    * @param targetPath - Vault path that was deleted.
    */
   public markPathDeleted(targetPath: string): void {
-    const normalizedTarget = this.deletedPaths.markDeleted(targetPath);
-    this.rooms.invalidateUnderPath(normalizedTarget);
+    const normalizedTarget = this.#deletedPaths.markDeleted(targetPath);
+    this.#rooms.invalidateUnderPath(normalizedTarget);
   }
 
   /**
@@ -71,7 +71,7 @@ export class YjsCollaborationServer {
    * @param targetPath - Vault path that should no longer be considered deleted.
    */
   public clearPathDeleted(targetPath: string): void {
-    this.deletedPaths.clearDeleted(targetPath);
+    this.#deletedPaths.clearDeleted(targetPath);
   }
 
   /**
@@ -79,7 +79,7 @@ export class YjsCollaborationServer {
    * @param targetPath - Vault path (not required to be pre-normalized) that was deleted.
    */
   public async deletePersistedStateUnderPath(targetPath: string): Promise<void> {
-    await this.persistence.deleteStateUnderPath(normalizeVaultPath(targetPath));
+    await this.#persistence.deleteStateUnderPath(normalizeVaultPath(targetPath));
   }
 
   /**
@@ -88,7 +88,7 @@ export class YjsCollaborationServer {
    * @param newPath - Vault path being moved to (not required to be pre-normalized).
    */
   public async renamePersistedStatePath(oldPath: string, newPath: string): Promise<void> {
-    await this.persistence.renameStatePath(
+    await this.#persistence.renameStatePath(
       normalizeVaultPath(oldPath),
       normalizeVaultPath(newPath),
     );
@@ -118,12 +118,12 @@ export class YjsCollaborationServer {
       return;
     }
 
-    if (this.deletedPaths.isPathDeleted(identity.filePath)) {
+    if (this.#deletedPaths.isPathDeleted(identity.filePath)) {
       closeConnection(connection, 1008, "Document deleted");
       return;
     }
 
-    const room = this.rooms.reserve(identity.docName, identity.filePath);
+    const room = this.#rooms.reserve(identity.docName, identity.filePath);
     if (!room) {
       closeConnection(connection, 1013, "Room is restarting");
       return;
@@ -152,9 +152,9 @@ export class YjsCollaborationServer {
       room,
       connection,
       connectionState,
-      this.deletedPaths,
-      this.syncHandler,
-      this.awarenessGuard,
+      this.#deletedPaths,
+      this.#syncHandler,
+      this.#awarenessGuard,
     );
 
     connection.on("message", (rawData: RawData, isBinary: boolean) => {
@@ -162,7 +162,7 @@ export class YjsCollaborationServer {
     });
 
     connection.once("close", () => {
-      this.rooms.release(room, connection);
+      this.#rooms.release(room, connection);
     });
 
     connection.once("error", (error: Error) => {

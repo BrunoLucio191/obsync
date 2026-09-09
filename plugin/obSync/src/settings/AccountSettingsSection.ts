@@ -14,15 +14,23 @@ import type { UserManagementSection } from './UserManagementSection.ts';
  * non-admins), the change-password form, and the sign-out action.
  */
 export class AccountSettingsSection {
-	private currentPassword = '';
-	private newPassword = '';
+	#currentPassword = '';
+	#newPassword = '';
+
+	readonly #controller: SettingsController;
+	readonly #users: UserManagementSection;
+	readonly #refresh: () => void;
 
 	/** @param users - Shared user-management section, used here to render the editable name field for admins. */
 	public constructor(
-		private readonly controller: SettingsController,
-		private readonly users: UserManagementSection,
-		private readonly refresh: () => void,
-	) {}
+		controller: SettingsController,
+		users: UserManagementSection,
+		refresh: () => void,
+	) {
+		this.#controller = controller;
+		this.#users = users;
+		this.#refresh = refresh;
+	}
 
 	public definition(currentUser: AuthenticatedUser): SettingDefinitionGroup {
 		const role =
@@ -44,7 +52,7 @@ export class AccountSettingsSection {
 				name: t('settings.account.yourDisplayName'),
 				desc: t('settings.account.yourDisplayNameDesc'),
 				render: (setting) =>
-					this.users.renderEditableName(setting, currentUser),
+					this.#users.renderEditableName(setting, currentUser),
 			});
 		} else {
 			items.push({
@@ -70,32 +78,32 @@ export class AccountSettingsSection {
 					text.inputEl.type = 'password';
 					text
 						.setPlaceholder(t('settings.account.currentPassword'))
-						.setValue(this.currentPassword)
-						.onChange((value) => (this.currentPassword = value));
+						.setValue(this.#currentPassword)
+						.onChange((value) => (this.#currentPassword = value));
 				});
 				setting.addText((text) => {
 					text.inputEl.type = 'password';
 					text
 						.setPlaceholder(t('settings.account.newPassword'))
-						.setValue(this.newPassword)
-						.onChange((value) => (this.newPassword = value));
+						.setValue(this.#newPassword)
+						.onChange((value) => (this.#newPassword = value));
 				});
 				setting.addButton((button) =>
 					button
 						.setButtonText(t('settings.account.savePassword'))
 						.onClick(async () => {
 							if (
-								this.newPassword.length < 6 ||
-								this.newPassword.length > 128
+								this.#newPassword.length < 6 ||
+								this.#newPassword.length > 128
 							) {
 								new Notice(t('auth.passwordTooShort'));
 								return;
 							}
 
 							button.setDisabled(true);
-							const result = await this.controller.changePassword(
-								this.currentPassword,
-								this.newPassword,
+							const result = await this.#controller.changePassword(
+								this.#currentPassword,
+								this.#newPassword,
 							);
 							button.setDisabled(false);
 
@@ -104,10 +112,10 @@ export class AccountSettingsSection {
 								return;
 							}
 
-							this.currentPassword = '';
-							this.newPassword = '';
+							this.#currentPassword = '';
+							this.#newPassword = '';
 							new Notice(t('settings.account.passwordUpdated'));
-							this.refresh();
+							this.#refresh();
 						}),
 				);
 			},
@@ -119,8 +127,8 @@ export class AccountSettingsSection {
 			render: (setting) => {
 				setting.addButton((button) =>
 					button.setButtonText(t('common.signOut')).onClick(async () => {
-						await this.controller.logout();
-						this.refresh();
+						await this.#controller.logout();
+						this.#refresh();
 					}),
 				);
 			},
