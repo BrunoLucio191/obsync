@@ -115,7 +115,7 @@ export class RouteSyncFiles {
           res.status(400).send({ error: "missing headers info" });
           return;
         }
-        const queue = this.#queueManager.creatDBQueueOrReturn(clientId);
+        const queue = this.#queueManager.getOrCreateQueue(clientId);
         queue.addTask(async () => {
           try {
             console.log("[ZIP] Starting compression...");
@@ -171,10 +171,9 @@ export class RouteSyncFiles {
           return;
         }
 
-        const queue = this.#queueManager.creatDBQueueOrReturn(String(clientId));
+        const queue = this.#queueManager.getOrCreateQueue(String(clientId));
         queue.addTask(async () => {
           try {
-
             if (this.#collaborationServer.isPathDeleted(pathDecoded)) {
               await this.#collaborationServer.deletePersistedStateUnderPath(pathDecoded);
             }
@@ -225,7 +224,7 @@ export class RouteSyncFiles {
           return;
         }
 
-        const queue = this.#queueManager.creatDBQueueOrReturn(clientId);
+        const queue = this.#queueManager.getOrCreateQueue(clientId);
         queue.addTask(async () => {
           try {
             this.#collaborationServer.markPathDeleted(path);
@@ -271,7 +270,7 @@ export class RouteSyncFiles {
           return;
         }
 
-        const queue = this.#queueManager.creatDBQueueOrReturn(clientId);
+        const queue = this.#queueManager.getOrCreateQueue(clientId);
         queue.addTask(async () => {
           try {
             if (this.#collaborationServer.isPathDeleted(path)) {
@@ -319,7 +318,7 @@ export class RouteSyncFiles {
           return;
         }
 
-        const queue = this.#queueManager.creatDBQueueOrReturn(clientId);
+        const queue = this.#queueManager.getOrCreateQueue(clientId);
         // Keyed on the source path: it is the resource that stops existing, and
         // locking both paths at once would open the door to a deadlock.
         queue.addTask(async () => {
@@ -356,18 +355,21 @@ export class RouteSyncFiles {
             res.send(400).send("Invalid clientId or path");
           }
 
-          const queue = this.#queueManager.creatDBQueueOrReturn(String(clientId));
-          queue.addTask(async () => {
-            try {
-              if (nodeBuffer.byteLength == 0 || path == undefined) {
-                console.error("[Files] The task is empty or is missing an important field");
+          const queue = this.#queueManager.getOrCreateQueue(String(clientId));
+          queue.addTask(
+            async () => {
+              try {
+                if (nodeBuffer.byteLength == 0 || path == undefined) {
+                  console.error("[Files] The task is empty or is missing an important field");
+                }
+              } catch (error) {
+                console.error("[Sync] Error in Sending File");
+                res.status(500).send("Error making file");
+                return;
               }
-            } catch (error) {
-              console.error("[Sync] Error in Sending File");
-              res.status(500).send("Error making file");
-              return;
-            }
-          }, `file:${String(path)}:writeBinary`);
+            },
+            `file:${String(path)}:writeBinary`,
+          );
           publishVaultChange({
             type: "create",
             path: String(path),

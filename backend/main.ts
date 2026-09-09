@@ -61,7 +61,7 @@ const main = () => {
 };
 
 /**
- * Runs {@link main} and, if startup fails, logs the error and sets a
+ * Runs main.ts and, if startup fails, logs the error and sets a
  * non-zero exit code instead of letting the process crash with a stack
  * trace.
  */

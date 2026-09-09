@@ -133,12 +133,12 @@ export class RouteUsers {
           });
           return;
         }
-        const actor = this.#currentUser(res);
-        const target = await this.#dbService.getUserById(userId, true);
-        const queue = this.#queueManager.creatDBQueueOrReturn(String(clientId));
 
+        const actor = this.#currentUser(res);
+        const queue = this.#queueManager.getOrCreateQueue(String(clientId));
         queue.addTask(async () => {
           try {
+            const target = await this.#dbService.getUserById(userId, true);
             if (!target) {
               console.warn("[Users] Target user not found");
               res.status(404).json({ error: "User not found." });
@@ -197,11 +197,10 @@ export class RouteUsers {
           return;
         }
 
-        const target = await this.#dbService.getUserById(userId, true);
-        const queue = this.#queueManager.creatDBQueueOrReturn(String(clientId));
-
+        const queue = this.#queueManager.getOrCreateQueue(String(clientId));
         queue.addTask(async () => {
           try {
+            const target = await this.#dbService.getUserById(userId, true);
             if (!target) {
               res.status(404).json({
                 error: "User not found in DB",
@@ -278,7 +277,7 @@ export class RouteUsers {
           });
           return;
         }
-        const queue = this.#queueManager.creatDBQueueOrReturn(String(clientId));
+        const queue = this.#queueManager.getOrCreateQueue(String(clientId));
         queue.addTask(async () => {
           try {
             const result = await this.#dbService.createUser(
@@ -326,7 +325,7 @@ export class RouteUsers {
           res.status(400).json({ error: "Invalid user or role." });
           return;
         }
-        const queue = this.#queueManager.creatDBQueueOrReturn(String(clientId));
+        const queue = this.#queueManager.getOrCreateQueue(String(clientId));
         queue.addTask(async () => {
           try {
             const result = await this.#dbService.updateUserRole(userId, role);
@@ -368,7 +367,7 @@ export class RouteUsers {
           return;
         }
 
-        const queue = this.#queueManager.creatDBQueueOrReturn(String(clientId));
+        const queue = this.#queueManager.getOrCreateQueue(String(clientId));
         queue.addTask(async () => {
           try {
             const result = await this.#dbService.updateUserStatus(userId, active);
@@ -410,7 +409,7 @@ export class RouteUsers {
           return;
         }
 
-        const queue = this.#queueManager.creatDBQueueOrReturn(String(clientId));
+        const queue = this.#queueManager.getOrCreateQueue(String(clientId));
 
         queue.addTask(async () => {
           try {

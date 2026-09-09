@@ -66,4 +66,7 @@ export default class Queue {
   public get getTaskIdentifiers(): string[] {
     return this.#queue.map((someTask) => someTask.taskKey);
   }
+  public get isProcessing() {
+    return this.#processing;
+  }
 }

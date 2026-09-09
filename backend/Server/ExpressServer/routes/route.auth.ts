@@ -9,14 +9,16 @@ import {
   UserMutationErrorMessage,
   userMutationErrorStatus,
 } from "./mutationMessage/userMessageMutation.ts";
+import { QueueManager } from "../../../queue/QueueManager.ts";
 
-export type RouteAuthConstructor = {
+type RouteAuthConstructor = {
   accountLoginRateLimiter: LoginRateLimiter;
   ipLoginRateLimiter: LoginRateLimiter;
   passwordChangeRateLimiter: LoginRateLimiter;
   tokenService: TokenService;
   authService: AuthService;
   dbService: DBServices;
+  queueManager: QueueManager;
 };
 
 /** Session endpoints mounted at `/api/auth`: login, refresh, logout, current user, WebSocket
@@ -29,6 +31,7 @@ export class RouteAuth {
   readonly #tokenService: TokenService;
   readonly #authService: AuthService;
   readonly #dbService: DBServices;
+  readonly #queueManager: QueueManager;
   constructor({
     accountLoginRateLimiter,
     ipLoginRateLimiter,
@@ -36,6 +39,7 @@ export class RouteAuth {
     tokenService,
     authService,
     dbService,
+    queueManager,
   }: RouteAuthConstructor) {
     this.#accountLoginRateLimiter = accountLoginRateLimiter;
     this.#ipLoginRateLimiter = ipLoginRateLimiter;
@@ -43,6 +47,7 @@ export class RouteAuth {
     this.#tokenService = tokenService;
     this.#authService = authService;
     this.#dbService = dbService;
+    this.#queueManager = queueManager;
   }
 
   /** Middleware: resolves the bearer access token and rejects the request with 401 if it's
@@ -69,10 +74,7 @@ export class RouteAuth {
     return res.locals.authenticatedUser as AuthenticatedUser;
   }
 
-  /** Registers this router's routes on {@link router}. Must be called once before mounting. */
   public startRoute() {
-    // Rate-limited by both account and IP; a failed attempt only counts against the limit
-    // once the credentials are confirmed invalid, so a malformed request doesn't cost a try.
     this.router.post("/login", async (req: Request, res: Response): Promise<void> => {
       const { email, password } = req.body ?? {};
 
@@ -201,6 +203,13 @@ export class RouteAuth {
       this.#requireAuth,
       async (req: Request, res: Response): Promise<void> => {
         const { currentPassword, newPassword } = req.body ?? {};
+        const { ["x-obsync-client"]: clientId } = req.headers;
+
+        if (typeof clientId !== "string" || clientId === undefined) {
+          console.warn("[Auth] Missing clientId inside the header");
+          res.send(400).json({ error: "Missing clientId inside the header" });
+        }
+
         if (
           typeof currentPassword !== "string" ||
           typeof newPassword !== "string" ||
@@ -214,37 +223,39 @@ export class RouteAuth {
           return;
         }
 
-        const currentAuthenticatedUser = this.#currentUser(res);
-        const rateLimitKey = String(currentAuthenticatedUser.id);
+        const actor = this.#currentUser(res);
+        const rateLimitKey = String(actor.id);
         const limit = this.#passwordChangeRateLimiter.check(rateLimitKey);
         if (!limit.allowed) {
           res.setHeader("Retry-After", limit.retryAfterSeconds);
+          console.error("[Auth] Too many attempts. Try again later.");
           res.status(429).json({
             error: "Too many attempts. Try again later.",
           });
-
           return;
         }
+        const queue = this.#queueManager.getOrCreateQueue(String(clientId));
+        queue.addTask(async () => {
+          const result = await this.#dbService.updateUserPassword(
+            actor.id,
+            currentPassword,
+            newPassword,
+          );
 
-        const result = await this.#dbService.updateUserPassword(
-          currentAuthenticatedUser.id,
-          currentPassword,
-          newPassword,
-        );
-
-        if (!result.ok) {
-          if (result.reason === "INVALID_CURRENT_PASSWORD") {
-            this.#passwordChangeRateLimiter.recordFailure(rateLimitKey);
+          if (!result.ok) {
+            if (result.reason === "INVALID_CURRENT_PASSWORD") {
+              this.#passwordChangeRateLimiter.recordFailure(rateLimitKey);
+            }
+            res.status(userMutationErrorStatus(result)).json({
+              error: UserMutationErrorMessage(result),
+              reason: result.reason,
+            });
+            return;
           }
-          res.status(userMutationErrorStatus(result)).json({
-            error: UserMutationErrorMessage(result),
-            reason: result.reason,
-          });
-          return;
-        }
 
-        this.#passwordChangeRateLimiter.reset(rateLimitKey);
-        res.json({ user: result.user });
+          this.#passwordChangeRateLimiter.reset(rateLimitKey);
+          res.json({ user: result.user });
+        }, `auth:${actor.id}:changePassword`);
       },
     );
   }

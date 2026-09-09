@@ -90,6 +90,7 @@ export class ExpressServer {
       tokenService: this.#tokenService,
       authService: this.#authService,
       dbService: this.#dbService,
+      queueManager: new QueueManager(keyedLock),
     });
     this.#routeSyncFiles = new RouteSyncFiles({
       tokenService: this.#tokenService,

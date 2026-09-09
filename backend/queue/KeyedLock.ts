@@ -4,11 +4,6 @@
  * sit in different queues. Keys are standardized per route, so they identify an
  * operation on a resource, such as `user:42:renameUser`.
  */
-
-//  done -> key2 | outra coisa
-//  not done -> key1 | fazer alguma coisa
-//  not done -> key1 | fazer alguma coisa
-
 export class KeyedLock {
   #lastInLine = new Map<string, Promise<void>>();
 
@@ -34,9 +29,7 @@ export class KeyedLock {
     const predecessor = this.#lastInLine.get(key);
     this.#lastInLine.set(key, promise);
 
-    if (predecessor) {
-      await predecessor;
-    }
+    if (predecessor) await predecessor;
 
     return () => {
       if (this.#lastInLine.get(key) === promise) {
@@ -46,7 +39,7 @@ export class KeyedLock {
     };
   }
 
-  /** Number of keys currently held or waited on. Meant for logging and tests. */
+  /** Number of keys currently held or waited on.*/
   public get busyKeys(): number {
     return this.#lastInLine.size;
   }
