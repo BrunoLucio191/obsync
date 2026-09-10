@@ -12,6 +12,8 @@ import type { KeyedLock } from "../../queue/KeyedLock.ts";
 import { RouteAuth } from "./routes/route.auth.ts";
 import { RouteUsers } from "./routes/route.users.ts";
 import { RouteSyncFiles } from "./routes/route.syncFiles.ts";
+import { AuthController } from "./routes/controllers/AuthController.ts";
+import type { AuthenticatedUser } from "../../auth/auth.types.ts";
 
 type ExpressServerConstructorOptions = {
   port: number;
@@ -40,9 +42,9 @@ export class ExpressServer {
   readonly #tokenService: TokenService;
   readonly #authService: AuthService;
   readonly #collaborationServer: YjsCollaborationGateway;
-  #routeAuth: RouteAuth;
-  #routeUsers: RouteUsers;
-  #routeSyncFiles: RouteSyncFiles;
+  readonly #routeAuth: RouteAuth;
+  readonly #routeUsers: RouteUsers;
+  readonly #routeSyncFiles: RouteSyncFiles;
 
   /**
    * Creates the Express app and underlying HTTP server, then set up middleware and routes.
@@ -73,24 +75,29 @@ export class ExpressServer {
     this.#authService = authService;
     this.#collaborationServer = collaborationServer;
     this.#routeUsers = new RouteUsers({
-      tokenService: this.#tokenService,
+      adminMiddleware: this.#requireAdmin,
+      authMiddleware: this.#requireAuth,
       dbService: this.#dbService,
       queueManager: new QueueManager(keyedLock),
     });
     this.#routeAuth = new RouteAuth({
-      accountLoginRateLimiter: new LoginRateLimiter({
-        maxFailedAttempts: 5,
-      }),
-      ipLoginRateLimiter: new LoginRateLimiter({
-        maxFailedAttempts: 25,
-      }),
-      passwordChangeRateLimiter: new LoginRateLimiter({
-        maxFailedAttempts: 5,
-      }),
-      tokenService: this.#tokenService,
+      authMiddleware: this.#requireAuth,
       authService: this.#authService,
-      dbService: this.#dbService,
-      queueManager: new QueueManager(keyedLock),
+      authController: new AuthController({
+        dbService: this.#dbService,
+        queueManager: new QueueManager(keyedLock),
+        authService: this.#authService,
+        passwordChangeRateLimiter: new LoginRateLimiter({
+          maxFailedAttempts: 5,
+        }),
+        ipLoginRateLimiter: new LoginRateLimiter({
+          maxFailedAttempts: 25,
+        }),
+        accountLoginRateLimiter: new LoginRateLimiter({
+          maxFailedAttempts: 5,
+        }),
+        tokenService: this.#tokenService,
+      }),
     });
     this.#routeSyncFiles = new RouteSyncFiles({
       tokenService: this.#tokenService,
@@ -149,6 +156,31 @@ export class ExpressServer {
       }
       console.log(`Server running on http://${this.#host}:${port}`);
     });
+  }
+
+  #requireAuth = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    const token = req.header("Authorization")?.replace(/^Bearer\s+/i, "");
+    const authenticatedUser = await this.#tokenService.verifyToken(token);
+
+    if (!authenticatedUser) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+    res.locals.authenticatedUser = authenticatedUser;
+    res.locals.accessToken = token;
+    next();
+  };
+
+  #requireAdmin = (req: Request, res: Response, next: NextFunction): void => {
+    const user = this.#currenteUser(res);
+    if (user.role !== "admin") {
+      res.status(403).json({ error: "Only Adms can perform this action." });
+      return;
+    }
+    next();
+  };
+  #currenteUser(res: Response): AuthenticatedUser {
+    return res.locals.authenticatedUser as AuthenticatedUser;
   }
 
   /** Node HTTP server, exposed to other components */

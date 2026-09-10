@@ -18,16 +18,27 @@ export default class Queue {
   }
 
   /** Adds a task to the #queue that is an array, and starts draining it if idle. */
-  public addTask(task: () => Promise<void>, taskKey: string): void {
+  public addTask<T>(task: () => Promise<T>, taskKey: string): Promise<T> {
     if (!task) {
       throw new Error("[Queue] The task is empty");
     }
     if (!taskKey) {
       throw new Error("[Queue] There is no key identifier");
     }
+    const { promise, reject, resolve } = Promise.withResolvers<T>();
 
-    this.#queue.push({ task, taskKey });
-    this.#runTask();
+    this.#queue.push({
+      task: async () => {
+        try {
+          resolve(await task());
+        } catch (error) {
+          reject(error);
+        }
+      },
+      taskKey,
+    });
+    void this.#runTask();
+    return promise;
   }
 
   async #runTask(): Promise<void> {

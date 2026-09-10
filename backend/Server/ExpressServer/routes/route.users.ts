@@ -1,5 +1,4 @@
 import express, { type Request, type Response, type NextFunction } from "express";
-import type { TokenService } from "../../../auth/TokenService.ts";
 import type { AuthenticatedUser, UserRole } from "../../../auth/auth.types.ts";
 import {
   UserMutationErrorMessage,
@@ -7,27 +6,24 @@ import {
 } from "./mutationMessage/userMessageMutation.ts";
 import { DBServices } from "../../../users/DBServices.ts";
 import type { QueueManager } from "../../../queue/QueueManager.ts";
-
-/** Admin-only user management endpoints mounted at `/api/users`: list, create, rename,
- * reset password, change role, activate/deactivate, and delete. Every mutation runs on a
- * per-target-user {@link QueueManager} queue so concurrent requests for the same user
- * serialize instead of racing. */
-
 type RouteUsersContructor = {
-  tokenService: TokenService;
   dbService: DBServices;
   queueManager: QueueManager;
+  authMiddleware: (req: Request, res: Response, next: NextFunction) => Promise<void>;
+  adminMiddleware: (req: Request, res: Response, next: NextFunction) => void;
 };
 
 export class RouteUsers {
   public router: express.Router = express.Router();
-  readonly #tokenService: TokenService;
   readonly #dbService: DBServices;
   readonly #queueManager: QueueManager;
-  constructor({ tokenService, dbService, queueManager }: RouteUsersContructor) {
-    this.#tokenService = tokenService;
+  readonly #authMiddleware: (req: Request, res: Response, next: NextFunction) => Promise<void>;
+  readonly #adminMiddleware: (req: Request, res: Response, next: NextFunction) => void;
+  constructor({ dbService, queueManager, authMiddleware, adminMiddleware }: RouteUsersContructor) {
     this.#dbService = dbService;
     this.#queueManager = queueManager;
+    this.#authMiddleware = authMiddleware;
+    this.#adminMiddleware = adminMiddleware;
   }
 
   /**
@@ -40,76 +36,15 @@ export class RouteUsers {
     const userId = Number(value);
     return userId > 0 ? userId : null;
   }
-
-  /** Extracts the vault path an audited request targeted (`path`, `oldPath`, or `newPath`),
-   * normalizing slashes, for {@link #auditDenied} log entries. */
-  #requestPath(req: Request): string | undefined {
-    const value = req.body?.path ?? req.body?.oldPath ?? req.body?.newPath;
-    return typeof value === "string" ? value.replace(/\\/g, "/") : undefined;
-  }
-
-  /** Logs an audit warning for an operation denied by {@link #requireAdmin}. */
-  #auditDenied(
-    user: AuthenticatedUser,
-    operation: string,
-    route: string,
-    targetPath?: string,
-  ): void {
-    console.warn("[Audit] Global operation blocked", {
-      userId: user.id,
-      role: user.role,
-      operation,
-      route,
-      path: targetPath,
-      timestamp: new Date().toISOString(),
-      allowed: false,
-    });
-  }
-
-  /** Reads the authenticated user previously attached to the request by {@link #requireAuth}. */
   #currentUser(res: Response): AuthenticatedUser {
     return res.locals.authenticatedUser as AuthenticatedUser;
   }
 
-  /** Middleware: resolves the bearer access token and rejects the request with 401 if it's
-   * missing/invalid. Must run before requireAdmin or any route reading currentUser.
-   */
-  #requireAuth = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    const token = req.header("Authorization")?.replace(/^Bearer\s+/i, "");
-
-    const authenticatedUser = await this.#tokenService.verifyToken(token);
-
-    if (!authenticatedUser) {
-      res.status(401).json({ error: "Authentication required" });
-      return;
-    }
-
-    res.locals.authenticatedUser = authenticatedUser;
-    res.locals.accessToken = token;
-    next();
-  };
-
-  /** Middleware: rejects the request with 403 (and logs an audit entry) unless the
-   * authenticated user is an admin. Must run after requireAuth. */
-  #requireAdmin = (req: Request, res: Response, next: NextFunction): void => {
-    const user = this.#currentUser(res);
-
-    if (user.role !== "admin") {
-      this.#auditDenied(user, req.method, req.path, this.#requestPath(req));
-      res.status(403).json({ error: "[Users] Only administrators can perform this action." });
-
-      return;
-    }
-
-    next();
-  };
-
-  /** Must be called once before mounting. */
   public startRoute() {
     this.router.patch(
       "/:id/name",
-      this.#requireAuth,
-      this.#requireAdmin,
+      this.#authMiddleware,
+      this.#adminMiddleware,
       async (req: Request, res: Response): Promise<void> => {
         const userId = this.#parseUserId(req.params.id);
         const normalizedName = typeof req.body?.name === "string" ? req.body.name.trim() : "";
@@ -117,7 +52,8 @@ export class RouteUsers {
 
         if (typeof clientId !== "string" || clientId === undefined) {
           console.warn("[Users] Missing clientId inside the header");
-          res.send(400).json({ error: "Missing clientId inside the header" });
+          res.status(400).json({ error: "Missing clientId inside the header" });
+          return;
         }
 
         if (!userId) {
@@ -162,7 +98,6 @@ export class RouteUsers {
             }
             res.json({ user: result.user });
           } catch (error) {
-            console.error(`[Users] An error happened while changing the ${userId} name`, error);
             res.status(500).json({
               error: "Something happened while changing some user name",
             });
@@ -173,8 +108,8 @@ export class RouteUsers {
 
     this.router.patch(
       "/:id/password",
-      this.#requireAuth,
-      this.#requireAdmin,
+      this.#authMiddleware,
+      this.#adminMiddleware,
       async (req: Request, res: Response): Promise<void> => {
         const userId = this.#parseUserId(req.params.id);
         const newPassword = req.body?.newPassword;
@@ -182,7 +117,8 @@ export class RouteUsers {
 
         if (typeof clientId !== "string" || clientId === undefined) {
           console.warn("[Users] Missing clientId inside the header");
-          res.send(400).json({ error: "Missing clientId inside the header" });
+          res.status(400).json({ error: "Missing clientId inside the header" });
+          return;
         }
 
         if (!userId) {
@@ -238,8 +174,8 @@ export class RouteUsers {
 
     this.router.get(
       "/",
-      this.#requireAuth,
-      this.#requireAdmin,
+      this.#authMiddleware,
+      this.#adminMiddleware,
       async (_req: Request, res: Response): Promise<void> => {
         res.json({ users: await this.#dbService.listUsers() });
       },
@@ -247,8 +183,8 @@ export class RouteUsers {
 
     this.router.post(
       "/",
-      this.#requireAuth,
-      this.#requireAdmin,
+      this.#authMiddleware,
+      this.#adminMiddleware,
       async (req: Request, res: Response): Promise<void> => {
         const { name, email, password, role } = req.body ?? {};
         const normalizedName = typeof name === "string" ? name.trim() : "";
@@ -258,7 +194,8 @@ export class RouteUsers {
 
         if (typeof clientId !== "string" || clientId === undefined) {
           console.warn("[Users] Missing clientId inside the header");
-          res.send(400).json({ error: "Missing clientId inside the header" });
+          res.status(400).json({ error: "Missing clientId inside the header" });
+          return;
         }
 
         if (normalizedName.length < 2 || normalizedName.length > 64) {
@@ -309,8 +246,8 @@ export class RouteUsers {
 
     this.router.patch(
       "/:id/role",
-      this.#requireAuth,
-      this.#requireAdmin,
+      this.#authMiddleware,
+      this.#adminMiddleware,
       async (req: Request, res: Response): Promise<void> => {
         const userId = this.#parseUserId(req.params.id);
         const { ["x-obsync-client"]: clientId } = req.headers;
@@ -318,7 +255,8 @@ export class RouteUsers {
 
         if (typeof clientId !== "string" || clientId === undefined) {
           console.warn("[Users] Missing clientId inside the header");
-          res.send(400).json({ error: "Missing clientId inside the header" });
+          res.status(400).json({ error: "Missing clientId inside the header" });
+          return;
         }
         if (!userId || !this.#dbService.isUserRole(role)) {
           console.warn("[Users] Invalid userId or role in request body");
@@ -349,8 +287,8 @@ export class RouteUsers {
 
     this.router.patch(
       "/:id/status",
-      this.#requireAuth,
-      this.#requireAdmin,
+      this.#authMiddleware,
+      this.#adminMiddleware,
       async (req: Request, res: Response): Promise<void> => {
         const userId = this.#parseUserId(req.params.id);
         const active = req.body?.active;
@@ -358,7 +296,8 @@ export class RouteUsers {
 
         if (typeof clientId !== "string" || clientId === undefined) {
           console.warn("[Users] Missing clientId inside the header");
-          res.send(400).json({ error: "Missing clientId inside the header" });
+          res.status(400).json({ error: "Missing clientId inside the header" });
+          return;
         }
 
         if (!userId || typeof active !== "boolean") {
@@ -392,8 +331,8 @@ export class RouteUsers {
 
     this.router.delete(
       "/:id",
-      this.#requireAuth,
-      this.#requireAdmin,
+      this.#authMiddleware,
+      this.#adminMiddleware,
       async (req: Request, res: Response): Promise<void> => {
         const userId = this.#parseUserId(req.params.id);
         const { ["x-obsync-client"]: clientId } = req.headers;
