@@ -7,6 +7,7 @@ type RouteAuthConstructor = {
   authService: AuthService;
   authController: AuthController;
   authMiddleware: (req: Request, res: Response, next: NextFunction) => Promise<void>;
+  clientIdMiddleware: (req: Request, res: Response, next: NextFunction) => void;
 };
 
 /** Session endpoints mounted at `/api/auth`: login, refresh, logout, current user, WebSocket
@@ -15,9 +16,11 @@ export class RouteAuth {
   public router: express.Router = express.Router();
   readonly #authController: AuthController;
   readonly #authMiddleware: (req: Request, res: Response, next: NextFunction) => Promise<void>;
-  constructor({ authController, authMiddleware }: RouteAuthConstructor) {
+  readonly #clientIdMiddleware: (req: Request, res: Response, next: NextFunction) => void;
+  constructor({ authController, authMiddleware, clientIdMiddleware }: RouteAuthConstructor) {
     this.#authController = authController;
     this.#authMiddleware = authMiddleware;
+    this.#clientIdMiddleware = clientIdMiddleware;
   }
 
   public startRoute() {
@@ -26,6 +29,11 @@ export class RouteAuth {
     this.router.post("/logout", this.#authController.logout);
     this.router.get("/me", this.#authMiddleware, this.#authController.me);
     this.router.post("/ws-ticket", this.#authMiddleware, this.#authController.wsTicket);
-    this.router.post("/change-password", this.#authMiddleware, this.#authController.changePassword);
+    this.router.post(
+      "/change-password",
+      this.#authMiddleware,
+      this.#clientIdMiddleware,
+      this.#authController.changePassword,
+    );
   }
 }

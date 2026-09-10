@@ -64,19 +64,7 @@ export class AuthController {
         return;
     }
 
-    function loginRateLimitKeys(
-      req: Request,
-      email: string,
-    ): { accountKey: string; ipKey: string } {
-      const normalizedEmail = email.normalize("NFKC").trim().toLowerCase();
-      const address = req.ip ?? req.socket.remoteAddress ?? "unknown";
-      return {
-        accountKey: `account:${normalizedEmail}`,
-        ipKey: `ip:${address}`,
-      };
-    }
-
-    const { accountKey, ipKey } = loginRateLimitKeys(req, email);
+    const { accountKey, ipKey } = LoginRateLimiter.loginRateLimitKeys(req, email);
     const accountLimit = this.#accountLoginRateLimiter.check(accountKey);
     const ipLimit = this.#ipLoginRateLimiter.check(ipKey);
 
@@ -86,7 +74,6 @@ export class AuthController {
         Math.max(accountLimit.retryAfterSeconds, ipLimit.retryAfterSeconds),
       );
       res.status(429).json({ error: "Too many login attempts. Try again later." });
-
       return;
     }
 
@@ -102,11 +89,9 @@ export class AuthController {
           Math.max(updatedAccountLimit.retryAfterSeconds, updatedIpLimit.retryAfterSeconds),
         );
         res.status(429).json({ error: "Too many login attempts. Try again later." });
-
         return;
       }
       res.status(401).json({ error: "Invalid e-mail or password." });
-
       return;
     }
     this.#accountLoginRateLimiter.reset(accountKey);
@@ -115,17 +100,13 @@ export class AuthController {
 
   refreash = async (req: Request, res: Response): Promise<void> => {
     const refreshToken = req.body?.refreshToken;
-
     const session = await this.#tokenService.refreshSession(
       typeof refreshToken === "string" ? refreshToken : null,
     );
-
     if (!session) {
       res.status(401).json({ error: "Invalid or expired session." });
-
       return;
     }
-
     res.json(session);
   };
 
@@ -163,13 +144,7 @@ export class AuthController {
   };
   changePassword = async (req: Request, res: Response): Promise<void> => {
     const { currentPassword, newPassword } = req.body ?? {};
-    const { ["x-obsync-client"]: clientId } = req.headers;
-
-    if (typeof clientId !== "string" || clientId === undefined) {
-      console.warn("[Auth] Missing clientId inside the header");
-      res.status(400).json({ error: "Missing clientId inside the header" });
-      return;
-    }
+    const clientId = res.locals.clientId as string;
 
     if (
       typeof currentPassword !== "string" ||
@@ -177,10 +152,10 @@ export class AuthController {
       newPassword.length < 6 ||
       newPassword.length > 128
     ) {
+      console.warn("[Auth] The new password must be between 6 and 128 characters.");
       res.status(400).json({
         error: "The new password must be between 6 and 128 characters.",
       });
-
       return;
     }
 
@@ -195,29 +170,33 @@ export class AuthController {
       });
       return;
     }
-    const queue = this.#queueManager.getOrCreateQueue(String(clientId));
-    const result = await queue.addTask(async () => {
-      const result = await this.#dbService.updateUserPassword(
-        actor.id,
-        currentPassword,
-        newPassword,
-      );
+    const queue = this.#queueManager.getOrCreateQueue(clientId);
+    try {
+      await queue.addTask(async () => {
+        const result = await this.#dbService.updateUserPassword(
+          actor.id,
+          currentPassword,
+          newPassword,
+        );
 
-      if (!result.ok) {
-        if (result.reason === "INVALID_CURRENT_PASSWORD") {
-          this.#passwordChangeRateLimiter.recordFailure(rateLimitKey);
+        if (!result.ok) {
+          if (result.reason === "INVALID_CURRENT_PASSWORD") {
+            this.#passwordChangeRateLimiter.recordFailure(rateLimitKey);
+          }
+          res.status(userMutationErrorStatus(result)).json({
+            error: UserMutationErrorMessage(result),
+            reason: result.reason,
+          });
+          return;
         }
-        res.status(userMutationErrorStatus(result)).json({
-          error: UserMutationErrorMessage(result),
-          reason: result.reason,
-        });
-        return;
-      }
 
-      this.#passwordChangeRateLimiter.reset(rateLimitKey);
-      res.json({ user: result.user });
-    }, `auth:${actor.id}:changePassword`);
-    res.json(result);
+        this.#passwordChangeRateLimiter.reset(rateLimitKey);
+        res.json({ user: result.user });
+      }, `auth:${actor.id}:changePassword`);
+    } catch (error) {
+      console.error("[Auth] Unexpected Error while changing the password", error);
+      res.status(500).json({ error: "Interal Error" });
+    }
   };
 
   #currentUser(res: Response): AuthenticatedUser {

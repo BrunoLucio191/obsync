@@ -66,8 +66,10 @@ export default class Queue {
 
     this.#runTask();
   }
-
-  public numberOfTaks(): number {
+  /**
+   * Numbers os taks inside the queue array
+   */
+  public get numberOfTaks(): number {
     return this.#queue.length;
   }
 
@@ -77,6 +79,10 @@ export default class Queue {
   public get getTaskIdentifiers(): string[] {
     return this.#queue.map((someTask) => someTask.taskKey);
   }
+
+  /**
+   * Returns the Status if there any processing happening
+   */
   public get isProcessing() {
     return this.#processing;
   }

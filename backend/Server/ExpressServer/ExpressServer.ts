@@ -77,11 +77,13 @@ export class ExpressServer {
     this.#routeUsers = new RouteUsers({
       adminMiddleware: this.#requireAdmin,
       authMiddleware: this.#requireAuth,
+      clientIdMiddleware: this.#requireClientId,
       dbService: this.#dbService,
       queueManager: new QueueManager(keyedLock),
     });
     this.#routeAuth = new RouteAuth({
       authMiddleware: this.#requireAuth,
+      clientIdMiddleware: this.#requireClientId,
       authService: this.#authService,
       authController: new AuthController({
         dbService: this.#dbService,
@@ -100,7 +102,9 @@ export class ExpressServer {
       }),
     });
     this.#routeSyncFiles = new RouteSyncFiles({
-      tokenService: this.#tokenService,
+      authMiddleware: this.#requireAuth,
+      adminMiddleware: this.#requireAdmin,
+      clientIdMiddleware: this.#requireClientId,
       fileManager: this.#fileManager,
       collaborationServer: this.#collaborationServer,
       queueManager: new QueueManager(keyedLock),
@@ -174,13 +178,46 @@ export class ExpressServer {
   #requireAdmin = (req: Request, res: Response, next: NextFunction): void => {
     const user = this.#currenteUser(res);
     if (user.role !== "admin") {
-      res.status(403).json({ error: "Only Adms can perform this action." });
+      this.#auditDenied(user, req.method, req.path, this.#requestPath(req));
+      res.status(403).json({ error: "Only administrators can perform this action." });
       return;
     }
     next();
   };
+
+  #requireClientId = (req: Request, res: Response, next: NextFunction): void => {
+    const clientId = req.headers["x-obsync-client"];
+    if (typeof clientId !== "string" || !clientId.trim()) {
+      console.warn("[ExpressServer] Missing clientId inside the header");
+      res.status(400).json({ error: "Missing clientId inside the header" });
+      return;
+    }
+    res.locals.clientId = clientId;
+    next();
+  };
+
   #currenteUser(res: Response): AuthenticatedUser {
     return res.locals.authenticatedUser as AuthenticatedUser;
+  }
+
+  /** Logs an audit warning for an operation denied by {@link #requireAdmin}. */
+  #auditDenied(user: AuthenticatedUser, operation: string, route: string, targetPath?: string): void {
+    console.warn("[ExpressServer] Global operation blocked", {
+      userId: user.id,
+      role: user.role,
+      operation,
+      route,
+      path: targetPath,
+      timestamp: new Date().toISOString(),
+      allowed: false,
+    });
+  }
+
+  /** Extracts the vault path an audited request targeted (`path`, `oldPath`, or `newPath`),
+   * normalizing slashes, for {@link #auditDenied} log entries. */
+  #requestPath(req: Request): string | undefined {
+    const value = req.body?.path ?? req.body?.oldPath ?? req.body?.newPath;
+    return typeof value === "string" ? value.replace(/\\/g, "/") : undefined;
   }
 
   /** Node HTTP server, exposed to other components */

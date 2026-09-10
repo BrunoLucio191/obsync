@@ -1,3 +1,4 @@
+import { type Request } from "express";
 const DEFAULT_ATTEMPT_WINDOW_MS = 15 * 60 * 1_000;
 const DEFAULT_BLOCK_DURATION_MS = 15 * 60 * 1_000;
 const DEFAULT_MAX_FAILED_ATTEMPTS = 5;
@@ -11,27 +12,22 @@ type AttemptRecord = {
 
 /** Result of checking or updating the rate limit state for a key. */
 export type LoginRateLimit = {
-  /** Whether the request should be allowed to proceed. */
   allowed: boolean;
-  /** If `allowed` is `false`, how many seconds the caller should wait before retrying. */
   retryAfterSeconds: number;
 };
 
-/** Configuration overrides for {@link LoginRateLimiter}. All fields fall back to module defaults when omitted. */
+/** All fields fall back to module defaults when omitted. */
 type LoginRateLimiterOptions = {
-  /** Sliding window (ms) over which failures are counted. */
   attemptWindowMs?: number;
-  /** How long (ms) a key stays blocked once it exceeds `maxFailedAttempts`. */
   blockDurationMs?: number;
-  /** Number of failures within `attemptWindowMs` that triggers a block. */
   maxFailedAttempts?: number;
   /** Maximum number of distinct keys tracked at once, to bound memory usage. */
   maxTrackedKeys?: number;
 };
 
 /**
- * In-memory sliding-window rate limiter used to throttle repeated failed login/password
- * attempts per key (e.g. per account or per IP). State is not persisted across restarts.
+ * In-memory sliding window rate limiter used to throttle repeated failed login/password
+ * attempts per key (per account or per IP). State is not persisted across restarts.
  */
 export class LoginRateLimiter {
   readonly #attempts = new Map<string, AttemptRecord>();
@@ -52,7 +48,7 @@ export class LoginRateLimiter {
 
   /**
    * Checks whether a key is currently allowed to attempt a login, without recording a new attempt.
-   * @param key - Identifier being rate-limited (e.g. `"account:<email>"` or `"ip:<address>"`).
+   * @param key - Identifier being rate-limited
    * @returns Whether the key is allowed, and if not, how long to wait.
    */
   public check(key: string): LoginRateLimit {
@@ -105,7 +101,7 @@ export class LoginRateLimiter {
   }
 
   /**
-   * Clears all tracked failures/blocks for a key, typically called after a successful login.
+   * Clears all tracked failures/blocks for a key, must be called after a successful login.
    * @param key - Identifier to reset.
    */
   public reset(key: string): void {
@@ -128,4 +124,16 @@ export class LoginRateLimiter {
       }
     }
   }
+
+  static loginRateLimitKeys = (
+    req: Request,
+    email: string,
+  ): { accountKey: string; ipKey: string } => {
+    const normalizedEmail = email.normalize("NFKC").trim().toLowerCase();
+    const address = req.ip ?? req.socket.remoteAddress ?? "unknown";
+    return {
+      accountKey: `account:${normalizedEmail}`,
+      ipKey: `ip:${address}`,
+    };
+  };
 }

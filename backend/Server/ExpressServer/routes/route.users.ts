@@ -11,6 +11,7 @@ type RouteUsersContructor = {
   queueManager: QueueManager;
   authMiddleware: (req: Request, res: Response, next: NextFunction) => Promise<void>;
   adminMiddleware: (req: Request, res: Response, next: NextFunction) => void;
+  clientIdMiddleware: (req: Request, res: Response, next: NextFunction) => void;
 };
 
 export class RouteUsers {
@@ -19,11 +20,19 @@ export class RouteUsers {
   readonly #queueManager: QueueManager;
   readonly #authMiddleware: (req: Request, res: Response, next: NextFunction) => Promise<void>;
   readonly #adminMiddleware: (req: Request, res: Response, next: NextFunction) => void;
-  constructor({ dbService, queueManager, authMiddleware, adminMiddleware }: RouteUsersContructor) {
+  readonly #clientIdMiddleware: (req: Request, res: Response, next: NextFunction) => void;
+  constructor({
+    dbService,
+    queueManager,
+    authMiddleware,
+    adminMiddleware,
+    clientIdMiddleware,
+  }: RouteUsersContructor) {
     this.#dbService = dbService;
     this.#queueManager = queueManager;
     this.#authMiddleware = authMiddleware;
     this.#adminMiddleware = adminMiddleware;
+    this.#clientIdMiddleware = clientIdMiddleware;
   }
 
   /**
@@ -45,16 +54,11 @@ export class RouteUsers {
       "/:id/name",
       this.#authMiddleware,
       this.#adminMiddleware,
+      this.#clientIdMiddleware,
       async (req: Request, res: Response): Promise<void> => {
         const userId = this.#parseUserId(req.params.id);
         const normalizedName = typeof req.body?.name === "string" ? req.body.name.trim() : "";
-        const { ["x-obsync-client"]: clientId } = req.headers;
-
-        if (typeof clientId !== "string" || clientId === undefined) {
-          console.warn("[Users] Missing clientId inside the header");
-          res.status(400).json({ error: "Missing clientId inside the header" });
-          return;
-        }
+        const clientId = res.locals.clientId as string;
 
         if (!userId) {
           console.warn("[Users] Missing or invalid userId in URL params");
@@ -71,7 +75,7 @@ export class RouteUsers {
         }
 
         const actor = this.#currentUser(res);
-        const queue = this.#queueManager.getOrCreateQueue(String(clientId));
+        const queue = this.#queueManager.getOrCreateQueue(clientId);
         queue.addTask(async () => {
           try {
             const target = await this.#dbService.getUserById(userId, true);
@@ -110,16 +114,11 @@ export class RouteUsers {
       "/:id/password",
       this.#authMiddleware,
       this.#adminMiddleware,
+      this.#clientIdMiddleware,
       async (req: Request, res: Response): Promise<void> => {
         const userId = this.#parseUserId(req.params.id);
         const newPassword = req.body?.newPassword;
-        const { ["x-obsync-client"]: clientId } = req.headers;
-
-        if (typeof clientId !== "string" || clientId === undefined) {
-          console.warn("[Users] Missing clientId inside the header");
-          res.status(400).json({ error: "Missing clientId inside the header" });
-          return;
-        }
+        const clientId = res.locals.clientId as string;
 
         if (!userId) {
           console.warn("[Users] Missing or invalid userId in URL params");
@@ -133,7 +132,7 @@ export class RouteUsers {
           return;
         }
 
-        const queue = this.#queueManager.getOrCreateQueue(String(clientId));
+        const queue = this.#queueManager.getOrCreateQueue(clientId);
         queue.addTask(async () => {
           try {
             const target = await this.#dbService.getUserById(userId, true);
@@ -185,36 +184,32 @@ export class RouteUsers {
       "/",
       this.#authMiddleware,
       this.#adminMiddleware,
+      this.#clientIdMiddleware,
       async (req: Request, res: Response): Promise<void> => {
         const { name, email, password, role } = req.body ?? {};
         const normalizedName = typeof name === "string" ? name.trim() : "";
         const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
         const normalizedRole: UserRole = this.#dbService.isUserRole(role) ? role : "user";
-        const { ["x-obsync-client"]: clientId } = req.headers;
+        const clientId = res.locals.clientId as string;
 
-        if (typeof clientId !== "string" || clientId === undefined) {
-          console.warn("[Users] Missing clientId inside the header");
-          res.status(400).json({ error: "Missing clientId inside the header" });
-          return;
+        switch (true) {
+          case normalizedName.length < 2 || normalizedName.length > 64:
+            console.warn("[Users] Invalid name length (must be 2-64 characters)");
+            res.status(400).json({ error: "The name must be between 2 and 64 characters." });
+            return;
+          case !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail):
+            console.warn("[Users] Invalid name length (must be 2-64 characters)");
+            res.status(400).json({ error: "Enter a valid e-mail address." });
+            return;
+          case typeof password !== "string" || password.length < 6 || password.length > 128:
+            console.warn("[Users] Invalid password length (must be 6-128 characters)");
+            res.status(400).json({
+              error: "The password must be between 6 and 128 characters.",
+            });
+            return;
         }
 
-        if (normalizedName.length < 2 || normalizedName.length > 64) {
-          console.warn("[Users] Invalid name length (must be 2-64 characters)");
-          res.status(400).json({ error: "The name must be between 2 and 64 characters." });
-          return;
-        }
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
-          res.status(400).json({ error: "Enter a valid e-mail address." });
-          return;
-        }
-        if (typeof password !== "string" || password.length < 6 || password.length > 128) {
-          console.warn("[Users] Invalid password length (must be 6-128 characters)");
-          res.status(400).json({
-            error: "The password must be between 6 and 128 characters.",
-          });
-          return;
-        }
-        const queue = this.#queueManager.getOrCreateQueue(String(clientId));
+        const queue = this.#queueManager.getOrCreateQueue(clientId);
         queue.addTask(async () => {
           try {
             const result = await this.#dbService.createUser(
@@ -248,22 +243,20 @@ export class RouteUsers {
       "/:id/role",
       this.#authMiddleware,
       this.#adminMiddleware,
+      this.#clientIdMiddleware,
       async (req: Request, res: Response): Promise<void> => {
         const userId = this.#parseUserId(req.params.id);
-        const { ["x-obsync-client"]: clientId } = req.headers;
+        const clientId = res.locals.clientId as string;
         const role = req.body?.role;
 
-        if (typeof clientId !== "string" || clientId === undefined) {
-          console.warn("[Users] Missing clientId inside the header");
-          res.status(400).json({ error: "Missing clientId inside the header" });
-          return;
+        switch (true) {
+          case !userId || !this.#dbService.isUserRole(role):
+            console.warn("[Users] Invalid userId or role in request body");
+            res.status(400).json({ error: "Invalid user or role." });
+            return;
         }
-        if (!userId || !this.#dbService.isUserRole(role)) {
-          console.warn("[Users] Invalid userId or role in request body");
-          res.status(400).json({ error: "Invalid user or role." });
-          return;
-        }
-        const queue = this.#queueManager.getOrCreateQueue(String(clientId));
+
+        const queue = this.#queueManager.getOrCreateQueue(clientId);
         queue.addTask(async () => {
           try {
             const result = await this.#dbService.updateUserRole(userId, role);
@@ -289,16 +282,11 @@ export class RouteUsers {
       "/:id/status",
       this.#authMiddleware,
       this.#adminMiddleware,
+      this.#clientIdMiddleware,
       async (req: Request, res: Response): Promise<void> => {
         const userId = this.#parseUserId(req.params.id);
         const active = req.body?.active;
-        const { ["x-obsync-client"]: clientId } = req.headers;
-
-        if (typeof clientId !== "string" || clientId === undefined) {
-          console.warn("[Users] Missing clientId inside the header");
-          res.status(400).json({ error: "Missing clientId inside the header" });
-          return;
-        }
+        const clientId = res.locals.clientId as string;
 
         if (!userId || typeof active !== "boolean") {
           console.warn("[Users] Invalid userId or status in request body");
@@ -306,7 +294,7 @@ export class RouteUsers {
           return;
         }
 
-        const queue = this.#queueManager.getOrCreateQueue(String(clientId));
+        const queue = this.#queueManager.getOrCreateQueue(clientId);
         queue.addTask(async () => {
           try {
             const result = await this.#dbService.updateUserStatus(userId, active);
@@ -333,14 +321,10 @@ export class RouteUsers {
       "/:id",
       this.#authMiddleware,
       this.#adminMiddleware,
+      this.#clientIdMiddleware,
       async (req: Request, res: Response): Promise<void> => {
         const userId = this.#parseUserId(req.params.id);
-        const { ["x-obsync-client"]: clientId } = req.headers;
-
-        if (typeof clientId !== "string" || clientId === undefined) {
-          console.warn("[Users] Missing clientId inside the header");
-          res.send(400).json({ error: "Missing clientId inside the header" });
-        }
+        const clientId = res.locals.clientId as string;
 
         if (!userId) {
           console.warn("[Users] Missing or invalid userId in URL params");
@@ -348,7 +332,7 @@ export class RouteUsers {
           return;
         }
 
-        const queue = this.#queueManager.getOrCreateQueue(String(clientId));
+        const queue = this.#queueManager.getOrCreateQueue(clientId);
 
         queue.addTask(async () => {
           try {

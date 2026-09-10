@@ -1,11 +1,9 @@
 import express, { type Request, type Response } from "express";
-import { TokenService } from "../../../auth/TokenService.ts";
 import type { FileManager } from "../../FileManager.ts";
 import { systemPaths } from "../../../paths.ts";
 import fs from "node:fs/promises";
 import { publishVaultChange } from "../../../syncEvents.ts";
 import type { NextFunction } from "express";
-import type { AuthenticatedUser } from "../../../auth/auth.types.ts";
 import type { YjsCollaborationServer as YjsCollaborationGateway } from "../../../yjs/YjsCollaborationServer.ts";
 import { QueueManager } from "../../../queue/QueueManager.ts";
 import pathes from "node:path";
@@ -15,7 +13,9 @@ import pathes from "node:path";
  * (`/create`, `/delete`, `/modify`, `/rename`) that also broadcast a {@link VaultChange}
  * over the WebSocket for other connected clients. */
 export type RouteSyncFilesContructor = {
-  tokenService: TokenService;
+  authMiddleware: (req: Request, res: Response, next: NextFunction) => Promise<void>;
+  adminMiddleware: (req: Request, res: Response, next: NextFunction) => void;
+  clientIdMiddleware: (req: Request, res: Response, next: NextFunction) => void;
   fileManager: FileManager;
   collaborationServer: YjsCollaborationGateway;
   queueManager: QueueManager;
@@ -23,98 +23,36 @@ export type RouteSyncFilesContructor = {
 
 export class RouteSyncFiles {
   public router: express.Router = express.Router();
-  readonly #tokenService: TokenService;
+  readonly #authMiddleware: (req: Request, res: Response, next: NextFunction) => Promise<void>;
+  readonly #adminMiddleware: (req: Request, res: Response, next: NextFunction) => void;
+  readonly #clientIdMiddleware: (req: Request, res: Response, next: NextFunction) => void;
   readonly #fileManager: FileManager;
   readonly #collaborationServer: YjsCollaborationGateway;
   readonly #queueManager: QueueManager;
   constructor({
-    tokenService,
+    authMiddleware,
+    adminMiddleware,
+    clientIdMiddleware,
     fileManager,
     collaborationServer,
     queueManager,
   }: RouteSyncFilesContructor) {
-    this.#tokenService = tokenService;
+    this.#authMiddleware = authMiddleware;
+    this.#adminMiddleware = adminMiddleware;
+    this.#clientIdMiddleware = clientIdMiddleware;
     this.#fileManager = fileManager;
     this.#collaborationServer = collaborationServer;
     this.#queueManager = queueManager;
-  }
-
-  /** Reads the authenticated user previously attached to the request by {@link #requireAuth}. */
-  #currentUser(res: Response): AuthenticatedUser {
-    return res.locals.authenticatedUser as AuthenticatedUser;
-  }
-
-  /** Middleware: rejects the request with 403 (and logs an audit entry) unless the
-   * authenticated user is an admin. Must run after {@link #requireAuth}. */
-  #requireAdmin = (req: Request, res: Response, next: NextFunction): void => {
-    const user = this.#currentUser(res);
-    if (user.role !== "admin") {
-      this.#auditDenied(user, req.method, req.path, this.#requestPath(req));
-      res.status(403).json({ error: "Only administrators can perform this action." });
-
-      return;
-    }
-
-    next();
-  };
-
-  /** Middleware: resolves the bearer access token and rejects the request with 401 if it's
-   * missing/invalid. Must run before {@link #requireAdmin} or any route reading
-   * {@link #currentUser}. */
-  #requireAuth = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    const token = req.header("Authorization")?.replace(/^Bearer\s+/i, "");
-
-    const authenticatedUser = await this.#tokenService.verifyToken(token);
-
-    if (!authenticatedUser) {
-      res.status(401).json({ error: "Unauthorized." });
-
-      return;
-    }
-
-    res.locals.authenticatedUser = authenticatedUser;
-    res.locals.accessToken = token;
-    next();
-  };
-
-  /** Logs an audit warning for an operation denied by {@link #requireAdmin}. */
-  #auditDenied(
-    user: AuthenticatedUser,
-    operation: string,
-    route: string,
-    targetPath?: string,
-  ): void {
-    console.warn("[Audit] Global operation blocked", {
-      userId: user.id,
-      role: user.role,
-      operation,
-      route,
-      path: targetPath,
-      timestamp: new Date().toISOString(),
-      allowed: false,
-    });
-  }
-
-  /** Extracts the vault path an audited request targeted (`path`, `oldPath`, or `newPath`),
-   * normalizing slashes, for {@link #auditDenied} log entries. */
-  #requestPath(req: Request): string | undefined {
-    const value = req.body?.path ?? req.body?.oldPath ?? req.body?.newPath;
-    return typeof value === "string" ? value.replace(/\\/g, "/") : undefined;
   }
 
   /** Registers this router's routes on {@link router}. Must be called once before mounting. */
   public startRoute() {
     this.router.post(
       "/initSync",
-      this.#requireAuth,
+      this.#authMiddleware,
+      this.#clientIdMiddleware,
       async (req: Request, res: Response): Promise<void> => {
-        const { ["x-obsync-client"]: clientId } = req.headers;
-
-        if (typeof clientId !== "string" || !clientId.trim()) {
-          console.warn("[Files] Missing headers info");
-          res.status(400).send({ error: "missing headers info" });
-          return;
-        }
+        const clientId = res.locals.clientId as string;
         const queue = this.#queueManager.getOrCreateQueue(clientId);
         queue.addTask(async () => {
           try {
@@ -147,16 +85,11 @@ export class RouteSyncFiles {
 
     this.router.post(
       "/create",
-      this.#requireAuth,
-      this.#requireAdmin,
+      this.#authMiddleware,
+      this.#adminMiddleware,
+      this.#clientIdMiddleware,
       async (req: Request, res: Response) => {
-        const { ["x-obsync-client"]: clientId } = req.headers;
-
-        if (typeof clientId !== "string" || clientId === undefined) {
-          console.warn("[Users] Missing clientId inside the header");
-          res.send(400).json({ error: "Missing clientId inside the header" });
-        }
-
+        const clientId = res.locals.clientId as string;
         const { path, isFolder, content } = req.body;
 
         if (typeof path !== "string" || !path.trim()) {
@@ -171,7 +104,7 @@ export class RouteSyncFiles {
           return;
         }
 
-        const queue = this.#queueManager.getOrCreateQueue(String(clientId));
+        const queue = this.#queueManager.getOrCreateQueue(clientId);
         queue.addTask(async () => {
           try {
             if (this.#collaborationServer.isPathDeleted(pathDecoded)) {
@@ -193,7 +126,7 @@ export class RouteSyncFiles {
               path: pathDecoded,
               isFolder: Boolean(isFolder),
               content: typeof content === "string" ? content : "",
-              originClientId: req.header("x-obsync-client") ?? undefined,
+              originClientId: clientId,
             });
 
             res.sendStatus(200);
@@ -207,20 +140,15 @@ export class RouteSyncFiles {
 
     this.router.delete(
       "/delete",
-      this.#requireAuth,
-      this.#requireAdmin,
+      this.#authMiddleware,
+      this.#adminMiddleware,
+      this.#clientIdMiddleware,
       async (req: Request, res: Response) => {
-        const { ["x-obsync-client"]: clientId } = req.headers;
+        const clientId = res.locals.clientId as string;
         const { path, isFolder } = req.body;
 
-        if (typeof clientId !== "string" || !clientId.trim()) {
-          console.warn("[Files] Missing clientId inside the header");
-          res.status(400).send("Missing clientId inside the header");
-          return;
-        }
-
         if (typeof path !== "string" || !path.trim()) {
-          res.status(400).send("Invalid path");
+          res.status(400).json({ error: "Invalid path" });
           return;
         }
 
@@ -245,7 +173,7 @@ export class RouteSyncFiles {
             res.sendStatus(200);
           } catch (error) {
             console.error("[Sync] Error in Delete:", error);
-            res.status(500).send("Error deleting");
+            res.status(500).json({ error: "Error deleting" });
           }
         }, `file:${path}:delete`);
       },
@@ -253,20 +181,15 @@ export class RouteSyncFiles {
 
     this.router.put(
       "/modify",
-      this.#requireAuth,
-      this.#requireAdmin,
+      this.#authMiddleware,
+      this.#adminMiddleware,
+      this.#clientIdMiddleware,
       async (req: Request, res: Response) => {
-        const { ["x-obsync-client"]: clientId } = req.headers;
+        const clientId = res.locals.clientId as string;
         const { path, content } = req.body;
 
-        if (typeof clientId !== "string" || !clientId.trim()) {
-          console.warn("[Files] Missing clientId inside the header");
-          res.status(400).send("Missing clientId inside the header");
-          return;
-        }
-
         if (typeof path !== "string" || typeof content !== "string") {
-          res.status(400).send("Invalid content or path");
+          res.status(400).json({ error: "Invalid content or path" });
           return;
         }
 
@@ -274,7 +197,7 @@ export class RouteSyncFiles {
         queue.addTask(async () => {
           try {
             if (this.#collaborationServer.isPathDeleted(path)) {
-              res.status(409).send("The path was deleted");
+              res.status(409).json({ error: "The path was deleted" });
               return;
             }
 
@@ -288,7 +211,7 @@ export class RouteSyncFiles {
             res.sendStatus(200);
           } catch (error) {
             console.error("[Sync] Error in Modify:", error);
-            res.status(500).send("Error modifying file");
+            res.status(500).json({ error: "Error modifying file" });
           }
         }, `file:${path}:modify`);
       },
@@ -296,17 +219,12 @@ export class RouteSyncFiles {
 
     this.router.put(
       "/rename",
-      this.#requireAuth,
-      this.#requireAdmin,
+      this.#authMiddleware,
+      this.#adminMiddleware,
+      this.#clientIdMiddleware,
       async (req: Request, res: Response) => {
-        const { ["x-obsync-client"]: clientId } = req.headers;
+        const clientId = res.locals.clientId as string;
         const { oldPath, newPath } = req.body;
-
-        if (typeof clientId !== "string" || !clientId.trim()) {
-          console.warn("[Files] Missing clientId inside the header");
-          res.status(400).send("Missing clientId inside the header");
-          return;
-        }
 
         if (
           typeof oldPath !== "string" ||
@@ -314,7 +232,7 @@ export class RouteSyncFiles {
           typeof newPath !== "string" ||
           !newPath.trim()
         ) {
-          res.status(400).send("Invalid path");
+          res.status(400).json({ error: "Invalid path" });
           return;
         }
 
@@ -334,37 +252,42 @@ export class RouteSyncFiles {
             res.sendStatus(200);
           } catch (error) {
             console.error("[Sync] Error in Rename:", error);
-            res.status(500).send("Error renaming");
+            res.status(500).json({ error: "Error renaming" });
           }
         }, `file:${oldPath}:rename`);
       },
     );
     this.router.post(
       "/createFile",
-      this.#requireAuth,
-      this.#requireAdmin,
+      this.#authMiddleware,
+      this.#adminMiddleware,
+      this.#clientIdMiddleware,
       express.raw({ limit: "50mb", type: "application/octet-stream" }),
       async (req: Request, res: Response) => {
         try {
+          const clientId = res.locals.clientId as string;
           const buffer: ArrayBuffer = req.body;
           const nodeBuffer = Buffer.from(buffer);
-          const headers = req.headers;
-          const { ["x-obsync-client"]: clientId, ["x-obsync-filepath"]: path } = headers;
+          const { ["x-obsync-filepath"]: path } = req.headers;
 
-          if (typeof clientId === "undefined" || typeof path !== "string") {
-            res.send(400).send("Invalid clientId or path");
+          if (typeof path !== "string") {
+            res.status(400).json({ error: "Invalid path" });
+            return;
           }
 
-          const queue = this.#queueManager.getOrCreateQueue(String(clientId));
+          const queue = this.#queueManager.getOrCreateQueue(clientId);
           queue.addTask(
             async () => {
               try {
                 if (nodeBuffer.byteLength == 0 || path == undefined) {
                   console.error("[Files] The task is empty or is missing an important field");
+                  res.status(500).json({ error: "Error making file" });
+                  return;
                 }
+                await this.#fileManager.createOrModifyFile(path, nodeBuffer);
               } catch (error) {
                 console.error("[Sync] Error in Sending File");
-                res.status(500).send("Error making file");
+                res.status(500).json({ error: "Error making file" });
                 return;
               }
             },
@@ -379,11 +302,12 @@ export class RouteSyncFiles {
           res.sendStatus(200);
         } catch (error) {
           console.error("[Sync] Error in Sending File");
-          res.status(500).send("Error making file");
+          res.status(500).json({ error: "Error making file" });
+          return;
         }
       },
     );
-    this.router.get("/getFile", this.#requireAuth, async (req: Request, res: Response) => {
+    this.router.get("/getFile", this.#authMiddleware, async (req: Request, res: Response) => {
       try {
         const { path, fileName } = req.query;
         const vaultPath = systemPaths.vault;
@@ -392,10 +316,13 @@ export class RouteSyncFiles {
         const relativo = pathes.join(vaultPath, String(fileNameOrDirectory));
         res.download(relativo, async (error) => {
           if (error) {
-            console.error(error);
+            console.error("[Sync] Error while sending the File", error);
           }
         });
-      } catch (error) {}
+      } catch (error) {
+        console.error("[Sync] Error while sending the File", error);
+        res.status(500).json({ error: "Error while sending the File" });
+      }
     });
   }
 }
