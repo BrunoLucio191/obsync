@@ -18,11 +18,7 @@ export class ZipWorkerSon {
 	readonly #mutedPath: PathMuteRegistry;
 	readonly #auth: AuthService;
 
-	constructor(
-		app: App,
-		mutedPath: PathMuteRegistry,
-		auth: AuthService,
-	) {
+	constructor(app: App, mutedPath: PathMuteRegistry, auth: AuthService) {
 		this.#app = app;
 		this.#mutedPath = mutedPath;
 		this.#auth = auth;
@@ -36,11 +32,13 @@ export class ZipWorkerSon {
 		const response = await requestUrl({
 			url: `${getApiBaseUrl()}/api/sync/initSync`,
 			method: 'POST',
-			headers: this.#auth.headers(),
+			headers: {
+				...this.#auth.Authheaders(),
+				'Content-Disposition': 'attachment',
+			},
 			body: JSON.stringify({ myFlag: true, name: 'obsidian ready to sync' }),
 			throw: false,
 		});
-
 		if (response.status !== 200) {
 			console.error(t('sync.initialSyncError'), t('sync.serverReturnError'), {
 				status: response.status,

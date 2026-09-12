@@ -40,7 +40,18 @@ export class RouteSyncFiles {
     this.#collaborationServer = collaborationServer;
     this.#queueManager = queueManager;
   }
-
+  #downloadVault = (zipPath: string, vaultZipName: string, res: Response) => {
+    return new Promise((resolve, reject) => {
+      res.download(zipPath, `${vaultZipName}.zip`, (error) => {
+        if (error) {
+          reject(error);
+        } else {
+          resolve(true);
+        }
+      });
+    });
+  };
+  //TODO:: add a dynamic time for the timeout based on the size of the vault
   /** Registers this router's routes on {@link router}. Must be called once before mounting. */
   public startRoute() {
     this.router.post(
@@ -52,30 +63,17 @@ export class RouteSyncFiles {
         const queue = this.#queueManager.getOrCreateQueue(clientId);
         queue.addTask(async () => {
           try {
-            console.log("[ZIP] Starting compression...");
-            await this.#fileManager.directoryZiped();
-            const zipPath = systemPaths.vaultExit;
-
-            res.download(zipPath, "vault.zip", async (error) => {
-              if (error) {
-                console.error("[ZIP] Error sending file:", error.message);
-                if (!res.headersSent) {
-                  res.status(500).json({ error: "Failed to send the files." });
-                }
-              } else {
-                console.log("[ZIP] Sent successfully.");
-              }
-              try {
-                await fs.unlink(zipPath);
-              } catch (error) {
-                console.error("[ZIP] Error cleaning up temporary file:", error);
-              }
-            });
+            await this.#fileManager.directoryZiped(systemPaths.zips, clientId);
+            await this.#downloadVault(`${systemPaths.zips}/${clientId.trim()}.zip`, clientId, res);
           } catch (error) {
-            console.error("[ZIP] General error:", error);
-            res.status(500).json({ error: "Internal error generating the file." });
+            // TODO: handle res.headersSent when the download fails mid-stream
+            res.status(500).json({ error: "[Zip] Internal error generating the file." });
+            console.error("[Zip] Error sending the file", error);
           }
-        }, "vault:initSync");
+          setTimeout(async () => {
+            await fs.unlink(`${systemPaths.zips}/${clientId.trim()}.zip`);
+          }, 15_000);
+        }, "vault:InitSync");
       },
     );
 
@@ -88,6 +86,7 @@ export class RouteSyncFiles {
         const clientId = res.locals.clientId as string;
         const { path, isFolder, content } = req.body;
 
+        console.log("recebe");
         if (typeof path !== "string" || !path.trim()) {
           res.status(400).json({ error: "Invalid path" });
           return;
@@ -237,8 +236,8 @@ export class RouteSyncFiles {
         // locking both paths at once would open the door to a deadlock.
         queue.addTask(async () => {
           try {
-            await this.#fileManager.rename(oldPath, newPath);
             await this.#collaborationServer.renamePersistedStatePath(oldPath, newPath);
+            await this.#fileManager.rename(oldPath, newPath);
             publishVaultChange({
               type: "rename",
               oldPath,
@@ -250,7 +249,7 @@ export class RouteSyncFiles {
             console.error("[Sync] Error in Rename:", error);
             res.status(500).json({ error: "Error renaming" });
           }
-        }, `file:${oldPath}:rename`);
+        }, `file:${newPath}:rename`);
       },
     );
     this.router.post(
@@ -286,16 +285,16 @@ export class RouteSyncFiles {
                 res.status(500).json({ error: "Error making file" });
                 return;
               }
+              publishVaultChange({
+                type: "create",
+                path: String(path),
+                isFolder: false,
+                isBinary: true,
+              });
+              res.sendStatus(200);
             },
             `file:${String(path)}:writeBinary`,
           );
-          publishVaultChange({
-            type: "create",
-            path: String(path),
-            isFolder: false,
-            isBinary: true,
-          });
-          res.sendStatus(200);
         } catch (error) {
           console.error("[Sync] Error in Sending File");
           res.status(500).json({ error: "Error making file" });
@@ -303,23 +302,27 @@ export class RouteSyncFiles {
         }
       },
     );
-    this.router.get("/getFile", this.#authMiddleware, async (req: Request, res: Response) => {
-      try {
+    this.router.get(
+      "/getFile",
+      this.#authMiddleware,
+      this.#clientIdMiddleware,
+      async (req: Request, res: Response) => {
         const { path, fileName } = req.query;
+        const clientId = res.locals.clienId as string;
         const vaultPath = systemPaths.vault;
-
         const fileNameOrDirectory = path === fileName ? fileName : path;
         const relativo = pathes.join(vaultPath, String(fileNameOrDirectory));
-        res.download(relativo, async (error) => {
-          if (error) {
-            res.status(500).json({ error: "Error while sending the File" });
+        const queue = this.#queueManager.getOrCreateQueue(clientId);
+        queue.addTask(async () => {
+          try {
+            await this.#downloadVault(relativo, clientId, res);
+          } catch (error) {
+            // TODO: handle res.headersSent when the download fails mid-stream
             console.error("[Sync] Error while sending the File", error);
+            res.status(500).json({ error: "Error while sending the File" });
           }
-        });
-      } catch (error) {
-        console.error("[Sync] Error while sending the File", error);
-        res.status(500).json({ error: "Error while sending the File" });
-      }
-    });
+        }, `file:${fileNameOrDirectory}:send`);
+      },
+    );
   }
 }

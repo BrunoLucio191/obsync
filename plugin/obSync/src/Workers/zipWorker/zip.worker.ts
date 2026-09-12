@@ -37,11 +37,11 @@ self.onmessage = async (event: MessageEvent<ArrayBuffer>) => {
 				transferables.push(content);
 			}
 		}
-		window.postMessage({ status: 'success', entries } satisfies ZipWorkerMessage, {
+		self.postMessage({ status: 'success', entries } satisfies ZipWorkerMessage, {
 			transfer: transferables,
 		});
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
-		window.postMessage({ status: 'error', message } satisfies ZipWorkerMessage);
+		self.postMessage({ status: 'error', message } satisfies ZipWorkerMessage);
 	}
 };

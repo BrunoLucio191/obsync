@@ -26,7 +26,6 @@ export default class Queue {
       throw new Error("[Queue] There is no key identifier");
     }
     const { promise, reject, resolve } = Promise.withResolvers<T>();
-
     this.#queue.push({
       task: async () => {
         try {

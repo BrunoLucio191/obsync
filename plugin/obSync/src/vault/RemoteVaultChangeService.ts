@@ -72,6 +72,7 @@ export class RemoteVaultChangeService {
 				this.#mutedPaths.mute(change.path);
 				await this.#ensureParentFolder(change.path);
 				await adapter.writeBinary(change.path, response.arrayBuffer);
+				return;
 			}
 			if (change.isFolder) {
 				if (!(await adapter.exists(change.path))) {

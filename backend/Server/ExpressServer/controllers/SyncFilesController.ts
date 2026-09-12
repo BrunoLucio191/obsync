@@ -40,10 +40,11 @@ export class SyncFilesController {
 
     queue.addTask(async () => {
       try {
-        await this.#fileManager.directoryZiped(systemPaths.zips);
+        await this.#fileManager.directoryZiped(systemPaths.zips, clientId);
         await downlodFile(zipPath, vaultZipName, res);
         await fs.unlink(zipPath);
       } catch (error) {
+        // TODO: handle res.headersSent when the download fails mid-stream
         res.status(500).json({ error: "[Zip] Internal error generating the file." });
         console.error("[Zip] Error sending the file");
       }

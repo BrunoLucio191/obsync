@@ -41,16 +41,16 @@ export class Gene {
   #checkPathsValid(vaultDirectory: string, genePath: string) {
     switch (true) {
       case !fs.existsSync(vaultDirectory):
-        console.error("This directory is not valid");
+        console.error("This directory is not valid o vault ta normal");
         return;
       case !fs.existsSync(genePath):
-        console.error("Ths gene path is not valid");
+        console.error("Ths gene path is not valid gene path");
         return;
       case typeof vaultDirectory != "string" || !vaultDirectory.trim():
-        console.error("This directory is not valid");
+        console.error("This directory is not valid trim ta dando erro?");
         return;
       case typeof genePath != "string" || !genePath.trim():
-        console.error("This directory is not valid");
+        console.error("This directory is not valid gene hummm");
         return;
     }
   }
@@ -72,7 +72,7 @@ export class Gene {
   }
   async #verifyGeneKeys(directory: string = this.#directory): Promise<boolean> {
     if (!fs.existsSync(directory)) {
-      console.error("This directory is not valid");
+      console.error("This directory is not valid gene keys");
       return false;
     }
     const geneCandidateFile = await readFile(directory, { encoding: "utf8" });
@@ -138,7 +138,7 @@ export class Gene {
       let vaultGene = undefined;
       try {
         vaultGene = await readFile(genePath, { encoding: "utf8" });
-        if (await this.#verifyGeneKeys(vaultGene)) {
+        if (!(await this.#verifyGeneKeys(genePath))) {
           console.log("This gene file is not valid, a new one will be made");
           await this.makeNewGene();
         }
