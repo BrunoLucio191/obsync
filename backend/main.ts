@@ -10,6 +10,8 @@ import { openUserDatabase } from "./users/databaseLifecycle.ts";
 import { loadServerConfig } from "./serverConfig.ts";
 import { YjsCollaborationServer } from "./yjs/YjsCollaborationServer.ts";
 import { KeyedLock } from "./queue/KeyedLock.ts";
+import { Gene } from "./Server/Gene.ts";
+
 /**
  * Backend entry point. Loads configuration and shared services (database,
  * auth, tokens, file management, Yjs collaboration), then wires them into
@@ -49,7 +51,8 @@ const main = () => {
     keyedLock,
   });
   server.serverStart();
-
+  const vaultGene = new Gene(systemPaths.vaultGene);
+  vaultGene.mutateVaultGene();
   const webSocketServer = new WebSocketServer(
     server.getHttpServer,
     tokenService,

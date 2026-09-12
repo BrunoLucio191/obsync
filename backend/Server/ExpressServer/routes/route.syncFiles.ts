@@ -8,10 +8,6 @@ import type { YjsCollaborationServer as YjsCollaborationGateway } from "../../..
 import { QueueManager } from "../../../queue/QueueManager.ts";
 import pathes from "node:path";
 
-/** Vault sync endpoints mounted at `/api/sync`: the initial full-vault zip download
- * (`/initSync`, any authenticated role) and the admin-only structure mutations
- * (`/create`, `/delete`, `/modify`, `/rename`) that also broadcast a {@link VaultChange}
- * over the WebSocket for other connected clients. */
 export type RouteSyncFilesContructor = {
   authMiddleware: (req: Request, res: Response, next: NextFunction) => Promise<void>;
   adminMiddleware: (req: Request, res: Response, next: NextFunction) => void;
@@ -51,7 +47,7 @@ export class RouteSyncFiles {
       "/initSync",
       this.#authMiddleware,
       this.#clientIdMiddleware,
-      async (req: Request, res: Response): Promise<void> => {
+      async (_req: Request, res: Response): Promise<void> => {
         const clientId = res.locals.clientId as string;
         const queue = this.#queueManager.getOrCreateQueue(clientId);
         queue.addTask(async () => {
@@ -316,6 +312,7 @@ export class RouteSyncFiles {
         const relativo = pathes.join(vaultPath, String(fileNameOrDirectory));
         res.download(relativo, async (error) => {
           if (error) {
+            res.status(500).json({ error: "Error while sending the File" });
             console.error("[Sync] Error while sending the File", error);
           }
         });

@@ -24,4 +24,5 @@ export const systemPaths = {
 
   //yjs persistente state file
   yjsState: path.join(dataDirectory, "yjs-state"),
+  vaultGene: path.join(dataDirectory, "vaultGene.json"),
 } as const;

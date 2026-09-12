@@ -12,7 +12,7 @@ import type { KeyedLock } from "../../queue/KeyedLock.ts";
 import { RouteAuth } from "./routes/route.auth.ts";
 import { RouteUsers } from "./routes/route.users.ts";
 import { RouteSyncFiles } from "./routes/route.syncFiles.ts";
-import { AuthController } from "./routes/controllers/AuthController.ts";
+import { AuthController } from "./controllers/AuthController.ts";
 import type { AuthenticatedUser } from "../../auth/auth.types.ts";
 
 type ExpressServerConstructorOptions = {
@@ -201,7 +201,12 @@ export class ExpressServer {
   }
 
   /** Logs an audit warning for an operation denied by {@link #requireAdmin}. */
-  #auditDenied(user: AuthenticatedUser, operation: string, route: string, targetPath?: string): void {
+  #auditDenied(
+    user: AuthenticatedUser,
+    operation: string,
+    route: string,
+    targetPath?: string,
+  ): void {
     console.warn("[ExpressServer] Global operation blocked", {
       userId: user.id,
       role: user.role,

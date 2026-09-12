@@ -1,15 +1,15 @@
 import { type Request, type Response } from "express";
-import { LoginRateLimiter } from "../../../../auth/LoginRateLimiter.ts";
-import type { AuthService } from "../../../../auth/authService.ts";
-import type { TokenService } from "../../../../auth/TokenService.ts";
-import type { AuthenticatedUser } from "../../../../auth/auth.types.ts";
-import type { WebSocketChannel } from "../../../../auth/auth.types.ts";
-import { QueueManager } from "../../../../queue/QueueManager.ts";
+import { LoginRateLimiter } from "../../../auth/LoginRateLimiter.ts";
+import type { AuthService } from "../../../auth/authService.ts";
+import type { TokenService } from "../../../auth/TokenService.ts";
+import type { AuthenticatedUser } from "../../../auth/auth.types.ts";
+import type { WebSocketChannel } from "../../../auth/auth.types.ts";
+import { QueueManager } from "../../../queue/QueueManager.ts";
 import {
   UserMutationErrorMessage,
   userMutationErrorStatus,
-} from "../mutationMessage/userMessageMutation.ts";
-import { DBServices } from "../../../../users/DBServices.ts";
+} from "../routes/mutationMessage/userMessageMutation.ts";
+import { DBServices } from "../../../users/DBServices.ts";
 
 export type AuthControllerContructor = {
   accountLoginRateLimiter: LoginRateLimiter;

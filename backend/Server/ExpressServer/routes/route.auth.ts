@@ -1,7 +1,7 @@
 import express, { type Request, type Response } from "express";
 import type { AuthService } from "../../../auth/authService.ts";
 import type { NextFunction } from "express";
-import { AuthController } from "./controllers/AuthController.ts";
+import { AuthController } from "../controllers/AuthController.ts";
 
 type RouteAuthConstructor = {
   authService: AuthService;
