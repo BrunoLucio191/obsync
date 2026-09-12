@@ -98,7 +98,7 @@ export class Gene {
     return new Date().toISOString();
   }
   /** returns the number of files and the byteSize from the whole vault */
-  async getBytesOrNumOfFiles(directory: string = this.#directory) {
+  async getBytesAndNumOfFiles(directory: string = this.#directory) {
     const files = await readdir(directory, { recursive: true });
 
     const stats = files.map(async (file) => {
@@ -123,7 +123,7 @@ export class Gene {
     );
     return {
       bytes: sumOfBytes,
-      NumOfFiles: numberOfFilesNoFolders.length,
+      filesCount: numberOfFilesNoFolders.length,
     };
   }
   /** update the gene file in a specific directory
@@ -155,10 +155,11 @@ export class Gene {
         this.makeNewGene();
       }
 
+      const { filesCount, bytes } = await this.getBytesAndNumOfFiles(directory);
       vaultGeneObj.generation++;
-      vaultGeneObj.bytes = (await this.getBytesOrNumOfFiles(directory)).bytes;
+      vaultGeneObj.bytes = bytes;
       vaultGeneObj.lastModification = this.#lastUpdate();
-      vaultGeneObj.filesCount = (await this.getBytesOrNumOfFiles(directory)).NumOfFiles;
+      vaultGeneObj.filesCount = filesCount;
       const vaultGeneModifications = Buffer.from(JSON.stringify(vaultGeneObj));
       await writeFile(genePath, vaultGeneModifications);
     });

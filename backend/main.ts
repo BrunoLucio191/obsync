@@ -37,6 +37,7 @@ const main = () => {
   const authService = new AuthService(userDB, dbService, tokenService);
   const collaborationServer = new YjsCollaborationServer();
   const keyedLock = new KeyedLock();
+  const vaultGene = new Gene(systemPaths.vault, systemPaths.vaultGene);
 
   const server = new ExpressServer({
     port: config.port,
@@ -51,7 +52,6 @@ const main = () => {
     keyedLock,
   });
   server.serverStart();
-  const vaultGene = new Gene(systemPaths.vaultGene);
   vaultGene.mutateVaultGene();
   const webSocketServer = new WebSocketServer(
     server.getHttpServer,

@@ -3,7 +3,7 @@ import { createWriteStream } from "node:fs";
 import path from "node:path";
 import { ZipArchive } from "archiver";
 import { systemPaths } from "../paths.ts";
-
+import fs from "fs";
 /**
  * Performs filesystem operations (create, modify, delete, rename, zip) scoped to the vault
  * directory. Every path-accepting method resolves and validates the path against the vault
@@ -11,11 +11,9 @@ import { systemPaths } from "../paths.ts";
  */
 export class FileManager {
   #vaultPath!: string;
-  #vaultExitPath!: string;
 
   constructor() {
     this.#vaultPath = systemPaths.vault;
-    this.#vaultExitPath = systemPaths.vaultExit;
   }
 
   /**
@@ -108,9 +106,13 @@ export class FileManager {
    * @returns Resolves once the archive has been fully written to disk.
    * @throws If the archiver reports an error while building the zip.
    */
-  public async directoryZiped(): Promise<void> {
+  public async directoryZiped(zipPath: string): Promise<void> {
+    if (!fs.existsSync(zipPath)) {
+      console.error("This is not a valid path");
+      return;
+    }
     return new Promise((resolve, reject) => {
-      const output = createWriteStream(this.#vaultExitPath);
+      const output = createWriteStream(zipPath);
       const archive = new ZipArchive({
         zlib: { level: 9 },
       });

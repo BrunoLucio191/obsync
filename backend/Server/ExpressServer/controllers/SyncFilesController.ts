@@ -3,6 +3,7 @@ import { QueueManager } from "../../../queue/QueueManager.ts";
 import { FileManager } from "../../FileManager.ts";
 import { systemPaths } from "../../../paths.ts";
 import * as fs from "node:fs/promises";
+import { promisify } from "node:util";
 
 export type SyncFilesControllerConstructor = {
   queueManager: QueueManager;
@@ -15,30 +16,32 @@ export class SyncFilesController {
     this.#queueManager = queueManager;
     this.#fileManager = fileManager;
   }
-  #downloadVault = async (
-    zipPath: string,
-    vaultZipName: string,
-    res: Response,
-  ): Promise<unknown> => {
-    const { promise, resolve, reject } = Promise.withResolvers();
-    res.download(zipPath, vaultZipName, (error) => {
-      if (error) reject(error);
-      else resolve(true);
-    });
-    return promise;
+
+  /** custom implementation of promisify function */
+  #downloadVault = async (zipPath: string, vaultZipName: string, res: Response): Promise<void> => {
+    res.download(
+      zipPath,
+      vaultZipName,
+      (error) =>
+        new Promise((reject, resolve) => {
+          if (error) reject(error);
+          else resolve(true);
+        }),
+    );
   };
 
   syncFile = async (_req: Request, res: Response): Promise<void> => {
     const clientId = res.locals.clientId as string;
     const zipPath = systemPaths.vaultExit;
-    const vaultZipName = "vault.zip";
+    const vaultZipName = clientId;
 
     const queue = this.#queueManager.getOrCreateQueue(clientId);
+    const downlodFile = promisify(this.#downloadVault);
 
     queue.addTask(async () => {
       try {
-        await this.#fileManager.directoryZiped();
-        await this.#downloadVault(zipPath, vaultZipName, res);
+        await this.#fileManager.directoryZiped(systemPaths.zips);
+        await downlodFile(zipPath, vaultZipName, res);
         await fs.unlink(zipPath);
       } catch (error) {
         res.status(500).json({ error: "[Zip] Internal error generating the file." });
