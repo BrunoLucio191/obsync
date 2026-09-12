@@ -25,22 +25,41 @@ const geneMissing: VaultGene = {
  *  `generation` - How many times the vault has changes.
  *  `bytes` - How many bytes the vault has.
  *  `fileCount` - The number of files inside the vault.
- *  `lastModification` - the date and hour from the last modification in ISO format
+ *  `lastModification` - the date and hour from the last modification in ISO forma and
+ *
+ *  @params directory - A valid directory
+ *  @params genePath - Path for the gene file
  */
 export class Gene {
-  private readonly directory!: string;
-  constructor(directory: string) {
-    if (!fs.existsSync(directory)) {
-      console.error("This directory is not valid");
-      return;
-    }
-    this.directory = directory;
+  #directory!: string;
+  #genePath!: string;
+  constructor(vaultDirectory: string, genePath: string) {
+    this.#checkPathsValid(vaultDirectory, genePath);
+    this.#genePath = genePath;
+    this.#directory = vaultDirectory;
   }
-  public makeNewGene(directory: string = this.directory): boolean {
-    if (!fs.existsSync(directory)) {
-      console.error("This directory is not valid");
-      return false;
+  #checkPathsValid(vaultDirectory: string, genePath: string) {
+    switch (true) {
+      case !fs.existsSync(vaultDirectory):
+        console.error("This directory is not valid");
+        return;
+      case !fs.existsSync(genePath):
+        console.error("Ths gene path is not valid");
+        return;
+      case typeof vaultDirectory != "string" || !vaultDirectory.trim():
+        console.error("This directory is not valid");
+        return;
+      case typeof genePath != "string" || !genePath.trim():
+        console.error("This directory is not valid");
+        return;
     }
+  }
+  /** Makes a new empty gene File*/
+  public async makeNewGene(
+    vaultDirectory = this.#directory,
+    genePath = this.#genePath,
+  ): Promise<boolean> {
+    this.#checkPathsValid(vaultDirectory, genePath);
     const geneMissing: VaultGene = {
       generation: 0,
       bytes: 0,
@@ -48,32 +67,38 @@ export class Gene {
       lastModification: "",
     };
     const geneMissingWrite = Buffer.from(JSON.stringify(geneMissing));
-    writeFile(directory, geneMissingWrite);
+    writeFile(genePath, geneMissingWrite);
     return true;
   }
-  async #verifyGeneKeys(directory: string = this.directory) {
-    const geneMissing: VaultGene = {
-      generation: 0,
-      bytes: 0,
-      filesCount: 0,
-      lastModification: "",
-    };
-    const vaultGeneMissingBuffer = Buffer.from(JSON.stringify(geneMissing));
+  async #verifyGeneKeys(directory: string = this.#directory): Promise<boolean> {
+    if (!fs.existsSync(directory)) {
+      console.error("This directory is not valid");
+      return false;
+    }
+    const geneCandidateFile = await readFile(directory, { encoding: "utf8" });
+    const geneCandidateKeys = Object.keys(JSON.parse(geneCandidateFile));
     const defaultGeneKeys = Object.keys(geneMissing);
-    const geneCandidate = await writeFile("gene.json", vaultGeneMissingBuffer);
-    const geneCandidate = await readFile("gene.json", { encoding: "utf8" });
-  }
 
+    if (JSON.stringify(geneCandidateKeys) == JSON.stringify(defaultGeneKeys)) {
+      return true;
+    } else {
+      console.error("this isn't a valid gene file, a new one will be made");
+      this.makeNewGene(directory);
+      return false;
+    }
+  }
+  /** compare if two gene JSON are iqual */
   public compareGenes(gen1: VaultGene, gen2: VaultGene): boolean {
     const gene1 = Buffer.from(JSON.stringify(gen1));
     const gene2 = Buffer.from(JSON.stringify(gen2));
     return timingSafeEqual(gene1, gene2);
   }
+  /** returns the current data and hour in ISO */
   #lastUpdate() {
     return new Date().toISOString();
   }
   /** returns the number of files and the byteSize from the whole vault */
-  async getBytesOrNumOfFiles(directory: string = this.directory) {
+  async getBytesOrNumOfFiles(directory: string = this.#directory) {
     const files = await readdir(directory, { recursive: true });
 
     const stats = files.map(async (file) => {
@@ -103,41 +128,39 @@ export class Gene {
   }
   /** update the gene file in a specific directory
    *  @params directory - A valid directory
+   *  @params genePath - Path for the gene file
    */
-  async mutateVaultGene(directory: string = this.directory): Promise<number | boolean | undefined> {
-    if (typeof directory != "string" || directory == undefined) {
-      console.error("This directory is not valid");
-      return;
-    } else if (!fs.existsSync(directory)) {
-      console.error("This directory is not valid");
-      return;
-    }
+  async mutateVaultGene(directory = this.#directory, genePath = this.#genePath): Promise<void> {
+    this.#checkPathsValid(directory, genePath);
     console.log("[Gene] The vault is watching the gene file");
 
     watch(directory, { recursive: true }, async () => {
       let vaultGene = undefined;
       try {
-        vaultGene = await readFile("gene.json", { encoding: "utf8" });
+        vaultGene = await readFile(genePath, { encoding: "utf8" });
+        if (await this.#verifyGeneKeys(vaultGene)) {
+          console.log("This gene file is not valid, a new one will be made");
+          await this.makeNewGene();
+        }
       } catch (error) {
         console.error("there is no gene.json file, making one", error);
         const vaultGeneMissingBuffer = Buffer.from(JSON.stringify(geneMissing));
-        await writeFile("gene.json", vaultGeneMissingBuffer);
+        await writeFile(genePath, vaultGeneMissingBuffer);
       }
       if (vaultGene == undefined) return;
       let vaultGeneObj = JSON.parse(vaultGene);
 
       if (vaultGeneObj == undefined || typeof vaultGeneObj != "object") {
         console.error("Error while reading the gene file, making a new one");
+        this.makeNewGene();
       }
 
       vaultGeneObj.generation++;
       vaultGeneObj.bytes = (await this.getBytesOrNumOfFiles(directory)).bytes;
       vaultGeneObj.lastModification = this.#lastUpdate();
       vaultGeneObj.filesCount = (await this.getBytesOrNumOfFiles(directory)).NumOfFiles;
-
       const vaultGeneModifications = Buffer.from(JSON.stringify(vaultGeneObj));
-      await writeFile("gene.json", vaultGeneModifications);
+      await writeFile(genePath, vaultGeneModifications);
     });
-    return;
   }
 }
