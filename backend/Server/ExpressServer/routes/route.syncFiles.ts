@@ -7,14 +7,14 @@ import type { NextFunction } from "express";
 import type { YjsCollaborationServer as YjsCollaborationGateway } from "../../../yjs/YjsCollaborationServer.ts";
 import { QueueManager } from "../../../queue/QueueManager.ts";
 import pathes from "node:path";
+import type { SyncFilesController } from "../controllers/SyncFilesController.ts";
 
 export type RouteSyncFilesContructor = {
   authMiddleware: (req: Request, res: Response, next: NextFunction) => Promise<void>;
   adminMiddleware: (req: Request, res: Response, next: NextFunction) => void;
   clientIdMiddleware: (req: Request, res: Response, next: NextFunction) => void;
-  fileManager: FileManager;
   collaborationServer: YjsCollaborationGateway;
-  queueManager: QueueManager;
+  syncfilesController: SyncFilesController;
 };
 
 export class RouteSyncFiles {
@@ -313,15 +313,30 @@ export class RouteSyncFiles {
         const fileNameOrDirectory = path === fileName ? fileName : path;
         const relativo = pathes.join(vaultPath, String(fileNameOrDirectory));
         const queue = this.#queueManager.getOrCreateQueue(clientId);
+
         queue.addTask(async () => {
           try {
             await this.#downloadVault(relativo, clientId, res);
           } catch (error) {
-            // TODO: handle res.headersSent when the download fails mid-stream
-            console.error("[Sync] Error while sending the File", error);
-            res.status(500).json({ error: "Error while sending the File" });
+            if (res.headersSent) {
+              (() => {
+                const loop = () => {
+                  setTimeout(async () => {
+                    try {
+                      await this.#downloadVault(relativo, clientId, res);
+                    } catch {
+                      loop();
+                    }
+                  }, 250);
+                };
+                loop();
+              })();
+            } else {
+              console.error("[Sync] Error while sending the File", error);
+              res.status(500).json({ error: "Error while sending the File" });
+            }
           }
-        }, `file:${fileNameOrDirectory}:send`);
+        }, `file:${clientId}:send`);
       },
     );
   }

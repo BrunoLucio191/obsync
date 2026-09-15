@@ -1,6 +1,11 @@
 import Queue from "../queue/Queue.ts";
 import type { KeyedLock } from "./KeyedLock.ts";
 
+type BackOff = {
+  next: () => number;
+  reset: () => void;
+};
+
 const QUEUE_LIFESPAN = 5 * 60 * 1000;
 /**
  * Menages all queues that are created per user. Every queue it builds shares the
@@ -46,21 +51,40 @@ export class QueueManager {
       const dateOfBirth = this.#queueLifeCicle.get(userId);
 
       if (!dateOfBirth) return;
+
       if (Date.now() > dateOfBirth) {
         const queue = this.#dbQueuesRecord.get(userId);
         if (!queue) return;
         let context = this;
-        (function loop() {
-          setTimeout(function () {
-            if (!queue.isProcessing) {
-              context.#dbQueuesRecord.delete(userId);
-              context.#queueLifeCicle.delete(userId);
-              return;
-            }
-            loop();
-          }, 250);
+        (() => {
+          const loop = () => {
+            setTimeout(() => {
+              if (!queue.isProcessing) {
+                context.#dbQueuesRecord.delete(userId);
+                context.#queueLifeCicle.delete(userId);
+                context.#backOff().reset();
+                return;
+              }
+              loop();
+            }, 250);
+          };
+          loop();
         })();
       }
     }, QUEUE_LIFESPAN);
+  }
+  #backOff({ base = 500, max = 600_000, jitter = true } = {}): BackOff {
+    let count = 0;
+    return {
+      next() {
+        const exponential = Math.min(base * Math.pow(2, count), max);
+        const delay = jitter ? exponential * (0.5 + Math.random() * 0.5) : exponential;
+        count++;
+        return Math.floor(delay);
+      },
+      reset() {
+        count = 0;
+      },
+    };
   }
 }

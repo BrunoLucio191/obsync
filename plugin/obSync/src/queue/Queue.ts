@@ -63,7 +63,7 @@ export default class Queue {
 			this.#processing = false;
 		}
 
-		this.#runTask();
+		void this.#runTask();
 	}
 	/**
 	 * Numbers os taks inside the queue array

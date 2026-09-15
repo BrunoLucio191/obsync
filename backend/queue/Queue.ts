@@ -26,6 +26,7 @@ export default class Queue {
       throw new Error("[Queue] There is no key identifier");
     }
     const { promise, reject, resolve } = Promise.withResolvers<T>();
+
     this.#queue.push({
       task: async () => {
         try {
@@ -65,16 +66,10 @@ export default class Queue {
 
     this.#runTask();
   }
-  /**
-   * Numbers os taks inside the queue array
-   */
   public get numberOfTaks(): number {
     return this.#queue.length;
   }
 
-  /**
-   * Returns an array with all task keys identifiers
-   */
   public get getTaskIdentifiers(): string[] {
     return this.#queue.map((someTask) => someTask.taskKey);
   }
