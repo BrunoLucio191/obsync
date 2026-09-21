@@ -10,18 +10,36 @@ import pathes from "node:path";
 import type { SyncFilesController } from "../controllers/SyncFilesController.ts";
 
 export type RouteSyncFilesContructor = {
-  authMiddleware: (req: Request, res: Response, next: NextFunction) => Promise<void>;
+  authMiddleware: (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ) => Promise<void>;
   adminMiddleware: (req: Request, res: Response, next: NextFunction) => void;
   clientIdMiddleware: (req: Request, res: Response, next: NextFunction) => void;
+  fileManager: FileManager;
+  queueManager: QueueManager;
   collaborationServer: YjsCollaborationGateway;
   syncfilesController: SyncFilesController;
 };
 
 export class RouteSyncFiles {
   public router: express.Router = express.Router();
-  readonly #authMiddleware: (req: Request, res: Response, next: NextFunction) => Promise<void>;
-  readonly #adminMiddleware: (req: Request, res: Response, next: NextFunction) => void;
-  readonly #clientIdMiddleware: (req: Request, res: Response, next: NextFunction) => void;
+  readonly #authMiddleware: (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ) => Promise<void>;
+  readonly #adminMiddleware: (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ) => void;
+  readonly #clientIdMiddleware: (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ) => void;
   readonly #fileManager: FileManager;
   readonly #collaborationServer: YjsCollaborationGateway;
   readonly #queueManager: QueueManager;
@@ -64,15 +82,26 @@ export class RouteSyncFiles {
         queue.addTask(async () => {
           try {
             await this.#fileManager.directoryZiped(systemPaths.zips, clientId);
-            await this.#downloadVault(`${systemPaths.zips}/${clientId.trim()}.zip`, clientId, res);
+            await this.#downloadVault(
+              `${systemPaths.zips}/${clientId.trim()}.zip`,
+              clientId,
+              res,
+            );
+            setTimeout(async () => {
+              await fs.unlink(`${systemPaths.zips}/${clientId.trim()}.zip`);
+            }, 15_000);
           } catch (error) {
             // TODO: handle res.headersSent when the download fails mid-stream
-            res.status(500).json({ error: "[Zip] Internal error generating the file." });
+            await this.#downloadVault(
+              `${systemPaths.zips}/${clientId.trim()}.zip`,
+              clientId,
+              res,
+            );
+            res
+              .status(500)
+              .json({ error: "[Zip] Internal error generating the file." });
             console.error("[Zip] Error sending the file", error);
           }
-          setTimeout(async () => {
-            await fs.unlink(`${systemPaths.zips}/${clientId.trim()}.zip`);
-          }, 15_000);
         }, "vault:InitSync");
       },
     );
@@ -85,8 +114,6 @@ export class RouteSyncFiles {
       async (req: Request, res: Response) => {
         const clientId = res.locals.clientId as string;
         const { path, isFolder, content } = req.body;
-
-        console.log("recebe");
         if (typeof path !== "string" || !path.trim()) {
           res.status(400).json({ error: "Invalid path" });
           return;
@@ -103,7 +130,9 @@ export class RouteSyncFiles {
         queue.addTask(async () => {
           try {
             if (this.#collaborationServer.isPathDeleted(pathDecoded)) {
-              await this.#collaborationServer.deletePersistedStateUnderPath(pathDecoded);
+              await this.#collaborationServer.deletePersistedStateUnderPath(
+                pathDecoded,
+              );
             }
             this.#collaborationServer.clearPathDeleted(pathDecoded);
 
@@ -169,6 +198,7 @@ export class RouteSyncFiles {
           } catch (error) {
             console.error("[Sync] Error in Delete:", error);
             res.status(500).json({ error: "Error deleting" });
+            return;
           }
         }, `file:${path}:delete`);
       },
@@ -236,7 +266,10 @@ export class RouteSyncFiles {
         // locking both paths at once would open the door to a deadlock.
         queue.addTask(async () => {
           try {
-            await this.#collaborationServer.renamePersistedStatePath(oldPath, newPath);
+            await this.#collaborationServer.renamePersistedStatePath(
+              oldPath,
+              newPath,
+            );
             await this.#fileManager.rename(oldPath, newPath);
             publishVaultChange({
               type: "rename",
@@ -275,7 +308,9 @@ export class RouteSyncFiles {
             async () => {
               try {
                 if (nodeBuffer.byteLength == 0 || path == undefined) {
-                  console.error("[Files] The task is empty or is missing an important field");
+                  console.error(
+                    "[Files] The task is empty or is missing an important field",
+                  );
                   res.status(500).json({ error: "Error making file" });
                   return;
                 }
@@ -319,18 +354,9 @@ export class RouteSyncFiles {
             await this.#downloadVault(relativo, clientId, res);
           } catch (error) {
             if (res.headersSent) {
-              (() => {
-                const loop = () => {
-                  setTimeout(async () => {
-                    try {
-                      await this.#downloadVault(relativo, clientId, res);
-                    } catch {
-                      loop();
-                    }
-                  }, 250);
-                };
-                loop();
-              })();
+              console.error("[Sync] File transfer failed during the sending");
+              res.destroy();
+              return;
             } else {
               console.error("[Sync] Error while sending the File", error);
               res.status(500).json({ error: "Error while sending the File" });

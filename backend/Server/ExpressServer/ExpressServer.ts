@@ -75,43 +75,50 @@ export class ExpressServer {
     this.#dbService = dbService;
     this.#authService = authService;
     this.#collaborationServer = collaborationServer;
-    this.#routeUsers = new RouteUsers({
-      adminMiddleware: this.#requireAdmin,
-      authMiddleware: this.#requireAuth,
-      clientIdMiddleware: this.#requireClientId,
-      dbService: this.#dbService,
-      queueManager: new QueueManager(keyedLock),
-    });
-    this.#routeAuth = new RouteAuth({
-      authMiddleware: this.#requireAuth,
-      clientIdMiddleware: this.#requireClientId,
-      authService: this.#authService,
-      authController: new AuthController({
+    this.#routeUsers = new RouteUsers
+      ({
+        adminMiddleware: this.#requireAdmin,
+        authMiddleware: this.#requireAuth,
+        clientIdMiddleware: this.#requireClientId,
         dbService: this.#dbService,
         queueManager: new QueueManager(keyedLock),
-        authService: this.#authService,
-        passwordChangeRateLimiter: new LoginRateLimiter({
-          maxFailedAttempts: 5,
-        }),
-        ipLoginRateLimiter: new LoginRateLimiter({
-          maxFailedAttempts: 25,
-        }),
-        accountLoginRateLimiter: new LoginRateLimiter({
-          maxFailedAttempts: 5,
-        }),
-        tokenService: this.#tokenService,
-      }),
-    });
-    this.#routeSyncFiles = new RouteSyncFiles({
-      authMiddleware: this.#requireAuth,
-      adminMiddleware: this.#requireAdmin,
-      clientIdMiddleware: this.#requireClientId,
-      collaborationServer: this.#collaborationServer,
-      syncfilesController: new SyncFilesController({
-        queueManager: new QueueManager(keyedLock),
-        fileManager: this.#fileManager,
-      }),
-    });
+      });
+    this.#routeAuth = new RouteAuth
+      ({
+        authMiddleware: this.#requireAuth,
+        clientIdMiddleware: this.#requireClientId,
+        authController: new AuthController
+          ({
+            dbService: this.#dbService,
+            queueManager: new QueueManager(keyedLock),
+            authService: this.#authService,
+            passwordChangeRateLimiter: new LoginRateLimiter
+              ({
+                maxFailedAttempts: 5,
+              }),
+            ipLoginRateLimiter: new LoginRateLimiter
+              ({
+                maxFailedAttempts: 25,
+              }),
+            accountLoginRateLimiter: new LoginRateLimiter
+              ({
+                maxFailedAttempts: 5,
+              }),
+            tokenService: this.#tokenService,
+          }),
+      });
+    this.#routeSyncFiles = new RouteSyncFiles
+      ({
+        authMiddleware: this.#requireAuth,
+        adminMiddleware: this.#requireAdmin,
+        clientIdMiddleware: this.#requireClientId,
+        syncfilesController: new SyncFilesController
+          ({
+            collaborationServer: this.#collaborationServer,
+            queueManager: new QueueManager(keyedLock),
+            fileManager: this.#fileManager,
+          }),
+      });
     this.initializeMiddleware();
     this.#initializeRoutes();
   }
