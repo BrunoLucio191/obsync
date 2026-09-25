@@ -8,8 +8,18 @@ type RouteAuthConstructor = {
   clientIdMiddleware: (req: Request, res: Response, next: NextFunction) => void;
 };
 
-/** Session endpoints mounted at `/api/auth`: login, refresh, logout, current user, WebSocket
- * ticket issuance, and self-service password change. */
+/**
+ * Session endpoints mounted at `/api/auth`: login, refresh, logout, current user, WebSocket
+ * ticket issuance, and self-service password change.
+ *
+ * Full paths:
+ * - POST /api/auth/login
+ * - POST /api/auth/refresh
+ * - POST /api/auth/logout
+ * - GET  /api/auth/me               auth
+ * - POST /api/auth/ws-ticket        auth
+ * - POST /api/auth/change-password  auth, clientId
+ */
 export class RouteAuth {
   public router: express.Router = express.Router();
   readonly #authController: AuthController;

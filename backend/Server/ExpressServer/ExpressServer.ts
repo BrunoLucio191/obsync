@@ -15,6 +15,7 @@ import { RouteSyncFiles } from "./routes/route.syncFiles.ts";
 import { AuthController } from "./controllers/AuthController.ts";
 import type { AuthenticatedUser } from "../../auth/auth.types.ts";
 import { SyncFilesController } from "./controllers/SyncFilesController.ts";
+import { UsersController } from "./controllers/UsersController.ts";
 
 type ExpressServerConstructorOptions = {
   port: number;
@@ -80,8 +81,11 @@ export class ExpressServer {
         adminMiddleware: this.#requireAdmin,
         authMiddleware: this.#requireAuth,
         clientIdMiddleware: this.#requireClientId,
-        dbService: this.#dbService,
-        queueManager: new QueueManager(keyedLock),
+        usersController: new UsersController
+          ({
+            dbService: this.#dbService,
+            queueManager: new QueueManager(keyedLock),
+          }),
       });
     this.#routeAuth = new RouteAuth
       ({
