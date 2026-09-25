@@ -40,13 +40,43 @@ export class SyncFilesController {
     });
   };
 
+  /**
+   * Current gene of the canonical vault as a single-line JSON string, or `null` when the
+   * gene file is missing or not valid JSON (for example while it is being rewritten).
+   */
+  async #readVaultGene(): Promise<string | null> {
+    try {
+      const raw = await fs.readFile(systemPaths.vaultGene, "utf8");
+      return JSON.stringify(JSON.parse(raw));
+    } catch {
+      return null;
+    }
+  }
+
   //TODO:: add a dynamic time for the timeout based on the size of the vault
-  initSync = async (_req: Request, res: Response): Promise<void> => {
+  /**
+   * Sends the whole vault as a zip, unless the gene the client got from its last complete
+   * initial sync (`X-ObSync-Gene`) matches the current one: then nothing changed and it
+   * answers 204. The zip response carries the current gene in the same header.
+   */
+  initSync = async (req: Request, res: Response): Promise<void> => {
     const clientId = res.locals.clientId as string;
+    const clientGene = req.headers["x-obsync-gene"];
     const queue = this.#queueManager.getOrCreateQueue(clientId);
 
     try {
       await queue.addTask(async () => {
+        // Read before zipping: a change landing in between leaves the client with a gene
+        // older than its files, which only costs one extra download next time
+        const currentGene = await this.#readVaultGene();
+        if (currentGene && clientGene === currentGene) {
+          res.sendStatus(204);
+          return;
+        }
+        if (currentGene) {
+          res.setHeader("X-ObSync-Gene", currentGene);
+        }
+
         await this.#fileManager.directoryZiped(systemPaths.zips, clientId);
         await this.#downloadVault(
           `${systemPaths.zips}/${clientId.trim()}.zip`,
@@ -208,7 +238,12 @@ export class SyncFilesController {
           oldPath,
           newPath,
         );
-        await this.#fileManager.rename(oldPath, newPath);
+        const moved = await this.#fileManager.rename(oldPath, newPath);
+        // Already applied in the canonical vault, so there is nothing to spread
+        if (!moved) {
+          res.sendStatus(200);
+          return;
+        }
         publishVaultChange({
           type: "rename",
           oldPath,

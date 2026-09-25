@@ -89,12 +89,18 @@ export class FileManager {
 
   /**
    * Moves/renames a file or directory within the vault, creating the destination's parent directory as needed.
+   * A rename that is already applied (source gone, destination present) is a no-op: it is what every
+   * descendant of a folder that was just moved looks like, since Obsidian reports each one after the folder.
    * @param oldPath - Current vault-relative path.
    * @param newPath - Destination vault-relative path.
+   * @returns `false` when the rename was already applied and nothing was moved.
    */
-  public async rename(oldPath: string, newPath: string): Promise<void> {
+  public async rename(oldPath: string, newPath: string): Promise<boolean> {
     const fullOld = this.#resolveVaultPath(oldPath);
     const fullNew = this.#resolveVaultPath(newPath);
+    if (!fs.existsSync(fullOld) && fs.existsSync(fullNew)) {
+      return false;
+    }
     const newDirName = path.dirname(fullNew);
     console.log("-------------");
     console.log(fullOld);
@@ -102,6 +108,7 @@ export class FileManager {
     console.log(newDirName);
     await fsPromises.mkdir(newDirName, { recursive: true });
     await fsPromises.rename(fullOld, fullNew);
+    return true;
   }
 
   /**

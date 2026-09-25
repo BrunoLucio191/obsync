@@ -1,20 +1,17 @@
 import Queue from "../queue/Queue.ts";
 import type { KeyedLock } from "./KeyedLock.ts";
 
-type BackOff = {
-  next: () => number;
-  reset: () => void;
-};
-
-const QUEUE_LIFESPAN = 5 * 60 * 1000;
 /**
  * Menages all queues that are created per user. Every queue it builds shares the
  * same Keyed Lock, so two users running the same keyed operation still
  * wait for each other even though their queues are independent.
+ *
+ * A queue is removed as soon as it drains and the next request creates a new one,
+ * so callers must add their task right after getOrCreateQueue instead of keeping
+ * the queue around across an await.
  */
 export class QueueManager {
   #dbQueuesRecord = new Map<string, Queue>();
-  #queueLifeCicle = new Map<string, number>();
   #lock: KeyedLock;
 
   constructor(lock: KeyedLock) {
@@ -27,64 +24,16 @@ export class QueueManager {
     }
 
     let queue = this.#dbQueuesRecord.get(userId);
-
-    if (this.#queueLifeCicle.get(userId)) {
-      const dateOfBirth = this.#queueLifeCicle.get(userId);
-      if (dateOfBirth) {
-        this.#queueLifeCicle.set(userId, Date.now() + QUEUE_LIFESPAN);
-      }
-    }
     if (!queue) {
-      queue = new Queue(this.#lock);
-      this.#dbQueuesRecord.set(userId, queue);
-      this.#queueLifeCicle.set(userId, Date.now() + QUEUE_LIFESPAN);
+      const created = new Queue(this.#lock, () => {
+        // An old queue draining late must not remove a newer one of the same user
+        if (this.#dbQueuesRecord.get(userId) === created) {
+          this.#dbQueuesRecord.delete(userId);
+        }
+      });
+      this.#dbQueuesRecord.set(userId, created);
+      queue = created;
     }
-    this.addTimers(userId);
     return queue;
-  }
-  /** Add life cycle timers for the queues
-   *
-   * @param userId the same userId identifier used for adding the queue in the dbQueuesRecord
-   */
-  public addTimers(userId: string) {
-    setTimeout(() => {
-      const dateOfBirth = this.#queueLifeCicle.get(userId);
-
-      if (!dateOfBirth) return;
-
-      if (Date.now() > dateOfBirth) {
-        const queue = this.#dbQueuesRecord.get(userId);
-        if (!queue) return;
-        let context = this;
-        (() => {
-          const loop = () => {
-            setTimeout(() => {
-              if (!queue.isProcessing) {
-                context.#dbQueuesRecord.delete(userId);
-                context.#queueLifeCicle.delete(userId);
-                context.#backOff().reset();
-                return;
-              }
-              loop();
-            }, 250);
-          };
-          loop();
-        })();
-      }
-    }, QUEUE_LIFESPAN);
-  }
-  #backOff({ base = 500, max = 600_000, jitter = true } = {}): BackOff {
-    let count = 0;
-    return {
-      next() {
-        const exponential = Math.min(base * Math.pow(2, count), max);
-        const delay = jitter ? exponential * (0.5 + Math.random() * 0.5) : exponential;
-        count++;
-        return Math.floor(delay);
-      },
-      reset() {
-        count = 0;
-      },
-    };
   }
 }

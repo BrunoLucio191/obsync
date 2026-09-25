@@ -141,9 +141,12 @@ export default {
 		invalidOrExpiredSession: 'Invalid or expired session.',
 		serverReturnedError: 'The server returned an error: {{status}}',
 		initialSyncComplete: 'Initial synchronization complete.',
+		vaultUpToDate: 'The vault is already up to date.',
 		initialSyncFailed: 'Could not sync the initial files.',
 		initialSyncError: 'Error during initial synchronization:',
 		invalidSyncEvent: 'Invalid synchronization event:',
+		publishChangeFailed: 'Could not send the local change in {{path}} to the server:',
+		applyRemoteChangeFailed: 'Could not apply the remote change in {{path}}:',
 	},
 	collab: {
 		userJoinedNote: '{{name}} joined this note.',

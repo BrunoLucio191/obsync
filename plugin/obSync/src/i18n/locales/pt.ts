@@ -141,9 +141,12 @@ export default {
 		invalidOrExpiredSession: 'Sessão inválida ou expirada.',
 		serverReturnedError: 'Servidor retornou erro: {{status}}',
 		initialSyncComplete: 'Sincronização inicial concluída.',
+		vaultUpToDate: 'O vault já está atualizado.',
 		initialSyncFailed: 'Não foi possível sincronizar os arquivos iniciais.',
 		initialSyncError: 'Erro na sincronização inicial:',
 		invalidSyncEvent: 'Evento de sincronização inválido:',
+		publishChangeFailed: 'Não foi possível enviar a alteração local em {{path}} para o servidor:',
+		applyRemoteChangeFailed: 'Não foi possível aplicar a alteração remota em {{path}}:',
 	},
 	collab: {
 		userJoinedNote: '{{name}} entrou nesta nota.',

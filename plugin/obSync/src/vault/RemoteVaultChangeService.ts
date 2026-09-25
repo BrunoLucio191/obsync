@@ -4,29 +4,53 @@ import type { AuthService } from '../auth/AuthService.ts';
 import type { CollaborationController } from '../collab/CollaborationController.ts';
 import { PathMuteRegistry } from './PathMuteRegistry.ts';
 import { getApiBaseUrl } from '../config/ApiConfig.ts';
+import type { QueueManager } from '../queue/QueueManager.ts';
+import { t } from '../i18n/i18n.ts';
 
 /**
  * Applies vault changes received from other clients (via {@link SystemChannel})
  * to the local Obsidian vault: writing/creating/deleting/renaming files and
  * folders. Every affected path is muted first so applying the change doesn't
  * trigger a local vault event that gets re-published back to the server.
+ *
+ * Changes are applied as tasks in this client's queue, the same one used by
+ * {@link SyncVaultChanges}, so they never run concurrently with each other or
+ * with a local change being published.
  */
 export class RemoteVaultChangeService {
 	readonly #app: App;
 	readonly #auth: AuthService;
 	readonly #mutedPaths: PathMuteRegistry;
 	readonly #collaboration: CollaborationController;
+	readonly #queueManager: QueueManager;
 
 	public constructor(
 		app: App,
 		auth: AuthService,
 		mutedPaths: PathMuteRegistry,
 		collaboration: CollaborationController,
+		queueManager: QueueManager,
 	) {
 		this.#app = app;
 		this.#auth = auth;
 		this.#mutedPaths = mutedPaths;
 		this.#collaboration = collaboration;
+		this.#queueManager = queueManager;
+	}
+
+	/**
+	 * Queues a remote vault change to be applied to the local vault. Failures
+	 * are logged instead of thrown.
+	 * @param change - The remote change to apply.
+	 */
+	public async apply(change: VaultChange): Promise<void> {
+		const path = change.type === 'rename' ? change.oldPath : change.path;
+		const queue = this.#queueManager.getOrCreateQueue(this.#auth.clientId);
+		try {
+			await queue.addTask(() => this.#applyChange(change), `remote:${path}:${change.type}`);
+		} catch (error) {
+			console.error(t('sync.applyRemoteChangeFailed', { path }), error);
+		}
 	}
 
 	/**
@@ -38,7 +62,7 @@ export class RemoteVaultChangeService {
 	 * parent folders before moving the file.
 	 * @param change - The remote change to apply.
 	 */
-	public async apply(change: VaultChange): Promise<void> {
+	async #applyChange(change: VaultChange): Promise<void> {
 		const adapter = this.#app.vault.adapter;
 
 		if (change.type === 'create') {

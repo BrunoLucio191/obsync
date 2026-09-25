@@ -16,6 +16,8 @@ import { SyncVaultChanges } from './sync/SyncVaultChanges.ts';
 import type { AuthenticatedUser, UserActionResult, UserRole } from './auth/auth.types.ts';
 import { PathMuteRegistry } from './vault/PathMuteRegistry.ts';
 import { RemoteVaultChangeService } from './vault/RemoteVaultChangeService.ts';
+import { QueueManager } from './queue/QueueManager.ts';
+import { KeyedLock } from './queue/KeyedLock.ts';
 /**
  * ObSync's Obsidian plugin entry point. Wires together authentication,
  * collaborative editing, and vault-change synchronization, and exposes the
@@ -31,6 +33,7 @@ export default class ObSync extends Plugin {
 	#userAdmin!: UserAdminService;
 	#collaboration!: CollaborationController;
 	#mutedPaths!: PathMuteRegistry;
+	#queueManager!: QueueManager;
 	#remoteChanges!: RemoteVaultChangeService;
 	#systemChannel!: SystemChannel;
 	#initialVaultSync!: SyncInitialVault;
@@ -232,11 +235,13 @@ export default class ObSync extends Plugin {
 		this.#userAdmin = new UserAdminService(this.#auth);
 		this.#mutedPaths = new PathMuteRegistry();
 		this.#collaboration = new CollaborationController(this.app, this.#auth);
+		this.#queueManager = new QueueManager(new KeyedLock());
 		this.#remoteChanges = new RemoteVaultChangeService(
 			this.app,
 			this.#auth,
 			this.#mutedPaths,
 			this.#collaboration,
+			this.#queueManager,
 		);
 		this.#systemChannel = new SystemChannel(this.#auth, this.#remoteChanges);
 		this.#initialVaultSync = new SyncInitialVault(this.app, this.#auth, this.#mutedPaths);
@@ -245,6 +250,7 @@ export default class ObSync extends Plugin {
 			this.#auth,
 			this.#mutedPaths,
 			this.#collaboration,
+			this.#queueManager,
 		);
 	}
 

@@ -12,9 +12,15 @@ export default class Queue {
   #queue: Array<{ task: () => Promise<void>; taskKey: string }> = [];
   #processing: boolean = false;
   #lock: KeyedLock;
+  #onEmpty?: () => void;
 
-  constructor(lock: KeyedLock) {
+  /**
+   * @param lock - KeyedLock shared by every queue.
+   * @param onEmpty - Called when the last task finishes and nothing is left to run.
+   */
+  constructor(lock: KeyedLock, onEmpty?: () => void) {
     this.#lock = lock;
+    this.#onEmpty = onEmpty;
   }
 
   /** Adds a task to the #queue that is an array, and starts draining it if idle. */
@@ -42,7 +48,11 @@ export default class Queue {
   }
 
   async #runTask(): Promise<void> {
-    if (this.#processing || this.#queue.length === 0) {
+    if (this.#processing) {
+      return;
+    }
+    if (this.#queue.length === 0) {
+      this.#onEmpty?.();
       return;
     }
 
