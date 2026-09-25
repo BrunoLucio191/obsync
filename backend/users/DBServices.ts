@@ -9,6 +9,7 @@ import type {
 import { UserDB } from "./UserDB.ts";
 import { normalizeEmailKey, normalizeName, normalizeNameKey } from "./userNormalization.ts";
 import { dbEvents } from "./DBEvents.ts";
+import { randomUserColor } from "./userColor.ts";
 
 /**
  * Application-level service layer over {@link UserDB}: implements user
@@ -41,7 +42,7 @@ export class DBServices {
    */
   #getUserRow(userId: number): Omit<StoredUserRow, "password_hash"> | null {
     const row = this.#userDB
-      .prepare("SELECT id, email, name, role, active FROM users WHERE id = ?")
+      .prepare("SELECT id, email, name, role, active, color FROM users WHERE id = ?")
       .get(userId) as Omit<StoredUserRow, "password_hash"> | undefined;
     return row ?? null;
   }
@@ -98,6 +99,7 @@ export class DBServices {
       name: row.name,
       role: row.role as UserRole,
       active: row.active === 1,
+      color: row.color,
     };
   }
 
@@ -125,7 +127,7 @@ export class DBServices {
   public async listUsers(): Promise<AuthenticatedUser[]> {
     const rows = this.#userDB
       .prepare(
-        `SELECT id, email, name, role, active
+        `SELECT id, email, name, role, active, color
          FROM users
          ORDER BY id ASC`,
       )
@@ -170,13 +172,13 @@ export class DBServices {
       this.#userDB
         .prepare(
           `INSERT INTO users
-           (email, name, name_key, password_hash, role, active)
-           VALUES (?, ?, ?, ?, ?, 1)`,
+           (email, name, name_key, password_hash, role, active, color)
+           VALUES (?, ?, ?, ?, ?, 1, ?)`,
         )
-        .run(normalizedEmail, normalizedName, nameKey, passwordHash, role);
+        .run(normalizedEmail, normalizedName, nameKey, passwordHash, role, randomUserColor());
 
       const row = this.#userDB
-        .prepare("SELECT id, email, name, role, active FROM users WHERE email = ?")
+        .prepare("SELECT id, email, name, role, active, color FROM users WHERE email = ?")
         .get(emailKey) as Omit<StoredUserRow, "password_hash"> | undefined;
       if (!row) throw new Error("The created user could not be loaded.");
       return { ok: true, user: this.rowToUser(row) };
@@ -217,6 +219,28 @@ export class DBServices {
 
     if (result.ok) this.#event.emitAuthorizationChanged(userId);
     return result;
+  }
+
+  /**
+   * Changes the cursor color a user shows to other collaborators. The color is not
+   * part of the user's authorization, so no authorization-changed event is emitted
+   * and live connections are kept.
+   *
+   * @param userId - id of the user whose color should change.
+   * @param color - New color, already normalized to a lowercase `#rrggbb` string.
+   * @returns `{ ok: true, user }` on success, or `{ ok: false, reason: "NOT_FOUND" }` if the user doesn't exist.
+   */
+  public async updateUserColor(userId: number, color: string): Promise<UserMutationResult> {
+    return this.runImmediateTransaction<UserMutationResult>(() => {
+      const row = this.#getUserRow(userId);
+      if (!row) return { ok: false, reason: "NOT_FOUND" };
+
+      this.#userDB.prepare("UPDATE users SET color = ? WHERE id = ?").run(color, userId);
+
+      const updated = this.#getUserRow(userId);
+      if (!updated) return { ok: false, reason: "NOT_FOUND" };
+      return { ok: true, user: this.rowToUser(updated) };
+    });
   }
 
   /**
@@ -298,7 +322,7 @@ export class DBServices {
     newPassword: string,
   ): Promise<UserMutationResult> {
     const row = this.#userDB
-      .prepare("SELECT id, email, name, password_hash, role, active FROM users WHERE id = ?")
+      .prepare("SELECT id, email, name, password_hash, role, active, color FROM users WHERE id = ?")
       .get(userId) as StoredUserRow | undefined;
     if (!row) return { ok: false, reason: "NOT_FOUND" };
 

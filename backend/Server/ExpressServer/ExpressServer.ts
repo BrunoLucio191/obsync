@@ -15,6 +15,7 @@ import { RouteSyncFiles } from "./routes/route.syncFiles.ts";
 import { AuthController } from "./controllers/AuthController.ts";
 import type { AuthenticatedUser } from "../../auth/auth.types.ts";
 import { SyncFilesController } from "./controllers/SyncFilesController.ts";
+import type { Gene } from "../Gene.ts";
 import { UsersController } from "./controllers/UsersController.ts";
 
 type ExpressServerConstructorOptions = {
@@ -28,6 +29,7 @@ type ExpressServerConstructorOptions = {
   authService: AuthService;
   collaborationServer: YjsCollaborationGateway;
   keyedLock: KeyedLock;
+  vaultGene: Gene;
 };
 
 /**
@@ -64,6 +66,7 @@ export class ExpressServer {
     authService,
     collaborationServer,
     keyedLock,
+    vaultGene,
   }: ExpressServerConstructorOptions) {
     this.#port = port;
     this.#host = host;
@@ -121,6 +124,7 @@ export class ExpressServer {
             collaborationServer: this.#collaborationServer,
             queueManager: new QueueManager(keyedLock),
             fileManager: this.#fileManager,
+            vaultGene,
           }),
       });
     this.initializeMiddleware();

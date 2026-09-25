@@ -11,6 +11,7 @@ import { loadServerConfig } from "./serverConfig.ts";
 import { YjsCollaborationServer } from "./yjs/YjsCollaborationServer.ts";
 import { KeyedLock } from "./queue/KeyedLock.ts";
 import { Gene } from "./Server/Gene.ts";
+import { QueueManager } from "./queue/QueueManager.ts";
 
 /**
  * Backend entry point. Loads configuration and shared services (database,
@@ -37,7 +38,7 @@ const main = () => {
   const authService = new AuthService(userDB, dbService, tokenService);
   const collaborationServer = new YjsCollaborationServer();
   const keyedLock = new KeyedLock();
-  const vaultGene = new Gene(systemPaths.vault, systemPaths.vaultGene);
+  const vaultGene = new Gene(systemPaths.vault, systemPaths.vaultGene, new QueueManager(keyedLock));
 
   const server = new ExpressServer({
     port: config.port,
@@ -50,6 +51,7 @@ const main = () => {
     authService,
     collaborationServer,
     keyedLock,
+    vaultGene,
   });
   server.serverStart();
   vaultGene.mutateVaultGene();

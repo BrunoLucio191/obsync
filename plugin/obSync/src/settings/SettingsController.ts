@@ -51,4 +51,6 @@ export interface SettingsController {
 		currentPassword: string,
 		newPassword: string,
 	): Promise<UserActionResult<null>>;
+	/** Changes the signed-in user's own cursor color. */
+	changeColor(color: string): Promise<UserActionResult<null>>;
 }

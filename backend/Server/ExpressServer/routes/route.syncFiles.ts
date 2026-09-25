@@ -96,7 +96,7 @@ export class RouteSyncFiles {
       this.#authMiddleware,
       this.#adminMiddleware,
       this.#clientIdMiddleware,
-      express.raw({ limit: "50mb", type: "application/octet-stream" }),
+      express.raw({ limit: "600mb", type: "application/octet-stream" }),
       this.#syncFilesController.createFile,
     );
     this.router.get(

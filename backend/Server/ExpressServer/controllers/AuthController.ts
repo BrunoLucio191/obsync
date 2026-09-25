@@ -10,6 +10,7 @@ import {
   userMutationErrorStatus,
 } from "../routes/mutationMessage/userMessageMutation.ts";
 import { DBServices } from "../../../users/DBServices.ts";
+import { normalizeUserColor } from "../../../users/userColor.ts";
 
 export type AuthControllerContructor = {
   accountLoginRateLimiter: LoginRateLimiter;
@@ -196,6 +197,36 @@ export class AuthController {
     } catch (error) {
       console.error("[Auth] Unexpected Error while changing the password", error);
       res.status(500).json({ error: "Interal Error" });
+    }
+  };
+
+  changeColor = async (req: Request, res: Response): Promise<void> => {
+    const color = normalizeUserColor(req.body?.color);
+    const clientId = res.locals.clientId as string;
+
+    if (!color) {
+      console.warn("[Auth] Invalid cursor color, expected #rrggbb");
+      res.status(400).json({ error: "The color must be a hex value like #3498db." });
+      return;
+    }
+
+    const actor = this.#currentUser(res);
+    const queue = this.#queueManager.getOrCreateQueue(clientId);
+    try {
+      await queue.addTask(async () => {
+        const result = await this.#dbService.updateUserColor(actor.id, color);
+        if (!result.ok) {
+          res.status(userMutationErrorStatus(result)).json({
+            error: UserMutationErrorMessage(result),
+            reason: result.reason,
+          });
+          return;
+        }
+        res.json({ user: result.user });
+      }, `user:${actor.id}:changeColor`);
+    } catch (error) {
+      console.error("[Auth] Unexpected Error while changing the cursor color", error);
+      res.status(500).json({ error: "Internal Error" });
     }
   };
 

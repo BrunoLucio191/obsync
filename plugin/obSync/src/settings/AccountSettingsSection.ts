@@ -11,11 +11,13 @@ import type { UserManagementSection } from './UserManagementSection.ts';
 /**
  * Renders the "Account" group of the plugin settings tab: the connected
  * user's identity/role, their editable display name (or a read-only view for
- * non-admins), the change-password form, and the sign-out action.
+ * non-admins), their cursor color, the change-password form, and the sign-out action.
  */
 export class AccountSettingsSection {
 	#currentPassword = '';
 	#newPassword = '';
+	/** Color picked but not saved yet; `null` shows the saved one. */
+	#color: string | null = null;
 
 	readonly #controller: SettingsController;
 	readonly #users: UserManagementSection;
@@ -62,6 +64,38 @@ export class AccountSettingsSection {
 				}),
 			});
 		}
+
+		items.push({
+			name: t('settings.account.cursorColor'),
+			desc: t('settings.account.cursorColorDesc'),
+			render: (setting) => {
+				setting.addColorPicker((picker) =>
+					picker
+						.setValue(this.#color ?? currentUser.color)
+						.onChange((value) => (this.#color = value)),
+				);
+				setting.addButton((button) =>
+					button
+						.setButtonText(t('settings.account.saveColor'))
+						.onClick(async () => {
+							button.setDisabled(true);
+							const result = await this.#controller.changeColor(
+								this.#color ?? currentUser.color,
+							);
+							button.setDisabled(false);
+
+							if (!result.ok) {
+								new Notice(result.error);
+								return;
+							}
+
+							this.#color = null;
+							new Notice(t('settings.account.colorUpdated'));
+							this.#refresh();
+						}),
+				);
+			},
+		});
 
 		if (currentUser.role === 'user') {
 			items.push({

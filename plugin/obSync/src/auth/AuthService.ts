@@ -185,6 +185,48 @@ export class AuthService {
 	}
 
 	/**
+	 * Changes the signed-in user's cursor color on the backend and adopts the
+	 * returned profile, which reconnects the collaboration room with the new color.
+	 * @param color - New color as a `#rrggbb` hex string.
+	 */
+	public async changeColor(color: string): Promise<UserActionResult<null>> {
+		if (!(await this.#ensureFreshAccessToken())) {
+			return { ok: false, error: t('auth.sessionExpired') };
+		}
+
+		try {
+			let response = await this.#requestChangeColor(color);
+			if (response.status === 401 && (await this.#refreshAccessToken())) {
+				response = await this.#requestChangeColor(color);
+			}
+
+			const payload = response.json as {
+				user?: AuthenticatedUser;
+				error?: unknown;
+				reason?: unknown;
+			};
+			if (response.status === 200 && payload?.user) {
+				await this.#updateCurrentUser(payload.user);
+				return { ok: true, value: null };
+			}
+
+			const fallback =
+				typeof payload?.error === 'string' && payload.error.trim()
+					? payload.error
+					: t('auth.colorChangeUnknownError');
+			return { ok: false, error: localizeBackendError(payload?.reason, fallback) };
+		} catch (error) {
+			return {
+				ok: false,
+				error:
+					error instanceof Error && error.message
+						? error.message
+						: t('auth.colorChangeUnknownError'),
+			};
+		}
+	}
+
+	/**
 	 * Debounces a call to {@link refreshSession}, so multiple near-simultaneous
 	 * triggers (e.g. several admin actions completing in quick succession)
 	 * collapse into a single request.
@@ -504,6 +546,17 @@ export class AuthService {
 		});
 	}
 
+	/** Sends a cursor color change request for the signed-in user to the backend. */
+	#requestChangeColor(color: string) {
+		return requestUrl({
+			url: `${getApiBaseUrl()}/api/auth/color`,
+			method: 'PATCH',
+			headers: this.headers(),
+			body: JSON.stringify({ color }),
+			throw: false,
+		});
+	}
+
 	/** Requests a WebSocket authentication ticket for the given channel. */
 	#requestWebSocketTicket(channel: WebSocketChannel) {
 		return requestUrl({
@@ -546,7 +599,8 @@ export class AuthService {
 			left?.name !== right?.name ||
 			left?.email !== right?.email ||
 			left?.role !== right?.role ||
-			left?.active !== right?.active
+			left?.active !== right?.active ||
+			left?.color !== right?.color
 		);
 	}
 }

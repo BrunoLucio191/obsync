@@ -70,6 +70,20 @@ export class FileManager {
   }
 
   /**
+   * Absolute path of a file inside the vault, resolved the same safe way as every write.
+   * @param filePath - Vault-relative path of the file.
+   * @returns The absolute path, or `null` if the path escapes the vault, doesn't exist, or is a folder.
+   */
+  public async getFilePath(filePath: string): Promise<string | null> {
+    try {
+      const fullPath = this.#resolveVaultPath(filePath);
+      return (await fsPromises.stat(fullPath)).isFile() ? fullPath : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * Creates a directory (and any missing parents) inside the vault.
    * @param folderPath - Vault-relative path of the folder to create.
    */

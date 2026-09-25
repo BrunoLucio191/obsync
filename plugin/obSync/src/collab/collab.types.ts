@@ -8,6 +8,8 @@ export type CollaborationUser = {
 	name: string;
 	email: string;
 	role: 'admin' | 'user';
+	/** Cursor color stored for the user on the backend. */
+	color: string;
 };
 
 /** Presence payload broadcast through Yjs awareness so peers can render this user's cursor/name/color. */

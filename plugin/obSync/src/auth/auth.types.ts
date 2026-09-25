@@ -31,6 +31,8 @@ export type AuthenticatedUser = {
 	name: string;
 	role: UserRole;
 	active: boolean;
+	/** Cursor color shown to other collaborators, as a lowercase `#rrggbb` hex string. */
+	color: string;
 };
 
 /**

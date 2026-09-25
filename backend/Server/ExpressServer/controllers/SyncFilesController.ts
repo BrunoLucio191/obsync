@@ -3,28 +3,32 @@ import { QueueManager } from "../../../queue/QueueManager.ts";
 import { FileManager } from "../../FileManager.ts";
 import { systemPaths } from "../../../paths.ts";
 import * as fs from "node:fs/promises";
-import pathes from "node:path";
 import type { YjsCollaborationServer } from "../../../yjs/YjsCollaborationServer.ts";
 import { publishVaultChange } from "../../../syncEvents.ts";
+import type { Gene } from "../../Gene.ts";
 
 export type SyncFilesControllerConstructor = {
   queueManager: QueueManager;
   fileManager: FileManager;
   collaborationServer: YjsCollaborationServer;
+  vaultGene: Gene;
 };
 
 export class SyncFilesController {
   readonly #queueManager: QueueManager;
   readonly #fileManager: FileManager;
   readonly #collaborationServer: YjsCollaborationServer;
+  readonly #vaultGene: Gene;
   constructor({
     queueManager,
     fileManager,
     collaborationServer,
+    vaultGene,
   }: SyncFilesControllerConstructor) {
     this.#queueManager = queueManager;
     this.#fileManager = fileManager;
     this.#collaborationServer = collaborationServer;
+    this.#vaultGene = vaultGene;
   }
 
   /** custom implementation of promisify function */
@@ -39,19 +43,6 @@ export class SyncFilesController {
       });
     });
   };
-
-  /**
-   * Current gene of the canonical vault as a single-line JSON string, or `null` when the
-   * gene file is missing or not valid JSON (for example while it is being rewritten).
-   */
-  async #readVaultGene(): Promise<string | null> {
-    try {
-      const raw = await fs.readFile(systemPaths.vaultGene, "utf8");
-      return JSON.stringify(JSON.parse(raw));
-    } catch {
-      return null;
-    }
-  }
 
   //TODO:: add a dynamic time for the timeout based on the size of the vault
   /**
@@ -68,7 +59,7 @@ export class SyncFilesController {
       await queue.addTask(async () => {
         // Read before zipping: a change landing in between leaves the client with a gene
         // older than its files, which only costs one extra download next time
-        const currentGene = await this.#readVaultGene();
+        const currentGene = await this.#vaultGene.readGene();
         if (currentGene && clientGene === currentGene) {
           res.sendStatus(204);
           return;
@@ -284,6 +275,7 @@ export class SyncFilesController {
           path,
           isFolder: false,
           isBinary: true,
+          originClientId: clientId,
         });
         res.sendStatus(200);
       }, `file:${path}:writeBinary`);
@@ -297,14 +289,25 @@ export class SyncFilesController {
     const { path, fileName } = req.query;
     const clientId = res.locals.clientId as string;
     const fileNameOrDirectory = path === fileName ? fileName : path;
-    const relativo = pathes.join(systemPaths.vault, String(fileNameOrDirectory));
     const queue = this.#queueManager.getOrCreateQueue(clientId);
 
     try {
       await queue.addTask(async () => {
-        await this.#downloadVault(relativo, clientId, res);
+        // Only files inside the vault. One that is gone was renamed or deleted after its
+        // event was published: the client expects that and waits for the next event.
+        const filePath = await this.#fileManager.getFilePath(String(fileNameOrDirectory));
+        if (!filePath) {
+          res.status(404).json({ error: "File not found" });
+          return;
+        }
+        await this.#downloadVault(filePath, clientId, res);
       }, `file:${clientId}:send`);
     } catch (error) {
+      // Deleted by its owner between the lookup and the transfer: same as not found
+      if (!res.headersSent && (error as NodeJS.ErrnoException).code === "ENOENT") {
+        res.status(404).json({ error: "File not found" });
+        return;
+      }
       if (res.headersSent) {
         console.error("[Sync] File transfer failed during the sending");
         res.destroy();

@@ -8,6 +8,8 @@ export type AuthenticatedUser = {
   name: string;
   role: UserRole;
   active: boolean;
+  /** Cursor color shown to other collaborators, as a lowercase `#rrggbb` hex string. */
+  color: string;
 };
 
 /** The payload returned to a client after a successful login or token refresh. */
@@ -60,6 +62,7 @@ export type StoredUserRow = {
   password_hash: string;
   role: string;
   active: number;
+  color: string;
 };
 
 /** Decoded claims of an access token issued by {@link TokenService}. */

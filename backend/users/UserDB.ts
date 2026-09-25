@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 import { normalizeEmailKey, normalizeName, normalizeNameKey } from "./userNormalization.ts";
 import { hashPassword } from "../auth/PasswordUtil.ts";
+import { randomUserColor } from "./userColor.ts";
 
 /** A user created by the initial database seed, with its one-time plaintext password. */
 type SeededUser = { id: number; email: string; password: string };
@@ -86,7 +87,10 @@ export class UserDB extends DatabaseSync {
             CHECK(role IN('admin','user')),
             
           active INTEGER NOT NULL DEFAULT 1
-            CHECK(active IN(0,1))
+            CHECK(active IN(0,1)),
+
+          color TEXT NOT NULL
+            CHECK(color GLOB '#[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]')
         );
 
         CREATE INDEX IF NOT EXISTS idx_users_role_active
@@ -109,8 +113,8 @@ export class UserDB extends DatabaseSync {
     ];
     const insert = this.prepare(
       `INSERT OR IGNORE INTO users
-       (email, name, name_key, password_hash, role, active)
-       VALUES (?, ?, ?, ?, 'user', 1)`,
+       (email, name, name_key, password_hash, role, active, color)
+       VALUES (?, ?, ?, ?, 'user', 1, ?)`,
     );
 
     const seeded: SeededUser[] = [];
@@ -119,7 +123,13 @@ export class UserDB extends DatabaseSync {
       const email = normalizeEmailKey(user.email);
       const name = normalizeName(user.name);
       const password = generateTemporaryPassword();
-      const result = insert.run(email, name, normalizeNameKey(name), await hashPassword(password));
+      const result = insert.run(
+        email,
+        name,
+        normalizeNameKey(name),
+        await hashPassword(password),
+        randomUserColor(),
+      );
 
       if (result.changes > 0) {
         seeded.push({ id: Number(result.lastInsertRowid), email, password });

@@ -24,6 +24,7 @@ export default {
 		sessionRenewFailed: 'Não foi possível renovar a sessão:',
 		sessionExpired: 'Sua sessão expirou. Entre novamente.',
 		passwordChangeUnknownError: 'Não foi possível trocar a senha.',
+		colorChangeUnknownError: 'Não foi possível trocar a cor do cursor.',
 		passwordTooShort: 'A nova senha precisa ter entre 6 e 128 caracteres.',
 		invalidCurrentPassword: 'Senha atual incorreta.',
 	},
@@ -81,6 +82,10 @@ export default {
 				'Como administrador, você pode alterar seu próprio nome. A mudança é enviada automaticamente.',
 			displayName: 'Nome de exibição',
 			displayNameDesc: '{{name}}. Somente administradores podem alterar nomes de usuários.',
+			cursorColor: 'Cor do cursor',
+			cursorColorDesc: 'A cor que os outros colaboradores veem no seu cursor e no seu nome.',
+			saveColor: 'Salvar cor',
+			colorUpdated: 'Cor do cursor atualizada.',
 			privateMode: 'Modo privado',
 			privateModeDesc:
 				'Suas edições de texto ficam somente neste dispositivo. Você recebe mudanças globais, mas não pode publicá-las no vault compartilhado.',

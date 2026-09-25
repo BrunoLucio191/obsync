@@ -31,7 +31,7 @@ export class AuthService {
   public async login(email: string, password: string): Promise<AuthSession | null | undefined> {
     const row = this.#userDB
       .prepare(
-        `SELECT id, email, name, password_hash, role, active
+        `SELECT id, email, name, password_hash, role, active, color
          FROM users WHERE email = ? AND active = 1`,
       )
       .get(normalizeEmailKey(email)) as StoredUserRow | undefined;

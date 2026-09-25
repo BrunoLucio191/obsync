@@ -24,6 +24,7 @@ export default {
 		sessionRenewFailed: 'Could not renew the session:',
 		sessionExpired: 'Your session has expired. Sign in again.',
 		passwordChangeUnknownError: 'Could not change the password.',
+		colorChangeUnknownError: 'Could not change the cursor color.',
 		passwordTooShort: 'The new password must be between 6 and 128 characters.',
 		invalidCurrentPassword: 'Incorrect current password.',
 	},
@@ -81,6 +82,10 @@ export default {
 				'As an administrator, you can change your own name. The change is sent automatically.',
 			displayName: 'Display name',
 			displayNameDesc: '{{name}}. Only administrators can change user names.',
+			cursorColor: 'Cursor color',
+			cursorColorDesc: 'The color other collaborators see on your cursor and name.',
+			saveColor: 'Save color',
+			colorUpdated: 'Cursor color updated.',
 			privateMode: 'Private mode',
 			privateModeDesc:
 				"Your text edits stay only on this device. You receive global changes, but can't publish them to the shared vault.",

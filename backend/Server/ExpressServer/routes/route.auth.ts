@@ -10,15 +10,16 @@ type RouteAuthConstructor = {
 
 /**
  * Session endpoints mounted at `/api/auth`: login, refresh, logout, current user, WebSocket
- * ticket issuance, and self-service password change.
+ * ticket issuance, and self-service password and cursor color changes.
  *
  * Full paths:
- * - POST /api/auth/login
- * - POST /api/auth/refresh
- * - POST /api/auth/logout
- * - GET  /api/auth/me               auth
- * - POST /api/auth/ws-ticket        auth
- * - POST /api/auth/change-password  auth, clientId
+ * - POST  /api/auth/login
+ * - POST  /api/auth/refresh
+ * - POST  /api/auth/logout
+ * - GET   /api/auth/me               auth
+ * - POST  /api/auth/ws-ticket        auth
+ * - POST  /api/auth/change-password  auth, clientId
+ * - PATCH /api/auth/color            auth, clientId
  */
 export class RouteAuth {
   public router: express.Router = express.Router();
@@ -42,6 +43,12 @@ export class RouteAuth {
       this.#authMiddleware,
       this.#clientIdMiddleware,
       this.#authController.changePassword,
+    );
+    this.router.patch(
+      "/color",
+      this.#authMiddleware,
+      this.#clientIdMiddleware,
+      this.#authController.changeColor,
     );
   }
 }

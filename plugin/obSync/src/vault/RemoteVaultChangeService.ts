@@ -23,6 +23,11 @@ export class RemoteVaultChangeService {
 	readonly #mutedPaths: PathMuteRegistry;
 	readonly #collaboration: CollaborationController;
 	readonly #queueManager: QueueManager;
+	/**
+	 * Binaries announced by the server that were already renamed or deleted when this client
+	 * tried to download them. A later rename says where they went; a delete drops them.
+	 */
+	readonly #missedBinaries = new Set<string>();
 
 	public constructor(
 		app: App,
@@ -72,30 +77,9 @@ export class RemoteVaultChangeService {
 
 			this.#mutedPaths.mute(change.path);
 			if (change.isBinary) {
-				let fileName = null;
-				if (!change.path.includes('/')) {
-					fileName = change.path;
-				} else {
-					fileName = change.path.slice(
-						change.path.lastIndexOf('/') + 1,
-						change.path.length,
-					);
+				if (!(await this.#downloadBinary(change.path))) {
+					this.#missedBinaries.add(change.path);
 				}
-				const params = new URLSearchParams({
-					path: change.path,
-					fileName: fileName,
-				});
-				const response = await requestUrl({
-					url: `${getApiBaseUrl()}/api/sync/getFile?${params}`,
-					method: 'GET',
-					headers: this.#auth.Authheaders(),
-				});
-				if (response.status !== 200) {
-					console.error('Error when downloading tha file');
-				}
-				this.#mutedPaths.mute(change.path);
-				await this.#ensureParentFolder(change.path);
-				await adapter.writeBinary(change.path, response.arrayBuffer);
 				return;
 			}
 			if (change.isFolder) {
@@ -122,6 +106,9 @@ export class RemoteVaultChangeService {
 		}
 
 		if (change.type === 'delete') {
+			for (const missed of [...this.#missedBinaries]) {
+				if (PathMuteRegistry.contains(change.path, missed)) this.#missedBinaries.delete(missed);
+			}
 			this.#collaboration.disconnectIfAffected(change.path);
 			this.#mutedPaths.mute(change.path);
 
@@ -145,6 +132,50 @@ export class RemoteVaultChangeService {
 		if (await adapter.exists(change.oldPath)) {
 			await this.#ensureParentFolder(change.newPath);
 			await adapter.rename(change.oldPath, change.newPath);
+		}
+		await this.#recoverMissedBinaries(change.oldPath, change.newPath);
+	}
+
+	/**
+	 * Downloads a binary file from the server into the vault, at the same path.
+	 * @param path - Vault-relative path of the file.
+	 * @returns `false` when the server no longer has the file (404), because it was renamed
+	 * or deleted before this client got to it; any other failure throws.
+	 */
+	async #downloadBinary(path: string): Promise<boolean> {
+		const params = new URLSearchParams({
+			path,
+			fileName: path.slice(path.lastIndexOf('/') + 1),
+		});
+		const response = await requestUrl({
+			url: `${getApiBaseUrl()}/api/sync/getFile?${params}`,
+			method: 'GET',
+			headers: this.#auth.Authheaders(),
+			throw: false,
+		});
+		if (response.status === 404) return false;
+		if (response.status !== 200) {
+			throw new Error(`getFile returned ${response.status} for ${path}`);
+		}
+
+		this.#mutedPaths.mute(path);
+		await this.#ensureParentFolder(path);
+		await this.#app.vault.adapter.writeBinary(path, response.arrayBuffer);
+		return true;
+	}
+
+	/**
+	 * Fetches the missed binaries a rename moved (the file itself or a folder above it) from
+	 * their new path. One that is gone again waits for the next rename under its new path.
+	 * @param oldPath - Path before the rename.
+	 * @param newPath - Path after the rename.
+	 */
+	async #recoverMissedBinaries(oldPath: string, newPath: string): Promise<void> {
+		for (const missed of [...this.#missedBinaries]) {
+			if (!PathMuteRegistry.contains(oldPath, missed)) continue;
+			this.#missedBinaries.delete(missed);
+			const current = newPath + missed.slice(oldPath.length);
+			if (!(await this.#downloadBinary(current))) this.#missedBinaries.add(current);
 		}
 	}
 

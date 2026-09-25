@@ -176,6 +176,10 @@ export default class ObSync extends Plugin {
 		return this.#auth.changePassword(currentPassword, newPassword);
 	}
 
+	public changeColor(color: string): Promise<UserActionResult<null>> {
+		return this.#auth.changeColor(color);
+	}
+
 	/**
 	 * Validates and applies a new backend URL, persists it, and — if it
 	 * actually changed from a previously configured backend — clears the

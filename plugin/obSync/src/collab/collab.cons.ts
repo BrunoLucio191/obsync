@@ -6,7 +6,5 @@ export const PERIODIC_STATE_VECTOR_SYNC_MS = 5 * 60_000;
 export const PRESENCE_LEAVE_GRACE_MS = 1_000;
 /** Timeout (ms) allowed for the initial network sync to complete when opening a collab room. */
 export const INITIAL_NETWORK_SYNC_TIMEOUT_MS = 3_000;
-/** Palette used to deterministically assign a cursor/presence color to each collaborator. */
-export const Colors = ['#e74c3c', '#2ecc71', '#3498db', '#9b59b6', '#f39c12'];
 /** Version tag prefixed to offline IndexedDB namespace names; bump to invalidate previously cached offline documents. */
 export const OFFLINE_NAMESPACE_VERSION = 'obsync:v3';

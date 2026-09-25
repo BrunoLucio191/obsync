@@ -11,16 +11,49 @@ import { t } from '../i18n/i18n.ts';
  * the attachments Obsidian can embed plus other files users commonly keep in a vault.
  */
 const BINARY_EXTENSIONS = new Set([
-	// images
-	'avif', 'bmp', 'gif', 'heic', 'ico', 'jpeg', 'jpg', 'png', 'svg', 'tif', 'tiff', 'webp',
-	// audio
-	'3gp', 'aac', 'flac', 'm4a', 'mp3', 'oga', 'ogg', 'opus', 'wav', 'webm',
-	// video
-	'avi', 'mkv', 'mov', 'mp4', 'ogv',
-	// documents
-	'pdf', 'epub', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'odt', 'ods', 'odp',
-	// archives
-	'zip', 'rar', '7z', 'tar', 'gz',
+	'avif',
+	'bmp',
+	'gif',
+	'heic',
+	'ico',
+	'jpeg',
+	'jpg',
+	'png',
+	'svg',
+	'tif',
+	'tiff',
+	'webp',
+	'3gp',
+	'aac',
+	'flac',
+	'm4a',
+	'mp3',
+	'oga',
+	'ogg',
+	'opus',
+	'wav',
+	'webm',
+	'avi',
+	'mkv',
+	'mov',
+	'mp4',
+	'ogv',
+	'pdf',
+	'epub',
+	'doc',
+	'docx',
+	'xls',
+	'xlsx',
+	'ppt',
+	'pptx',
+	'odt',
+	'ods',
+	'odp',
+	'zip',
+	'rar',
+	'7z',
+	'tar',
+	'gz',
 ]);
 
 /**
@@ -67,7 +100,9 @@ export class SyncVaultChanges {
 				const path = file.path;
 				if (!this.#shouldPublish(path)) return;
 
-				const queue = this.#queueManager.getOrCreateQueue(this.#auth.clientId);
+				const queue = this.#queueManager.getOrCreateQueue(
+					this.#auth.clientId,
+				);
 				try {
 					await queue.addTask(async () => {
 						if (!(await this.#canSendRequest())) return;
@@ -76,7 +111,8 @@ export class SyncVaultChanges {
 							file instanceof TFile &&
 							BINARY_EXTENSIONS.has(file.extension.toLowerCase())
 						) {
-							const buffer = await this.#plugin.app.vault.readBinary(file);
+							const buffer =
+								await this.#plugin.app.vault.readBinary(file);
 							// An empty binary has no bytes to upload, so it goes through /create below
 							if (buffer.byteLength > 0) {
 								await requestUrl({
@@ -84,7 +120,8 @@ export class SyncVaultChanges {
 									method: 'POST',
 									headers: {
 										...this.#auth.Authheaders(),
-										'Content-Type': 'application/octet-stream',
+										'Content-Type':
+											'application/octet-stream',
 										'X-ObSync-filePath': path,
 									},
 									body: buffer,
@@ -95,7 +132,9 @@ export class SyncVaultChanges {
 
 						const isFolder = file instanceof TFolder;
 						const content =
-							file instanceof TFile ? await this.#plugin.app.vault.read(file) : null;
+							file instanceof TFile
+								? await this.#plugin.app.vault.read(file)
+								: null;
 						await requestUrl({
 							url: `${getApiBaseUrl()}/api/sync/create`,
 							method: 'POST',
@@ -108,7 +147,10 @@ export class SyncVaultChanges {
 						});
 					}, `local:${path}:create`);
 				} catch (error) {
-					console.error(t('sync.publishChangeFailed', { path }), error);
+					console.error(
+						t('sync.publishChangeFailed', { path }),
+						error,
+					);
 				}
 			}),
 		);
@@ -121,7 +163,9 @@ export class SyncVaultChanges {
 				const isFolder = file instanceof TFolder;
 				this.#collaboration.disconnectIfAffected(path);
 
-				const queue = this.#queueManager.getOrCreateQueue(this.#auth.clientId);
+				const queue = this.#queueManager.getOrCreateQueue(
+					this.#auth.clientId,
+				);
 				try {
 					await queue.addTask(async () => {
 						if (!(await this.#canSendRequest())) return;
@@ -134,7 +178,10 @@ export class SyncVaultChanges {
 						});
 					}, `local:${path}:delete`);
 				} catch (error) {
-					console.error(t('sync.publishChangeFailed', { path }), error);
+					console.error(
+						t('sync.publishChangeFailed', { path }),
+						error,
+					);
 				}
 			}),
 		);
@@ -144,11 +191,12 @@ export class SyncVaultChanges {
 				const path = file.path;
 				if (!this.#shouldPublish(path)) return;
 				const activeFile = this.#plugin.app.workspace.getActiveFile();
-				// Yjs takes care of the active file, so we don't fire the PUT for it
 				if (activeFile && path === activeFile.path) return;
 				if (!(file instanceof TFile)) return;
 
-				const queue = this.#queueManager.getOrCreateQueue(this.#auth.clientId);
+				const queue = this.#queueManager.getOrCreateQueue(
+					this.#auth.clientId,
+				);
 				try {
 					await queue.addTask(async () => {
 						if (!(await this.#canSendRequest())) return;
@@ -162,7 +210,10 @@ export class SyncVaultChanges {
 						});
 					}, `local:${path}:modify`);
 				} catch (error) {
-					console.error(t('sync.publishChangeFailed', { path }), error);
+					console.error(
+						t('sync.publishChangeFailed', { path }),
+						error,
+					);
 				}
 			}),
 		);
@@ -172,7 +223,9 @@ export class SyncVaultChanges {
 				const newPath = file.path;
 				if (!this.#shouldPublish(newPath, oldPath)) return;
 
-				const queue = this.#queueManager.getOrCreateQueue(this.#auth.clientId);
+				const queue = this.#queueManager.getOrCreateQueue(
+					this.#auth.clientId,
+				);
 				try {
 					await queue.addTask(async () => {
 						if (!(await this.#canSendRequest())) return;
@@ -186,13 +239,19 @@ export class SyncVaultChanges {
 
 						if (
 							this.#collaboration.currentPath &&
-							PathMuteRegistry.contains(oldPath, this.#collaboration.currentPath)
+							PathMuteRegistry.contains(
+								oldPath,
+								this.#collaboration.currentPath,
+							)
 						) {
 							this.#collaboration.scheduleActiveRoomSync();
 						}
 					}, `local:${oldPath}:rename`);
 				} catch (error) {
-					console.error(t('sync.publishChangeFailed', { path: oldPath }), error);
+					console.error(
+						t('sync.publishChangeFailed', { path: oldPath }),
+						error,
+					);
 				}
 			}),
 		);
@@ -208,7 +267,10 @@ export class SyncVaultChanges {
 	 * @returns `true` if the change should be published.
 	 */
 	#shouldPublish(...paths: string[]): boolean {
-		return this.#auth.isAdmin() && !paths.some((path) => this.#mutedPaths.isMuted(path));
+		return (
+			this.#auth.isAdmin() &&
+			!paths.some((path) => this.#mutedPaths.isMuted(path))
+		);
 	}
 
 	/**
@@ -216,6 +278,9 @@ export class SyncVaultChanges {
 	 * be authenticated (refreshing it if needed) and still belong to an admin.
 	 */
 	async #canSendRequest(): Promise<boolean> {
-		return (await this.#auth.prepareAuthenticatedRequest()) && this.#auth.isAdmin();
+		return (
+			(await this.#auth.prepareAuthenticatedRequest()) &&
+			this.#auth.isAdmin()
+		);
 	}
 }
