@@ -1,0 +1,52 @@
+/** Extensions synced as raw bytes (createFile/getFile) instead of text. */
+export const BINARY_EXTENSIONS = new Set([
+	'avif',
+	'bmp',
+	'gif',
+	'heic',
+	'ico',
+	'jpeg',
+	'jpg',
+	'png',
+	'svg',
+	'tif',
+	'tiff',
+	'webp',
+	'3gp',
+	'aac',
+	'flac',
+	'm4a',
+	'mp3',
+	'oga',
+	'ogg',
+	'opus',
+	'wav',
+	'webm',
+	'avi',
+	'mkv',
+	'mov',
+	'mp4',
+	'ogv',
+	'pdf',
+	'epub',
+	'doc',
+	'docx',
+	'xls',
+	'xlsx',
+	'ppt',
+	'pptx',
+	'odt',
+	'ods',
+	'odp',
+	'zip',
+	'rar',
+	'7z',
+	'tar',
+	'gz',
+]);
+
+export function isBinaryPath(path: string): boolean {
+	const name = path.slice(path.lastIndexOf('/') + 1);
+	const dot = name.lastIndexOf('.');
+	return dot > 0 && BINARY_EXTENSIONS.has(name.slice(dot + 1).toLowerCase());
+}

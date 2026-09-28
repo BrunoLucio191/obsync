@@ -4,80 +4,100 @@ import { AuthService } from '../../auth/AuthService.ts';
 import { t } from '../../i18n/i18n.ts';
 import { getApiBaseUrl } from '../../config/ApiConfig.ts';
 import zipWorkerSource from './zip.worker.generated.ts';
-import { ZipWorkerMessage } from './zip.worker.ts';
+import type { ZipWorkerEntry, ZipWorkerMessage } from './zip.worker.ts';
+import type { QueueManager } from '../../queue/QueueManager.ts';
+import type { ServerVersionMerger } from '../../vault/ServerVersionMerger.ts';
+import { ensureParentFolder } from '../../vault/ensureParentFolder.ts';
 
 const GENE_HEADER = 'X-ObSync-Gene';
 
 /**
- * Fetches the remote vault zip on the main thread (the only place with
- * access to the Obsidian API), hands the raw bytes off to a real Worker to
- * unzip off the main thread, then writes the extracted entries back into the
- * vault once the worker reports its result.
- *
- * The request carries the vault gene saved in Obsidian's secret storage after the
- * last initial sync that fully completed. The server compares it with its own gene
- * and answers 204 when nothing changed, so the download is skipped.
+ * Downloads on the main thread (the only one with the Obsidian API) and unzips in a Worker.
+ * Skipped while the gene saved after the last complete sync still matches the server's.
  */
 export class ZipWorkerSon {
 	#zipWoker!: Worker;
 	readonly #app: App;
 	readonly #mutedPath: PathMuteRegistry;
 	readonly #auth: AuthService;
-	/** Gene the server sent along with the zip, saved only once every entry is written. */
+	readonly #queueManager: QueueManager;
+	readonly #merger: ServerVersionMerger;
 	#receivedGene: string | null = null;
 
-	constructor(app: App, mutedPath: PathMuteRegistry, auth: AuthService) {
+	constructor(
+		app: App,
+		mutedPath: PathMuteRegistry,
+		auth: AuthService,
+		queueManager: QueueManager,
+		merger: ServerVersionMerger,
+	) {
 		this.#app = app;
 		this.#mutedPath = mutedPath;
 		this.#auth = auth;
+		this.#queueManager = queueManager;
+		this.#merger = merger;
 	}
 	public async startWorking(): Promise<void> {
 		if (!(await this.#auth.prepareAuthenticatedRequest())) {
 			new Notice(t('sync.initialSyncFailed'));
 			return;
 		}
-
 		const savedGene = this.#app.secretStorage.getSecret(this.#geneSecretId);
 		const response = await requestUrl({
 			url: `${getApiBaseUrl()}/api/sync/initSync`,
 			method: 'POST',
 			headers: {
-				...this.#auth.Authheaders(),
+				...this.#auth.AuthHeaders(),
 				'Content-Disposition': 'attachment',
-				...(savedGene ? { [GENE_HEADER]: savedGene } : {}),
+				...(savedGene ? { ...this.#auth.GeneHeader(savedGene) } : {}),
 			},
-			body: JSON.stringify({ myFlag: true, name: 'obsidian ready to sync' }),
+			body: JSON.stringify({
+				myFlag: true,
+				name: 'obsidian ready to sync',
+			}),
 			throw: false,
 		});
-		// The server compared the genes: nothing changed since the last complete initial sync
+		// 204: the gene matched, nothing changed
 		if (response.status === 204) {
 			new Notice(t('sync.vaultUpToDate'));
 			return;
 		}
 		if (response.status !== 200) {
-			console.error(t('sync.initialSyncError'), t('sync.serverReturnError'), {
-				status: response.status,
-			});
+			console.error(
+				t('sync.initialSyncError'),
+				t('sync.serverReturnError'),
+				{
+					status: response.status,
+				},
+			);
 			new Notice(t('sync.initialSyncFailed'));
 			return;
 		}
-
+		// Object.entries() returns key values pair inside an array.
+		// find the gene header value and stores it
 		this.#receivedGene =
 			Object.entries(response.headers).find(
 				([name]) => name.toLowerCase() === GENE_HEADER.toLowerCase(),
 			)?.[1] ?? null;
 
-		const blob = new Blob([zipWorkerSource], { type: 'application/javascript' });
+		const blob = new Blob([zipWorkerSource], {
+			type: 'application/javascript',
+		});
 		this.#zipWoker = new Worker(URL.createObjectURL(blob));
 
 		this.#app.workspace.onLayoutReady(() => {
-			this.#zipWoker.onmessage = (event: MessageEvent<ZipWorkerMessage>) => {
+			this.#zipWoker.onmessage = (
+				event: MessageEvent<ZipWorkerMessage>,
+			) => {
 				void this.#handleZipResult(event.data);
 			};
 		});
 
 		this.#zipWoker.onerror = (event) => {
-			console.error(t('sync.initialSyncError'), event.error ?? event.message);
+			console.error(
+				t('sync.initialSyncError'),
+				event.error ?? event.message,
+			);
 			new Notice(t('sync.initialSyncFailed'));
 		};
 
@@ -85,13 +105,6 @@ export class ZipWorkerSon {
 		this.#zipWoker.postMessage(zipData, [zipData]);
 	}
 
-	/**
-	 * Handles the worker's result: on success, writes every extracted entry into the
-	 * vault (creating parent folders as needed), muting each path first so the
-	 * resulting vault events aren't re-published back to the server. Admins always get
-	 * the latest file content; non-admins only get files that don't already exist
-	 * locally, so local-only content survives for read-only users.
-	 */
 	async #handleZipResult(message: ZipWorkerMessage) {
 		this.#zipWoker.terminate();
 
@@ -101,9 +114,30 @@ export class ZipWorkerSon {
 			return;
 		}
 
-		const adapter = this.#app.vault.adapter;
+		const queue = this.#queueManager.getOrCreateQueue(this.#auth.clientId);
+		try {
+			await queue.addTask(
+				() => this.#writeEntries(message.entries),
+				'vault:initialSync',
+			);
+		} catch (error) {
+			console.error(t('sync.initialSyncError'), error);
+			new Notice(t('sync.initialSyncFailed'));
+			return;
+		}
+		if (this.#receivedGene) {
+			this.#app.secretStorage.setSecret(
+				this.#geneSecretId,
+				this.#receivedGene,
+			);
+		}
+		new Notice(t('sync.initialSyncComplete'));
+	}
 
-		for (const entry of message.entries) {
+	/** Admins take the server's files as they are; regular users go through the merger. */
+	async #writeEntries(entries: ZipWorkerEntry[]): Promise<void> {
+		const adapter = this.#app.vault.adapter;
+		for (const entry of entries) {
 			if (entry.isDir) {
 				if (!(await adapter.exists(entry.path))) {
 					this.#mutedPath.mute(entry.path);
@@ -111,28 +145,17 @@ export class ZipWorkerSon {
 				}
 				continue;
 			}
-
-			const parentPath = entry.path.substring(0, entry.path.lastIndexOf('/'));
-			if (parentPath && !(await adapter.exists(parentPath))) {
-				this.#mutedPath.mute(parentPath);
-				await adapter.mkdir(parentPath);
+			if (!this.#auth.isAdmin()) {
+				await this.#merger.apply(entry.path, entry.content);
+				continue;
 			}
-			if (this.#auth.isAdmin() || !(await adapter.exists(entry.path))) {
-				this.#mutedPath.mute(entry.path);
-				await adapter.writeBinary(entry.path, entry.content);
-			}
+			this.#mutedPath.mute(entry.path);
+			await ensureParentFolder(adapter, this.#mutedPath, entry.path);
+			await adapter.writeBinary(entry.path, entry.content);
 		}
-		// Saved only now: an initial sync that stopped halfway must not look up to date next time
-		if (this.#receivedGene) {
-			this.#app.secretStorage.setSecret(this.#geneSecretId, this.#receivedGene);
-		}
-		new Notice(t('sync.initialSyncComplete'));
 	}
 
-	/**
-	 * Secret id for this vault's gene. On mobile Obsidian keeps every vault's secrets
-	 * under the same key, so the vault name goes into the id to keep them apart.
-	 */
+	/** Mobile shares secrets across vaults, so the vault name goes into the id. */
 	get #geneSecretId(): string {
 		const vaultName = this.#app.vault
 			.getName()

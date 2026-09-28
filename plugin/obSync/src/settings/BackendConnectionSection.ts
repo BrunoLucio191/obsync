@@ -2,11 +2,7 @@ import { Notice, type SettingDefinitionGroup } from 'obsidian';
 import { t } from '../i18n/i18n.ts';
 import type { SettingsController } from './SettingsController.ts';
 
-/**
- * Renders the "Backend" group of the plugin settings tab: the server URL
- * field. Editable before anyone is authenticated (first-time setup) and
- * thereafter restricted to admins only.
- */
+/** Anyone can edit the URL before the first login; after that, only admins. */
 export class BackendConnectionSection {
 	#url: string;
 

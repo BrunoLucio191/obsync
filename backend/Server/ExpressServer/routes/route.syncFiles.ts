@@ -55,7 +55,6 @@ export class RouteSyncFiles {
     this.#syncFilesController = syncfilesController;
   }
 
-  /** Registers this router's routes on {@link router}. Must be called once before mounting. */
   public startRoute() {
     this.router.post(
       "/initSync",

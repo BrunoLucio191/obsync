@@ -4,21 +4,16 @@ import type { AuthService } from '../auth/AuthService.ts';
 import type { RemoteVaultChangeService } from '../vault/RemoteVaultChangeService.ts';
 import type { VaultChange } from '../vault/VaultChange.ts';
 
-/**
- * Maintains a persistent websocket to the backend's `/system` channel, which
- * broadcasts vault changes (create/delete/modify/rename) made by other
- * clients. Reconnects automatically on disconnect or auth expiry, using a
- * generation counter to discard stale reconnect attempts after `disconnect()`.
- */
 type backOff = {
 	next: () => number;
 	reset: () => void;
 };
 
+/** Websocket to `/system`, where the backend broadcasts vault changes made by other clients. */
 export class SystemChannel {
 	#socket: WebSocket | null = null;
 	#reconnectTimer: number | null = null;
-	/** Incremented on every connect/disconnect to invalidate callbacks from a superseded connection attempt. */
+	/** Bumped on every connect/disconnect, so callbacks from a superseded attempt stop. */
 	#generation: number = 0;
 	#reconnectDelayMs = this.#creatBackoff();
 
@@ -33,25 +28,17 @@ export class SystemChannel {
 		this.#remoteChanges = remoteChanges;
 	}
 
-	/** Closes any existing connection and opens a new system-channel websocket. */
 	public connect(): void {
 		this.#closeCurrentConnection();
 		const generation = ++this.#generation;
 		void this.#openWithTicket(generation);
 	}
 
-	/** Closes the connection and stops any scheduled reconnect attempts. */
 	public disconnect(): void {
 		this.#generation += 1;
 		this.#closeCurrentConnection();
 	}
 
-	/**
-	 * Obtains an auth ticket and opens the websocket, wiring up message and
-	 * close handlers. No-ops if a newer `connect`/`disconnect` call has
-	 * superseded this attempt's generation.
-	 * @param generation - The generation this connection attempt belongs to.
-	 */
 	async #openWithTicket(generation: number): Promise<void> {
 		const ticket = await this.#auth.createWebSocketTicket('system');
 		if (generation !== this.#generation) return;
@@ -90,12 +77,6 @@ export class SystemChannel {
 		};
 	}
 
-	/**
-	 * Schedules a single reconnect attempt after {@link RECONNECT_DELAY_MS},
-	 * unless one is already pending, the session is no longer authenticated,
-	 * or this generation has been superseded.
-	 * @param generation - The generation to reconnect under.
-	 */
 	#scheduleReconnect(generation: number): void {
 		if (
 			generation !== this.#generation ||
@@ -113,7 +94,6 @@ export class SystemChannel {
 		}, this.#reconnectDelayMs.next());
 	}
 
-	/** Cancels any pending reconnect timer and closes the active socket, if any. */
 	#closeCurrentConnection(): void {
 		if (this.#reconnectTimer !== null) {
 			window.clearTimeout(this.#reconnectTimer);

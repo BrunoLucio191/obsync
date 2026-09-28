@@ -17,12 +17,7 @@ import type {
 } from "./yjs.types.ts";
 import { syncMessageHandler } from "./SyncMessageHandler.ts";
 
-/**
- * Top-level facade for the Yjs real-time collaboration backend. Wires together the room
- * registry, persistence gateway, and per-message handlers (sync/awareness), and exposes the
- * operations the rest of the server needs: configuring persistence, reacting to vault file
- * events (delete/rename), and accepting new authenticated WebSocket connections.
- */
+/** Entry point of the Yjs backend for the rest of the server. */
 export class YjsCollaborationServer {
   readonly #deletedPaths = new DeletedPathRegistry();
   readonly #persistence = new YjsPersistenceGateway();
@@ -30,63 +25,31 @@ export class YjsCollaborationServer {
   readonly #syncHandler: SyncMessageHandlerFn = syncMessageHandler;
   readonly #awarenessGuard = new AwarenessOwnershipGuard();
 
-  /**
-   * Configures the storage backend used to persist Yjs documents.
-   * @param adapter - Concrete persistence implementation to use.
-   */
   public setPersistence(adapter: YjsPersistenceAdapter): void {
     this.#persistence.setAdapter(adapter);
   }
 
-  /**
-   * Checks whether a vault path is currently marked as deleted.
-   * @param filePath - Vault path to check.
-   * @returns `true` if the path (or an ancestor folder) was marked deleted.
-   */
   public isPathDeleted(filePath: string): boolean {
     return this.#deletedPaths.isPathDeleted(filePath);
   }
 
-  /**
-   * Checks whether a specific in-memory Yjs document was invalidated by a path deletion.
-   * @param doc - Yjs document instance to check.
-   * @returns `true` if the document was invalidated.
-   */
   public isDocumentInvalidated(doc: Y.Doc): boolean {
     return this.#deletedPaths.isDocumentInvalidated(doc);
   }
 
-  /**
-   * Records that a vault path was deleted and immediately disconnects/invalidates any active
-   * room under it.
-   * @param targetPath - Vault path that was deleted.
-   */
   public markPathDeleted(targetPath: string): void {
     const normalizedTarget = this.#deletedPaths.markDeleted(targetPath);
     this.#rooms.invalidateUnderPath(normalizedTarget);
   }
 
-  /**
-   * Clears a previously recorded deletion for a vault path (e.g. it was recreated).
-   * @param targetPath - Vault path that should no longer be considered deleted.
-   */
   public clearPathDeleted(targetPath: string): void {
     this.#deletedPaths.clearDeleted(targetPath);
   }
 
-  /**
-   * Deletes persisted Yjs state for a vault path and everything nested under it.
-   * @param targetPath - Vault path (not required to be pre-normalized) that was deleted.
-   */
   public async deletePersistedStateUnderPath(targetPath: string): Promise<void> {
     await this.#persistence.deleteStateUnderPath(normalizeVaultPath(targetPath));
   }
 
-  /**
-   * Moves persisted Yjs state from one vault path to another.
-   * @param oldPath - Vault path being moved from (not required to be pre-normalized).
-   * @param newPath - Vault path being moved to (not required to be pre-normalized).
-   */
   public async renamePersistedStatePath(oldPath: string, newPath: string): Promise<void> {
     await this.#persistence.renameStatePath(
       normalizeVaultPath(oldPath),
@@ -94,15 +57,6 @@ export class YjsCollaborationServer {
     );
   }
 
-  /**
-   * Handles a newly upgraded, already-authenticated WebSocket connection: resolves which
-   * document it targets, rejects it if the path is invalid/deleted or the room is restarting,
-   * reserves/joins the room, and wires up message/close/error listeners before sending the
-   * initial sync.
-   * @param connection - The freshly upgraded WebSocket connection.
-   * @param request - The original HTTP upgrade request, whose URL encodes the target document.
-   * @param authenticatedUser - Identity resolved during the WebSocket handshake/auth step.
-   */
   public async setupConnection(
     connection: WebSocket,
     request: IncomingMessage,

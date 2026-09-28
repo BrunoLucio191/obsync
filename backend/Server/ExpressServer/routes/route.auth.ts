@@ -9,9 +9,6 @@ type RouteAuthConstructor = {
 };
 
 /**
- * Session endpoints mounted at `/api/auth`: login, refresh, logout, current user, WebSocket
- * ticket issuance, and self-service password and cursor color changes.
- *
  * Full paths:
  * - POST  /api/auth/login
  * - POST  /api/auth/refresh

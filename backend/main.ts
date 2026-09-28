@@ -13,15 +13,6 @@ import { KeyedLock } from "./queue/KeyedLock.ts";
 import { Gene } from "./Server/Gene.ts";
 import { QueueManager } from "./queue/QueueManager.ts";
 
-/**
- * Backend entry point. Loads configuration and shared services (database,
- * auth, tokens, file management, Yjs collaboration), then wires them into
- * the HTTP (Express) and WebSocket servers and starts both.
- *
- * @throws {Error} If configuration loading or any service/server
- * initialization fails.
- */
-
 const main = () => {
   const config = loadServerConfig();
   const userDB = openUserDatabase(systemPaths.usersDatabase);
@@ -65,11 +56,7 @@ const main = () => {
   webSocketServer.initializeWebSockets();
 };
 
-/**
- * Runs main.ts and, if startup fails, logs the error and sets a
- * non-zero exit code instead of letting the process crash with a stack
- * trace.
- */
+// A startup failure logs its message and exits non-zero, without a stack trace
 try {
   main();
 } catch (error) {

@@ -5,13 +5,6 @@ export type ServerConfig = {
   trustProxy: boolean;
   tokenSecret: string;
 };
-/**
- * Reads and validates server configuration from environment variables
- *
- * @param environment - Source of environment variables; defaults to `process.env`, overridable for testing.
- * @returns The fully resolved {@link ServerConfig}.
- * @throws {Error} If a non-loopback host does not require TLS, or if TLS is required without proxy trust enabled.
- */
 export function loadServerConfig(environment: NodeJS.ProcessEnv = process.env): ServerConfig {
   const host = environment.OBSYNC_HOST?.trim() || "127.0.0.1";
   const port = parsePort(environment.PORT);
@@ -31,27 +24,12 @@ export function loadServerConfig(environment: NodeJS.ProcessEnv = process.env): 
   return { host, port, requireTls, trustProxy, tokenSecret };
 }
 
-/**
- * Parses the `PORT` environment value into a valid TCP port number.
- *
- * @param value - Raw environment variable value, or `undefined` to use the default.
- * @returns The port number (defaults to 3000 when `value` is not set).
- * @throws {Error} If `value` is set but is not an integer between 1 and 65535.
- */
 function parsePort(value: string | undefined): number {
   if (!value) return 3_000;
   const port = Number(value);
   return port;
 }
 
-/**
- * Parses a strict `"true"`/`"false"` environment variable into a boolean.
- *
- * @param value - Raw environment variable value, or `undefined` to use `fallback`.
- * @param fallback - Value returned when `value` is `undefined`.
- * @returns The parsed boolean.
- * @throws {Error} If `value` is set but is neither `"true"` nor `"false"`.
- */
 function parseBoolean(value: string | undefined, fallback: boolean): boolean {
   if (value === undefined) return fallback;
   if (value === "true") return true;
@@ -59,12 +37,6 @@ function parseBoolean(value: string | undefined, fallback: boolean): boolean {
   throw new Error("Environment boolean values must be 'true' or 'false'.");
 }
 
-/**
- * Checks whether a host string refers to the local machine.
- *
- * @param host - Hostname or IP to check.
- * @returns `true` if `host` is `127.0.0.1`, `::1`, or `localhost`.
- */
 function isLoopbackHost(host: string): boolean {
   return host === "127.0.0.1" || host === "::1" || host === "localhost";
 }

@@ -8,7 +8,6 @@ const BINARY_STATE_EXTENSION = ".yjs-state";
 const BINARY_HYDRATION_ORIGIN = Symbol("binary-state-hydration");
 const MARKDOWN_HYDRATION_ORIGIN = Symbol("markdown-bootstrap");
 
-/** Per-document bookkeeping used to debounce/serialize writes to disk as a Yjs document changes. */
 type DocumentWriteState = {
   readonly fileName: string;
   readonly ydoc: Y.Doc;
@@ -18,17 +17,14 @@ type DocumentWriteState = {
   revision: number;
 };
 
-/** A point-in-time view of a document's content in both representations that get persisted. */
 type DocumentSnapshot = {
   readonly markdown: string;
   readonly binaryState: Uint8Array;
 };
 
 /**
- * Persists Yjs documents to disk in two forms kept in sync: a binary Yjs state file (the
- * authoritative CRDT state, under `stateRoot`) and a plain markdown mirror (under `vaultRoot`,
- * so files remain readable/editable outside the app). Also seeds new documents from existing
- * markdown files and keeps persisted state in sync with vault renames/deletes.
+ * Saves each document twice: the binary Yjs state (the authority) and a markdown
+ * mirror in the vault, so the files stay readable outside the app.
  */
 export class YjsPersistence {
   readonly #vaultRoot: string;
@@ -36,11 +32,6 @@ export class YjsPersistence {
   readonly #collaborationServer: YjsCollaborationServer;
   readonly #documentStates = new WeakMap<Y.Doc, DocumentWriteState>();
 
-  /**
-   * @param vaultPath - Root directory containing the markdown mirror of documents.
-   * @param statePath - Root directory containing binary Yjs state files.
-   * @param collaborationServer - Used to check whether a document/path has been invalidated or deleted before writing.
-   */
   public constructor(
     vaultPath: string,
     statePath: string,
@@ -51,13 +42,6 @@ export class YjsPersistence {
     this.#collaborationServer = collaborationServer;
   }
 
-  /**
-   * Hydrates a Yjs document when a client first opens it: loads existing binary state if present,
-   * otherwise bootstraps the document from its markdown file (if any), and starts listening for
-   * further updates so they get persisted automatically.
-   * @param docName - The (URI-encoded) document name, as provided by the Yjs provider.
-   * @param ydoc - The in-memory Yjs document to hydrate and start tracking.
-   */
   public async bindState(docName: string, ydoc: Y.Doc): Promise<void> {
     const fileName = this.#decodeDocumentName(docName);
     const binaryState = await this.#readBinaryState(fileName);
@@ -98,12 +82,6 @@ export class YjsPersistence {
     }
   }
 
-  /**
-   * Forces an immediate flush of a document's current state to disk, regardless of whether an
-   * update event fired (e.g. used for explicit save points).
-   * @param docName - The (URI-encoded) document name.
-   * @param ydoc - The document to flush.
-   */
   public async writeState(docName: string, ydoc: Y.Doc): Promise<void> {
     const state = this.#getOrCreateState(docName, ydoc);
     state.dirty = true;
@@ -111,12 +89,6 @@ export class YjsPersistence {
     await this.#flush(state);
   }
 
-  /**
-   * Stops tracking a document (detaching its update listener) once it's no longer in memory,
-   * waiting for any in-flight write to finish first so no data is lost.
-   * @param _docName - Unused; kept to match the persistence provider interface.
-   * @param ydoc - The document being torn down.
-   */
   public async destroyState(_docName: string, ydoc: Y.Doc): Promise<void> {
     const state = this.#documentStates.get(ydoc);
     if (!state) return;
@@ -126,11 +98,7 @@ export class YjsPersistence {
     this.#documentStates.delete(ydoc);
   }
 
-  /**
-   * Deletes any persisted binary state for a path and everything nested under it (for a file
-   * or folder deletion), so stale state doesn't resurface if the path is reused.
-   * @param targetPath - Vault-relative path (file or folder) whose persisted state should be removed.
-   */
+  /** File or whole folder, so old state can't resurface if the path is reused. */
   public async deleteStateUnderPath(targetPath: string): Promise<void> {
     const normalized = this.#normalizeRelativePath(targetPath);
     const fileStatePath = this.#resolveStateFilePath(normalized);
@@ -142,12 +110,7 @@ export class YjsPersistence {
     ]);
   }
 
-  /**
-   * Moves persisted binary state (file and/or folder) to match a vault rename, so collaboration
-   * history survives the move.
-   * @param oldPath - Previous vault-relative path.
-   * @param newPath - New vault-relative path.
-   */
+  /** Keeps the collaboration history across a vault rename. */
   public async renameStatePath(oldPath: string, newPath: string): Promise<void> {
     const normalizedOld = this.#normalizeRelativePath(oldPath);
     const normalizedNew = this.#normalizeRelativePath(newPath);
@@ -168,7 +131,6 @@ export class YjsPersistence {
     }
   }
 
-  /** Seeds a brand-new (empty) Yjs document from its existing markdown file, if one exists on disk. */
   async #bootstrapFromMarkdown(fileName: string, ydoc: Y.Doc): Promise<void> {
     const fullPath = this.#resolveVaultPath(fileName);
 
@@ -186,12 +148,6 @@ export class YjsPersistence {
     }
   }
 
-  /**
-   * Reads a document's previously persisted binary Yjs state, if any.
-   * @param fileName - Vault-relative document name.
-   * @returns The binary state, or `null` if no state file exists.
-   * @throws If the state file exists but is empty/corrupted, or on any other read error.
-   */
   async #readBinaryState(fileName: string): Promise<Uint8Array | null> {
     const statePath = this.#resolveStateFilePath(fileName);
 
@@ -210,7 +166,6 @@ export class YjsPersistence {
     }
   }
 
-  /** Returns the existing write-tracking state for a document, or creates a fresh (not-yet-listening) one. */
   #getOrCreateState(docName: string, ydoc: Y.Doc): DocumentWriteState {
     const existing = this.#documentStates.get(ydoc);
     if (existing) return existing;
@@ -228,12 +183,7 @@ export class YjsPersistence {
     return state;
   }
 
-  /**
-   * Ensures a document's pending changes get written, coalescing concurrent calls onto the same
-   * in-flight write so writes to a single document never run in parallel.
-   * @param state - The document's write-tracking state.
-   * @returns The (possibly shared) promise for the ongoing/triggered flush.
-   */
+  /** Concurrent calls share the in-flight write, so a document never has two writes at once. */
   #flush(state: DocumentWriteState): Promise<void> {
     if (state.writing) return state.writing;
 
@@ -244,11 +194,7 @@ export class YjsPersistence {
     return state.writing;
   }
 
-  /**
-   * Repeatedly writes the document's current binary state and markdown mirror until no further
-   * changes have accumulated (`dirty` stays `false`), so a burst of updates during a slow write
-   * isn't lost. Skips writing entirely if the document/path has since been invalidated or deleted.
-   */
+  /** Loops until no update arrived during the write, so a burst during a slow write isn't lost. */
   async #flushLoop(state: DocumentWriteState): Promise<void> {
     while (state.dirty) {
       state.dirty = false;
@@ -275,22 +221,14 @@ export class YjsPersistence {
     }
   }
 
-  /** Writes a document's binary Yjs state to its state file. */
   async #writeBinaryState(fileName: string, binaryState: Uint8Array): Promise<void> {
     await this.#atomicWrite(this.#resolveStateFilePath(fileName), binaryState);
   }
 
-  /** Writes a document's plain-text content to its markdown mirror file. */
   async #writeMarkdown(fileName: string, content: string): Promise<void> {
     await this.#atomicWrite(this.#resolveVaultPath(fileName), content);
   }
 
-  /**
-   * Writes data to a destination path atomically, via a temp file + rename, so a crash or
-   * concurrent read never observes a partially written file.
-   * @param destination - Final absolute path to write to.
-   * @param data - Content to write.
-   */
   async #atomicWrite(destination: string, data: string | Uint8Array): Promise<void> {
     await fsPromises.mkdir(path.dirname(destination), { recursive: true });
 
@@ -308,7 +246,6 @@ export class YjsPersistence {
     return this.#resolveInsideRoot(this.#vaultRoot, relativePath);
   }
 
-  /** Resolves a document's binary state file path (with the `.yjs-state` extension) inside `stateRoot`. */
   #resolveStateFilePath(relativePath: string): string {
     return this.#resolveInsideRoot(this.#stateRoot, `${relativePath}${BINARY_STATE_EXTENSION}`);
   }
@@ -317,13 +254,6 @@ export class YjsPersistence {
     return this.#resolveInsideRoot(this.#stateRoot, relativePath);
   }
 
-  /**
-   * Resolves a relative path against a root directory, ensuring the result stays inside that root.
-   * @param root - Absolute root directory (either `vaultRoot` or `stateRoot`).
-   * @param relativePath - Path relative to `root`.
-   * @returns The absolute, resolved path.
-   * @throws If the resolved path would fall outside `root`.
-   */
   #resolveInsideRoot(root: string, relativePath: string): string {
     const normalized = this.#normalizeRelativePath(relativePath);
     const fullPath = path.resolve(root, normalized);
@@ -335,13 +265,6 @@ export class YjsPersistence {
     return fullPath;
   }
 
-  /**
-   * Normalizes and validates a relative path: converts backslashes to slashes, trims whitespace,
-   * and rejects absolute paths or any `.`/`..` segment.
-   * @param relativePath - The path to normalize.
-   * @returns The normalized, forward-slash path.
-   * @throws If the path is empty, absolute, or contains `.`/`..` segments.
-   */
   #normalizeRelativePath(relativePath: string): string {
     const normalized = relativePath.replace(/\\/g, "/").trim();
 
@@ -357,12 +280,6 @@ export class YjsPersistence {
     return normalized;
   }
 
-  /**
-   * Decodes and normalizes a URI-encoded Yjs document name into a safe vault-relative path.
-   * @param docName - The raw, URI-encoded document name from the Yjs provider.
-   * @returns The decoded, normalized relative path.
-   * @throws If the document name is not validly URI-encoded or normalizes to an invalid path.
-   */
   #decodeDocumentName(docName: string): string {
     try {
       return this.#normalizeRelativePath(decodeURIComponent(docName));
@@ -371,7 +288,6 @@ export class YjsPersistence {
     }
   }
 
-  /** Checks whether a filesystem path exists, without throwing. */
   async #pathExists(filePath: string): Promise<boolean> {
     try {
       await fsPromises.access(filePath);
@@ -382,7 +298,6 @@ export class YjsPersistence {
     }
   }
 
-  /** Type guard for a Node filesystem "file not found" (`ENOENT`) error. */
   #isMissingFileError(error: unknown): boolean {
     return (
       error instanceof Error &&

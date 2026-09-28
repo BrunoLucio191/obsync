@@ -1,20 +1,13 @@
 import type { AuthenticatedUser } from '../../auth/auth.types.ts';
 
-/**
- * In-memory, id-sorted cache of user accounts backing the user-management
- * settings UI. Holds the last `listUsers()` fetch and is kept in sync
- * locally as create/update/delete mutations succeed, so the UI doesn't need
- * to re-fetch the whole list after every action.
- */
+/** Local copy of the user list, updated after each action so the UI doesn't re-fetch it. */
 export class UserDirectory {
 	#users: AuthenticatedUser[] = [];
 
-	/** Replaces the entire cache, e.g. after a fresh `listUsers()` fetch. */
 	public replaceAll(users: AuthenticatedUser[]): void {
 		this.#users = [...users].sort((first, second) => first.id - second.id);
 	}
 
-	/** Overwrites a single cached user, matched by `id`; no-op if the id isn't cached. */
 	public replace(updatedUser: AuthenticatedUser): void {
 		const index = this.#users.findIndex(
 			(user) => user.id === updatedUser.id,
@@ -22,11 +15,7 @@ export class UserDirectory {
 		if (index !== -1) this.#users[index] = updatedUser;
 	}
 
-	/**
-	 * Inserts a user created after the initial listUsers() fetch, keeping the
-	 * id ordering replaceAll() establishes. A no-op if the id is already
-	 * cached, so a stale double-call can't create a duplicate row.
-	 */
+	/** Ignores an id already cached, so a stale double call can't duplicate a row. */
 	public add(newUser: AuthenticatedUser): void {
 		if (this.#users.some((user) => user.id === newUser.id)) return;
 
@@ -42,7 +31,6 @@ export class UserDirectory {
 		this.#users = this.#users.filter((user) => user.id !== userId);
 	}
 
-	/** Filters cached users by a case/accent-insensitive match against name or email; an empty query returns every user. */
 	public search(query: string): AuthenticatedUser[] {
 		const normalizedQuery = this.#normalizeSearch(query);
 		if (!normalizedQuery) return this.all();
@@ -54,11 +42,6 @@ export class UserDirectory {
 		);
 	}
 
-	/**
-	 * Looks up a user by exact (normalized, case-insensitive) display name,
-	 * used to prevent duplicate names when creating or renaming a user.
-	 * @param exceptUserId - A user id to exclude from the search, e.g. the user currently being renamed.
-	 */
 	public findByName(
 		name: string,
 		exceptUserId?: number,
@@ -73,7 +56,6 @@ export class UserDirectory {
 		);
 	}
 
-	/** Looks up a user by exact (normalized, case-insensitive) email, used to prevent duplicate accounts when creating a user. */
 	public findByEmail(email: string): AuthenticatedUser | undefined {
 		const key = email.normalize('NFKC').trim().toLocaleLowerCase();
 		if (!key) return undefined;
@@ -84,7 +66,6 @@ export class UserDirectory {
 		);
 	}
 
-	/** The number of active admins, used to prevent demoting/deactivating/deleting the last remaining one. */
 	public activeAdminCount(): number {
 		return this.#users.filter(
 			(user) => user.active && user.role === 'admin',
@@ -99,11 +80,6 @@ export class UserDirectory {
 		return this.#users.length;
 	}
 
-	/**
-	 * Normalizes a display name for uniqueness comparisons: Unicode
-	 * normalization, trimming, collapsing internal whitespace, and
-	 * locale-aware (`pt-BR`) lowercasing.
-	 */
 	#normalizeUniqueName(value: string): string {
 		return value
 			.normalize('NFKC')
@@ -112,7 +88,6 @@ export class UserDirectory {
 			.toLocaleLowerCase('pt-BR');
 	}
 
-	/** Normalizes a string for accent/case-insensitive substring search by stripping diacritics after Unicode decomposition. */
 	#normalizeSearch(value: string): string {
 		return value
 			.normalize('NFD')

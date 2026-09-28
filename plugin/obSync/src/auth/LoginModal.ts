@@ -1,11 +1,6 @@
 import { App, Modal, Notice, Setting } from 'obsidian';
 import { t } from '../i18n/i18n.ts';
 
-/**
- * Obsidian modal that collects an e-mail and password and delegates the
- * actual login request to a caller-supplied callback, reporting back
- * whether the user ended up authenticated when the modal closes.
- */
 export class LoginModal extends Modal {
 	#email = '';
 	#password = '';
@@ -17,11 +12,7 @@ export class LoginModal extends Modal {
 	) => Promise<boolean>;
 	readonly #onFinished: (authenticated: boolean) => void;
 
-	/**
-	 * @param app - The Obsidian app instance, forwarded to `Modal`.
-	 * @param submitLogin - Called with the entered credentials when the user clicks "Sign in"; should return whether login succeeded.
-	 * @param onFinished - Called once, when the modal closes, with whether authentication succeeded (by login or otherwise).
-	 */
+	/** `onFinished` runs once, on close, with whether the user ended up authenticated. */
 	constructor(
 		app: App,
 		submitLogin: (
@@ -35,7 +26,6 @@ export class LoginModal extends Modal {
 		this.#onFinished = onFinished;
 	}
 
-	/** Builds the modal's e-mail/password form and wires up the sign-in button. */
 	onOpen(): void {
 		this.setTitle(t('auth.loginTitle'));
 		this.contentEl.createEl('p', {
@@ -77,7 +67,6 @@ export class LoginModal extends Modal {
 		);
 	}
 
-	/** Clears the modal's DOM and reports the final authentication outcome to {@link #onFinished}. */
 	onClose(): void {
 		this.contentEl.empty();
 		this.#onFinished(this.#authenticated);

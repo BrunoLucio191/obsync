@@ -13,11 +13,16 @@ export const activity = { pending: [] as Promise<unknown>[], watcherTimers: 0, h
  * called synchronously and not awaited, like Obsidian. Adapter writes, which is what
  * RemoteVaultChangeService uses, fire their events 5-40ms later like Obsidian's file watcher.
  * rename follows Obsidian's adapter.rename: the item first, then one event per descendant.
+ * Paths under `configDir` (the plugin's own files) live apart and never fire vault events,
+ * like Obsidian's hidden config folder.
  */
 export class FakeVault {
   #handlers = new Map<string, Function[]>();
   entries = new Map<string, any>();
   contents = new Map<string, string>();
+  configDir = ".obsidian";
+  /** Files under configDir, keyed by path; folders are implied. */
+  hidden = new Map<string, string>();
   #name: string;
 
   constructor(name = "Test Vault") {
@@ -65,6 +70,9 @@ export class FakeVault {
   }
   getAbstractFileByPath(p: string) {
     return this.entries.get(p) ?? null;
+  }
+  getFiles() {
+    return [...this.entries.values()].filter((entry) => entry instanceof TFile);
   }
 
   /** Adds entries without firing events, for the starting state. */
@@ -129,17 +137,37 @@ export class FakeVault {
     this.#watch("create", file);
   }
 
+  #isHidden(p: string) {
+    return p === this.configDir || p.startsWith(`${this.configDir}/`);
+  }
+
   adapter = {
-    exists: async (p: string) => this.entries.has(p),
-    mkdir: async (p: string) => {
-      if (this.entries.has(p)) return;
+    exists: async (raw: string) => {
+      const p = raw.replace(/\/$/, "");
+      if (this.#isHidden(p)) return this.hidden.has(p) || [...this.hidden.keys()].some((k) => k.startsWith(`${p}/`)) || p === this.configDir;
+      return this.entries.has(p);
+    },
+    read: async (p: string) => {
+      if (this.#isHidden(p)) return this.hidden.get(p) ?? "";
+      return this.contents.get(p) ?? "";
+    },
+    readBinary: async (p: string) => new TextEncoder().encode(this.contents.get(p) ?? "").buffer,
+    mkdir: async (raw: string) => {
+      const p = raw.replace(/\/$/, "");
+      if (this.#isHidden(p) || this.entries.has(p)) return;
       const folder = new TFolder(p);
       this.entries.set(p, folder);
       this.#watch("create", folder);
     },
-    write: async (p: string, data: string) => this.#adapterWrite(p, data),
+    write: async (p: string, data: string) => {
+      if (this.#isHidden(p)) this.hidden.set(p, data);
+      else this.#adapterWrite(p, data);
+    },
     writeBinary: async (p: string, data: ArrayBuffer) => this.#adapterWrite(p, new TextDecoder().decode(data)),
-    remove: async (p: string) => this.#removeTree(p).forEach((o) => this.#watch("delete", o)),
+    remove: async (p: string) => {
+      if (this.#isHidden(p)) this.hidden.delete(p);
+      else this.#removeTree(p).forEach((o) => this.#watch("delete", o));
+    },
     rmdir: async (p: string) => this.#removeTree(p).forEach((o) => this.#watch("delete", o)),
     rename: async (a: string, b: string) => this.rename(a, b),
   };

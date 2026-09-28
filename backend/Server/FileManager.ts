@@ -5,11 +5,7 @@ import { ZipArchive } from "archiver";
 import { systemPaths } from "../paths.ts";
 import fs from "fs";
 import { zip } from "zip-a-folder";
-/**
- * Performs filesystem operations (create, modify, delete, rename, zip) scoped to the vault
- * directory. Every path-accepting method resolves and validates the path against the vault
- * root first, so callers cannot escape the vault via absolute paths or `..` segments.
- */
+/** Every path is validated first, so absolute paths or `..` can't escape the vault. */
 export class FileManager {
   #vaultPath!: string;
 
@@ -17,13 +13,6 @@ export class FileManager {
     this.#vaultPath = systemPaths.vault;
   }
 
-  /**
-   * Resolves a vault-relative path to an absolute filesystem path, rejecting anything that
-   * would escape the vault root.
-   * @param relativePath - Path relative to the vault root.
-   * @returns The absolute, resolved path inside the vault.
-   * @throws If `relativePath` is empty, absolute, or resolves outside the vault root.
-   */
   #resolveVaultPath(relativePath: string): string {
     if (typeof relativePath !== "string" || !relativePath.trim()) {
       throw new Error("The file path is required.");
@@ -43,21 +32,10 @@ export class FileManager {
     return fullPath;
   }
 
-  /**
-   * Convenience wrapper around {@link createOrModifyFile} with the arguments swapped (content first).
-   * @param fileContent - Text content to write.
-   * @param name - Vault-relative path to write to.
-   */
   public async stringToFile(fileContent: string, name: string): Promise<void> {
     await this.createOrModifyFile(name, fileContent);
   }
 
-  /**
-   * Writes a file's content, creating parent directories as needed. Creates the file if it
-   * doesn't exist, or overwrites it if it does.
-   * @param filePath - Vault-relative path of the file to write.
-   * @param content - Text content to write.
-   */
   public async createOrModifyFile(
     filePath: string,
     content: string | Buffer<ArrayBuffer>,
@@ -69,11 +47,7 @@ export class FileManager {
     await fsPromises.writeFile(fullPath, content);
   }
 
-  /**
-   * Absolute path of a file inside the vault, resolved the same safe way as every write.
-   * @param filePath - Vault-relative path of the file.
-   * @returns The absolute path, or `null` if the path escapes the vault, doesn't exist, or is a folder.
-   */
+  /** `null` for folders, missing paths and paths outside the vault. */
   public async getFilePath(filePath: string): Promise<string | null> {
     try {
       const fullPath = this.#resolveVaultPath(filePath);
@@ -83,37 +57,36 @@ export class FileManager {
     }
   }
 
-  /**
-   * Creates a directory (and any missing parents) inside the vault.
-   * @param folderPath - Vault-relative path of the folder to create.
-   */
+  public async isFolder(folderPath: string): Promise<boolean> {
+    try {
+      return (await fsPromises.stat(this.#resolveVaultPath(folderPath))).isDirectory();
+    } catch {
+      return false;
+    }
+  }
+
   public async createFolder(folderPath: string): Promise<void> {
     const fullPath = this.#resolveVaultPath(folderPath);
     await fsPromises.mkdir(fullPath, { recursive: true });
   }
 
-  /**
-   * Deletes a file or directory (recursively) inside the vault. No-op if the path doesn't exist.
-   * @param targetPath - Vault-relative path to delete.
-   */
   public async deletePath(targetPath: string): Promise<void> {
     const fullPath = this.#resolveVaultPath(targetPath);
     await fsPromises.rm(fullPath, { recursive: true, force: true });
   }
 
   /**
-   * Moves/renames a file or directory within the vault, creating the destination's parent directory as needed.
-   * A rename that is already applied (source gone, destination present) is a no-op: it is what every
-   * descendant of a folder that was just moved looks like, since Obsidian reports each one after the folder.
-   * @param oldPath - Current vault-relative path.
-   * @param newPath - Destination vault-relative path.
-   * @returns `false` when the rename was already applied and nothing was moved.
+   * Already applied when only the destination exists: Obsidian reports each descendant of a moved
+   * folder after the folder itself. Not found means the source never reached the vault.
    */
-  public async rename(oldPath: string, newPath: string): Promise<boolean> {
+  public async rename(
+    oldPath: string,
+    newPath: string,
+  ): Promise<"moved" | "already-applied" | "not-found"> {
     const fullOld = this.#resolveVaultPath(oldPath);
     const fullNew = this.#resolveVaultPath(newPath);
-    if (!fs.existsSync(fullOld) && fs.existsSync(fullNew)) {
-      return false;
+    if (!fs.existsSync(fullOld)) {
+      return fs.existsSync(fullNew) ? "already-applied" : "not-found";
     }
     const newDirName = path.dirname(fullNew);
     console.log("-------------");
@@ -122,15 +95,9 @@ export class FileManager {
     console.log(newDirName);
     await fsPromises.mkdir(newDirName, { recursive: true });
     await fsPromises.rename(fullOld, fullNew);
-    return true;
+    return "moved";
   }
 
-  /**
-   * Compresses the entire vault (excluding dotfiles/dot-directories) into a single zip archive
-   * at the configured vault-exit path, ready for download.
-   * @returns Resolves once the archive has been fully written to disk.
-   * @throws If the archiver reports an error while building the zip.
-   */
   public async directoryZiped(zipPath: string, clientId: string): Promise<void> {
     if (!fs.existsSync(zipPath)) {
       console.error("This is not a valid path");

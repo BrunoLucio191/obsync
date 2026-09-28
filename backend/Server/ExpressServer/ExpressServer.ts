@@ -50,11 +50,7 @@ export class ExpressServer {
   readonly #routeUsers: RouteUsers;
   readonly #routeSyncFiles: RouteSyncFiles;
 
-  /**
-   * Creates the Express app and underlying HTTP server, then set up middleware and routes.
-   * Does not start listening, call serverStart} for that.
-   * @param options - Server configuration and the collaborator services used by its routes.
-   */
+  /** Doesn't start listening, call {@link serverStart} for that. */
   constructor({
     port,
     host,
@@ -131,9 +127,6 @@ export class ExpressServer {
     this.#initializeRoutes();
   }
 
-  /**
-   * Registers global middleware
-   */
   public initializeMiddleware(): void {
     this.#app.use((req: Request, res: Response, next: NextFunction) => {
       if (this.#requireTls && !req.secure) {
@@ -153,19 +146,12 @@ export class ExpressServer {
     this.#app.use("/api/sync", this.#routeSyncFiles.router);
   }
 
-  /**
-   * Registers each router's routes (`/api/auth/*`, `/api/users/*`, `/api/sync/*`)
-   */
   #initializeRoutes(): void {
     this.#routeAuth.startRoute();
     this.#routeUsers.startRoute();
     this.#routeSyncFiles.startRoute();
   }
 
-  /**
-   * Starts the HTTP server listening for connections.
-   * @param port - Port to listen on; defaults to the port passed to the constructor.
-   */
   public serverStart(port = this.#port): void {
     this.#server.once("error", (error) => {
       console.error(`Could not start the server on port ${port}:`, error);
@@ -218,7 +204,6 @@ export class ExpressServer {
     return res.locals.authenticatedUser as AuthenticatedUser;
   }
 
-  /** Logs an audit warning for an operation denied by {@link #requireAdmin}. */
   #auditDenied(
     user: AuthenticatedUser,
     operation: string,
@@ -236,14 +221,11 @@ export class ExpressServer {
     });
   }
 
-  /** Extracts the vault path an audited request targeted (`path`, `oldPath`, or `newPath`),
-   * normalizing slashes, for {@link #auditDenied} log entries. */
   #requestPath(req: Request): string | undefined {
     const value = req.body?.path ?? req.body?.oldPath ?? req.body?.newPath;
     return typeof value === "string" ? value.replace(/\\/g, "/") : undefined;
   }
 
-  /** Node HTTP server, exposed to other components */
   get getHttpServer(): Server {
     return this.#server;
   }

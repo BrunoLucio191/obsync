@@ -90,8 +90,7 @@ export default {
 			privateModeDesc:
 				'Suas edições de texto ficam somente neste dispositivo. Você recebe mudanças globais, mas não pode publicá-las no vault compartilhado.',
 			changePassword: 'Trocar senha',
-			changePasswordDesc:
-				'Informe a senha atual e a nova senha (6 a 128 caracteres).',
+			changePasswordDesc: 'De 6 a 128 caracteres.',
 			currentPassword: 'Senha atual',
 			newPassword: 'Nova senha',
 			savePassword: 'Salvar nova senha',
@@ -147,6 +146,14 @@ export default {
 		serverReturnedError: 'Servidor retornou erro: {{status}}',
 		initialSyncComplete: 'Sincronização inicial concluída.',
 		vaultUpToDate: 'O vault já está atualizado.',
+		yourVersion: 'sua versão',
+		serverVersion: 'versão do servidor',
+		mergeConflict: 'Você e o servidor alteraram o mesmo trecho de {{path}}. As duas versões estão marcadas no arquivo.',
+		adminMovedDownloaded:
+			'O admin moveu {{oldPath}} para {{newPath}}. A versão do servidor foi baixada lá; a sua cópia, se ainda existir, não recebe mais atualizações.',
+		adminMovedYourCopy:
+			'O admin moveu {{oldPath}} para {{newPath}}, então a sua cópia sem alterações em {{copyPath}} foi levada junto.',
+		binaryConflict: 'Você alterou {{path}} e o servidor tem uma versão nova. Ela foi salva ao lado da sua como {{copy}}.',
 		initialSyncFailed: 'Não foi possível sincronizar os arquivos iniciais.',
 		initialSyncError: 'Erro na sincronização inicial:',
 		invalidSyncEvent: 'Evento de sincronização inválido:',

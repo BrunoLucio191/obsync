@@ -1,9 +1,4 @@
 import type { UserMutationResult } from "../../../../auth/auth.types.ts";
-/**
- * Maps a failed {@link UserMutationResult} to the appropriate HTTP status code.
- * @param result - The mutation result to inspect.
- * @returns `200` if `result.ok` is `true`, otherwise a status code matching `result.reason`.
- */
 export function userMutationErrorStatus(result: UserMutationResult) {
   if (result.ok) return 200;
 
@@ -25,11 +20,6 @@ export function userMutationErrorStatus(result: UserMutationResult) {
   }
 }
 
-/**
- * Maps a failed {@link UserMutationResult} to a human-readable error message.
- * @param result - The mutation result to inspect.
- * @returns An empty string if `result.ok` is `true`, otherwise a message describing `result.reason`.
- */
 export function UserMutationErrorMessage(result: UserMutationResult): string {
   if (result.ok) return "";
 

@@ -8,11 +8,7 @@ import { t } from '../i18n/i18n.ts';
 import type { SettingsController } from './SettingsController.ts';
 import type { UserManagementSection } from './UserManagementSection.ts';
 
-/**
- * Renders the "Account" group of the plugin settings tab: the connected
- * user's identity/role, their editable display name (or a read-only view for
- * non-admins), their cursor color, the change-password form, and the sign-out action.
- */
+/** Password fields get one row each, so Obsidian's layout keeps them readable at any width. */
 export class AccountSettingsSection {
 	#currentPassword = '';
 	#newPassword = '';
@@ -23,7 +19,6 @@ export class AccountSettingsSection {
 	readonly #users: UserManagementSection;
 	readonly #refresh: () => void;
 
-	/** @param users - Shared user-management section, used here to render the editable name field for admins. */
 	public constructor(
 		controller: SettingsController,
 		users: UserManagementSection,
@@ -105,23 +100,33 @@ export class AccountSettingsSection {
 		}
 
 		items.push({
-			name: t('settings.account.changePassword'),
+			name: t('settings.account.currentPassword'),
+			render: (setting) => {
+				setting.addText((text) => {
+					text.inputEl.type = 'password';
+					text
+						.setValue(this.#currentPassword)
+						.onChange((value) => (this.#currentPassword = value));
+				});
+			},
+		});
+
+		items.push({
+			name: t('settings.account.newPassword'),
 			desc: t('settings.account.changePasswordDesc'),
 			render: (setting) => {
 				setting.addText((text) => {
 					text.inputEl.type = 'password';
 					text
-						.setPlaceholder(t('settings.account.currentPassword'))
-						.setValue(this.#currentPassword)
-						.onChange((value) => (this.#currentPassword = value));
-				});
-				setting.addText((text) => {
-					text.inputEl.type = 'password';
-					text
-						.setPlaceholder(t('settings.account.newPassword'))
 						.setValue(this.#newPassword)
 						.onChange((value) => (this.#newPassword = value));
 				});
+			},
+		});
+
+		items.push({
+			name: t('settings.account.changePassword'),
+			render: (setting) => {
 				setting.addButton((button) =>
 					button
 						.setButtonText(t('settings.account.savePassword'))

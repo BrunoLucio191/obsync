@@ -8,12 +8,7 @@ export type ZipWorkerMessage =
 	| { status: 'success'; entries: ZipWorkerEntry[] }
 	| { status: 'error'; message: string };
 
-/**
- * Runs inside a real Worker thread (spawned by ZipWorkerSon), so it has zero
- * access to the Obsidian API — no `app`, no `require('obsidian')`. It only
- * unzips the bytes it's given and hands the extracted entries back; the main
- * thread is the one that decides what to do with each entry in the vault.
- */
+/** A real Worker has no Obsidian API, so it only unzips; the main thread writes the vault. */
 self.onmessage = async (event: MessageEvent<ArrayBuffer>) => {
 	try {
 		const zip = await JSZip.loadAsync(event.data);

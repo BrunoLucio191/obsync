@@ -90,8 +90,7 @@ export default {
 			privateModeDesc:
 				"Your text edits stay only on this device. You receive global changes, but can't publish them to the shared vault.",
 			changePassword: 'Change password',
-			changePasswordDesc:
-				'Enter the current password and the new password (6 to 128 characters).',
+			changePasswordDesc: '6 to 128 characters.',
 			currentPassword: 'Current password',
 			newPassword: 'New password',
 			savePassword: 'Save new password',
@@ -147,6 +146,14 @@ export default {
 		serverReturnedError: 'The server returned an error: {{status}}',
 		initialSyncComplete: 'Initial synchronization complete.',
 		vaultUpToDate: 'The vault is already up to date.',
+		yourVersion: 'your version',
+		serverVersion: 'server version',
+		mergeConflict: 'You and the server changed the same part of {{path}}. Both versions are marked in the file.',
+		adminMovedDownloaded:
+			"The admin moved {{oldPath}} to {{newPath}}. The server's version was downloaded there; your own copy, if it still exists, no longer gets updates.",
+		adminMovedYourCopy:
+			'The admin moved {{oldPath}} to {{newPath}}, so your unchanged copy at {{copyPath}} was moved there too.',
+		binaryConflict: 'You changed {{path}} and the server has a new version. It was saved next to yours as {{copy}}.',
 		initialSyncFailed: 'Could not sync the initial files.',
 		initialSyncError: 'Error during initial synchronization:',
 		invalidSyncEvent: 'Invalid synchronization event:',

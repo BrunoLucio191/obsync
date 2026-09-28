@@ -20,11 +20,6 @@ export class UsersController {
     this.#queueManager = queueManager;
   }
 
-  /**
-   * Parses and validates a route param as a positive user id.
-   * @param value - The raw `:id` route param.
-   * @returns The parsed id, or `null` if it's missing, an array, non-numeric, or not positive.
-   */
   #parseUserId(value: string | string[] | undefined): number | null {
     if (Array.isArray(value)) return null;
     const userId = Number(value);

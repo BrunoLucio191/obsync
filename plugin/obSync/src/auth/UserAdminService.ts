@@ -14,12 +14,7 @@ type ApiResponse = {
 	text: string;
 };
 
-/**
- * Client for the backend's admin-only user-management endpoints: listing,
- * creating, and mutating (role/status/name/password) user accounts. Every
- * write operation re-checks admin status and refreshes the auth session
- * afterward when it affects the currently signed-in user.
- */
+/** Client for the admin-only user endpoints. */
 export class UserAdminService {
 	readonly #auth: AuthService;
 
@@ -27,10 +22,6 @@ export class UserAdminService {
 		this.#auth = auth;
 	}
 
-	/**
-	 * Fetches the full list of registered users.
-	 * @returns The user list, or a localized error if the request fails or the caller isn't authenticated.
-	 */
 	public async listUsers(): Promise<UserActionResult<AuthenticatedUser[]>> {
 		if (!this.#hasSession() || !(await this.#auth.prepareAuthenticatedRequest())) {
 			return { ok: false, error: t('userAdmin.signInToViewUsers') };
@@ -68,11 +59,6 @@ export class UserAdminService {
 		}
 	}
 
-	/**
-	 * Creates a new user account.
-	 * @param input - The new account's display name, e-mail, initial password, and role.
-	 * @returns The created user, or a localized error on failure.
-	 */
 	public async createUser(input: {
 		name: string;
 		email: string;
@@ -113,7 +99,6 @@ export class UserAdminService {
 		}
 	}
 
-	/** Changes a user's role. */
 	public updateUserRole(
 		userId: number,
 		role: UserRole,
@@ -126,7 +111,6 @@ export class UserAdminService {
 		);
 	}
 
-	/** Activates or deactivates a user account. */
 	public updateUserStatus(
 		userId: number,
 		active: boolean,
@@ -139,7 +123,6 @@ export class UserAdminService {
 		);
 	}
 
-	/** Deletes a user account; the result carries the deleted user's last known data. */
 	public deleteUser(
 		userId: number,
 	): Promise<UserActionResult<AuthenticatedUser>> {
@@ -151,7 +134,6 @@ export class UserAdminService {
 		);
 	}
 
-	/** Renames a user account. */
 	public updateUserName(
 		userId: number,
 		name: string,
@@ -164,7 +146,6 @@ export class UserAdminService {
 		);
 	}
 
-	/** Resets a user's password to an admin-supplied value. */
 	public resetUserPassword(
 		userId: number,
 		newPassword: string,
@@ -177,18 +158,7 @@ export class UserAdminService {
 		);
 	}
 
-	/**
-	 * Shared implementation for the admin-only user mutation endpoints:
-	 * verifies admin status (before and after re-authenticating, since the
-	 * refresh could reveal the caller lost admin rights), sends the
-	 * request, and refreshes the local session if the caller edited their
-	 * own account.
-	 * @param path - The API path to call, relative to the backend base URL.
-	 * @param method - The HTTP method to use.
-	 * @param body - The request payload, or `undefined` for methods that need none (e.g. DELETE).
-	 * @param fallback - The localized error message to use if the backend didn't provide a more specific one.
-	 * @returns The updated user, or a localized error on failure.
-	 */
+	/** Checks admin before and after the token refresh, since the refresh can reveal lost admin rights. */
 	async #mutateUser(
 		path: string,
 		method: 'PATCH' | 'DELETE',
@@ -238,18 +208,10 @@ export class UserAdminService {
 		}
 	}
 
-	/** @returns Whether the caller currently has a locally-stored session. */
 	#hasSession(): boolean {
 		return this.#auth.isAuthenticated();
 	}
 
-	/**
-	 * Extracts a user-facing error message from a failed API response,
-	 * localizing it when the backend provided a recognized `reason` code.
-	 * @param response - The failed response.
-	 * @param fallback - The message to use if the response has no usable error text.
-	 * @returns The localized (or fallback) error message.
-	 */
 	#apiError(response: ApiResponse, fallback: string): string {
 		const payload = response.json as { error?: unknown; reason?: unknown };
 		const raw =
@@ -259,14 +221,6 @@ export class UserAdminService {
 		return localizeBackendError(payload?.reason, raw);
 	}
 
-	/**
-	 * Extracts a user-facing message from a thrown error (e.g. a network
-	 * failure), falling back to a generic message when the error carries
-	 * no useful text.
-	 * @param error - The caught error.
-	 * @param fallback - The message to use if `error` has no usable message.
-	 * @returns The error message to show the user.
-	 */
 	#unknownRequestError(error: unknown, fallback: string): string {
 		return error instanceof Error && error.message
 			? error.message

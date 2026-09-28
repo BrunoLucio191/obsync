@@ -1,71 +1,21 @@
-import { Plugin, TFile, TFolder, requestUrl } from 'obsidian';
+import {
+	Plugin,
+	TFile,
+	TFolder,
+	requestUrl,
+	type TAbstractFile,
+} from 'obsidian';
 import { getApiBaseUrl } from '../config/ApiConfig.ts';
 import type { AuthService } from '../auth/AuthService.ts';
 import type { CollaborationController } from '../collab/CollaborationController.ts';
 import { PathMuteRegistry } from '../vault/PathMuteRegistry.ts';
 import type { QueueManager } from '../queue/QueueManager.ts';
 import { t } from '../i18n/i18n.ts';
+import { BINARY_EXTENSIONS } from '../vault/binaryExtensions.ts';
 
 /**
- * Extensions uploaded as raw bytes to `/api/sync/createFile` instead of as text:
- * the attachments Obsidian can embed plus other files users commonly keep in a vault.
- */
-const BINARY_EXTENSIONS = new Set([
-	'avif',
-	'bmp',
-	'gif',
-	'heic',
-	'ico',
-	'jpeg',
-	'jpg',
-	'png',
-	'svg',
-	'tif',
-	'tiff',
-	'webp',
-	'3gp',
-	'aac',
-	'flac',
-	'm4a',
-	'mp3',
-	'oga',
-	'ogg',
-	'opus',
-	'wav',
-	'webm',
-	'avi',
-	'mkv',
-	'mov',
-	'mp4',
-	'ogv',
-	'pdf',
-	'epub',
-	'doc',
-	'docx',
-	'xls',
-	'xlsx',
-	'ppt',
-	'pptx',
-	'odt',
-	'ods',
-	'odp',
-	'zip',
-	'rar',
-	'7z',
-	'tar',
-	'gz',
-]);
-
-/**
- * Listens for local Obsidian vault events (create/delete/modify/rename) made
- * by an admin and publishes them to the backend so other clients receive the
- * change. Non-admin edits are never published (admins own the shared vault).
- *
- * Every publish runs as a task in this client's queue, the same one used by
- * {@link RemoteVaultChangeService}, so local and remote changes are handled
- * one at a time in the order they happened. Paths are read when the event
- * fires, because Obsidian renames the same file object in place and the task
- * may only run later.
+ * Publishes an admin's local vault events, one queue task each. Paths are read when the
+ * event fires, because Obsidian renames the same file object in place.
  */
 export class SyncVaultChanges {
 	readonly #plugin: Plugin;
@@ -73,6 +23,8 @@ export class SyncVaultChanges {
 	readonly #mutedPaths: PathMuteRegistry;
 	readonly #collaboration: CollaborationController;
 	readonly #queueManager: QueueManager;
+	/** Files deleted before their create was sent: their later tasks send nothing. */
+	readonly #unpublished = new WeakSet<TAbstractFile>();
 
 	public constructor(
 		plugin: Plugin,
@@ -88,12 +40,6 @@ export class SyncVaultChanges {
 		this.#queueManager = queueManager;
 	}
 
-	/**
-	 * Registers the vault event listeners (`create`, `delete`, `modify`,
-	 * `rename`) that forward local changes to the corresponding `/api/sync/*`
-	 * backend endpoints. Muted paths (changes caused by applying a remote
-	 * update) are skipped to avoid echoing changes back to their origin.
-	 */
 	public initialize(): void {
 		this.#plugin.registerEvent(
 			this.#plugin.app.vault.on('create', async (file) => {
@@ -105,6 +51,11 @@ export class SyncVaultChanges {
 				);
 				try {
 					await queue.addTask(async () => {
+						// Deleted before it was sent: skip it and what follows
+						if (this.#isGone(file)) {
+							this.#unpublished.add(file);
+							return;
+						}
 						if (!(await this.#canSendRequest())) return;
 
 						if (
@@ -113,19 +64,9 @@ export class SyncVaultChanges {
 						) {
 							const buffer =
 								await this.#plugin.app.vault.readBinary(file);
-							// An empty binary has no bytes to upload, so it goes through /create below
+							// Empty binaries go through /create
 							if (buffer.byteLength > 0) {
-								await requestUrl({
-									url: `${getApiBaseUrl()}/api/sync/createFile`,
-									method: 'POST',
-									headers: {
-										...this.#auth.Authheaders(),
-										'Content-Type':
-											'application/octet-stream',
-										'X-ObSync-filePath': path,
-									},
-									body: buffer,
-								});
+								await this.#uploadBinary(path, buffer);
 								return;
 							}
 						}
@@ -168,6 +109,7 @@ export class SyncVaultChanges {
 				);
 				try {
 					await queue.addTask(async () => {
+						if (this.#unpublished.has(file)) return;
 						if (!(await this.#canSendRequest())) return;
 
 						await requestUrl({
@@ -199,7 +141,22 @@ export class SyncVaultChanges {
 				);
 				try {
 					await queue.addTask(async () => {
+						// Deleted since: the queued delete handles it
+						if (this.#unpublished.has(file) || this.#isGone(file))
+							return;
 						if (!(await this.#canSendRequest())) return;
+
+						// As bytes: reading a binary as text corrupts it
+						if (
+							BINARY_EXTENSIONS.has(file.extension.toLowerCase())
+						) {
+							const buffer =
+								await this.#plugin.app.vault.readBinary(file);
+							if (buffer.byteLength > 0) {
+								await this.#uploadBinary(path, buffer);
+								return;
+							}
+						}
 
 						const content = await this.#plugin.app.vault.read(file);
 						await requestUrl({
@@ -228,14 +185,23 @@ export class SyncVaultChanges {
 				);
 				try {
 					await queue.addTask(async () => {
+						if (this.#unpublished.has(file)) return;
 						if (!(await this.#canSendRequest())) return;
 
-						await requestUrl({
+						const response = await requestUrl({
 							url: `${getApiBaseUrl()}/api/sync/rename`,
 							method: 'PUT',
 							headers: this.#auth.headers(),
 							body: JSON.stringify({ oldPath, newPath }),
+							throw: false,
 						});
+						// 404: the server never had the source
+						if (response.status === 404) return;
+						if (response.status >= 400) {
+							throw new Error(
+								`rename returned ${response.status}`,
+							);
+						}
 
 						if (
 							this.#collaboration.currentPath &&
@@ -257,15 +223,7 @@ export class SyncVaultChanges {
 		);
 	}
 
-	/**
-	 * Decides, as soon as the vault event fires, whether the change should be
-	 * published: only admins publish, and muted paths (from applying a remote
-	 * change) are excluded. It is synchronous on purpose: tasks are queued in
-	 * the same order the events happened, and a mute can't expire while the
-	 * task waits its turn in the queue.
-	 * @param paths - One or more vault paths involved in the change (e.g. old and new path for a rename).
-	 * @returns `true` if the change should be published.
-	 */
+	/** Checked when the event fires, not in the task: keeps event order, and a mute can't expire in the queue. */
 	#shouldPublish(...paths: string[]): boolean {
 		return (
 			this.#auth.isAdmin() &&
@@ -273,10 +231,23 @@ export class SyncVaultChanges {
 		);
 	}
 
-	/**
-	 * Checked inside the task, right before the request: the session must still
-	 * be authenticated (refreshing it if needed) and still belong to an admin.
-	 */
+	#isGone(file: TAbstractFile): boolean {
+		return this.#plugin.app.vault.getAbstractFileByPath(file.path) !== file;
+	}
+
+	async #uploadBinary(path: string, buffer: ArrayBuffer): Promise<void> {
+		await requestUrl({
+			url: `${getApiBaseUrl()}/api/sync/createFile`,
+			method: 'POST',
+			headers: {
+				...this.#auth.AuthHeaders(),
+				'Content-Type': 'application/octet-stream',
+				'X-ObSync-filePath': path,
+			},
+			body: buffer,
+		});
+	}
+
 	async #canSendRequest(): Promise<boolean> {
 		return (
 			(await this.#auth.prepareAuthenticatedRequest()) &&

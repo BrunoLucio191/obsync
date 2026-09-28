@@ -12,20 +12,7 @@ import {
 } from "./yjsUtils/wsTransport.utils.ts";
 import type { YjsRoom } from "./yjsRooms/YjsRoom.ts";
 
-/**
- * Handles the `y-protocols/sync` sub-protocol nested inside a {@link MESSAGE_SYNC} envelope:
- * responding to state-vector requests and applying incoming document updates, subject to a
- * write-access check.
- * Dispatches a decoded sync sub-message: replies with sync-step-2 for a sync-step-1 request,
- * or applies the update to the document for sync-step-2/update messages (only if the
- * connection has global write access; otherwise the update is silently dropped and audited).
- * @param room - Room whose document is being synced.
- * @param connection - Connection the message came from (and, for step-1, the reply target).
- * @param connectionState - Per-connection state, used to check write permission.
- * @param decoder - Decoder positioned right after the outer {@link MESSAGE_SYNC} tag, at the
- * start of the sync sub-message.
- * @throws If the sync sub-message type is unrecognized.
- */
+/** Updates from a connection without global write access are dropped and audited. */
 export type SyncMessageHandlerFn = (params: SyncMessageHandlerParams) => void;
 
 export type SyncMessageHandlerParams = {

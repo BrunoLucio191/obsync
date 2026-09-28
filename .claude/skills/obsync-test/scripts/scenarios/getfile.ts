@@ -49,6 +49,17 @@ await checks.check("404 de arquivo sumido nao vira erro no log do backend", () =
   if (logs.backendErrors.length) throw new Error(logs.backendErrors[0]);
 });
 
+const errorsBeforeRename = logs.backendErrors.length;
+const missingRename = await fetch(`${server.baseUrl}/api/sync/rename`, {
+  method: "PUT",
+  headers: { "Content-Type": "application/json", Authorization: `Bearer ${admin.token}`, "X-ObSync-Client": "renamer" },
+  body: JSON.stringify({ oldPath: "never/there.md", newPath: "never/here.md" }),
+});
+await checks.check("rename de algo que o vault nunca teve: 404 sem erro no log", () => {
+  if (missingRename.status !== 404) throw new Error(`status ${missingRename.status}`);
+  if (logs.backendErrors.length !== errorsBeforeRename) throw new Error(logs.backendErrors.at(-1));
+});
+
 const events: { originClientId?: string }[] = [];
 vaultEvents.on("change", (change: { originClientId?: string }) => events.push(change));
 const upload = await fetch(`${server.baseUrl}/api/sync/createFile`, {

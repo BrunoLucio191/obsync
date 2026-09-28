@@ -1,12 +1,8 @@
 import type { KeyedLock } from "./KeyedLock.ts";
 
 /**
- * A simple abstraction of a queue, each task has an async function
- * with a standardized key.
- *
- * Tasks run one at a time, in arrival order. Before running a task the
- * queue takes the shared KeyedLock for its key, which makes a task wait
- * while another queue is already running something with the same key.
+ * Runs tasks one at a time, in arrival order. Each task first takes the shared KeyedLock
+ * for its key, so it waits while another queue runs something with the same key.
  */
 export default class Queue {
   #queue: Array<{ task: () => Promise<void>; taskKey: string }> = [];
@@ -14,16 +10,11 @@ export default class Queue {
   #lock: KeyedLock;
   #onEmpty?: () => void;
 
-  /**
-   * @param lock - KeyedLock shared by every queue.
-   * @param onEmpty - Called when the last task finishes and nothing is left to run.
-   */
   constructor(lock: KeyedLock, onEmpty?: () => void) {
     this.#lock = lock;
     this.#onEmpty = onEmpty;
   }
 
-  /** Adds a task to the #queue that is an array, and starts draining it if idle. */
   public addTask<T>(task: () => Promise<T>, taskKey: string): Promise<T> {
     if (!task) {
       throw new Error("[Queue] The task is empty");
@@ -84,9 +75,6 @@ export default class Queue {
     return this.#queue.map((someTask) => someTask.taskKey);
   }
 
-  /**
-   * Returns the Status if there any processing happening
-   */
   public get isProcessing() {
     return this.#processing;
   }

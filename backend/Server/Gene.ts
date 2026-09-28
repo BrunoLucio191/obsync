@@ -20,7 +20,6 @@ const geneMissing: VaultGene = {
   lastModification: "",
 };
 
-/** Every read and update of the gene file runs in this queue, one at a time. */
 const GENE_QUEUE_ID = "vault-gene";
 const GENE_UPDATE_KEY = "vault:gene:update";
 const GENE_READ_KEY = "vault:gene:read";
@@ -165,11 +164,7 @@ export class Gene {
     }
   }
 
-  /**
-   * Current gene as a single-line JSON string, read in the gene queue so it is never caught
-   * in the middle of an update.
-   * @returns The gene, or `null` if the file is missing or not valid JSON.
-   */
+  /** Read in the gene queue, so it's never caught mid-update. `null` if missing or invalid. */
   public async readGene(genePath = this.#genePath): Promise<string | null> {
     const queue = this.#queueManager.getOrCreateQueue(GENE_QUEUE_ID);
     try {
@@ -181,7 +176,6 @@ export class Gene {
     }
   }
 
-  /** Recounts the vault and writes the gene with the next generation. Runs as a queue task. */
   async #updateGene(directory: string, genePath: string): Promise<void> {
     let vaultGene = undefined;
     try {

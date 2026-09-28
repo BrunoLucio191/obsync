@@ -28,6 +28,7 @@ if anything under `backend/data` changed. Other flags are passed to the scenario
 | `queue` | Queue/QueueManager/KeyedLock, backend and plugin copies: order, error isolation, same key never concurrent, queue removed when drained |
 | `move` | Moving notes, folders with subfolders, several folders, create+move+rename; server vault must equal the client's with no failed request (`--runs`) |
 | `getfile` | getFile serves only files inside the vault (404 otherwise, including `../` paths), createFile events carry `originClientId`, a client recovers binaries renamed before it could download them |
+| `readonly-user` | A regular user whose vault drifted from the server's: admin renames of things they moved fetch the server's result (file download, or an initial sync for a folder), text is merged three-way with git-style markers, binaries they changed get a `(server version)` copy, offline changes merge through the initial sync |
 | `gene` | initSync with the vault gene: 204 when unchanged, gene saved in secretStorage only after a complete sync, per-vault secret id |
 | `color` | Cursor color in SQLite, `PATCH /api/auth/color`, plugin AuthService and the Account settings item |
 | `multiuser` | N admin clients editing their own `user-N/` folder at once, randomly connected, unstable or offline on `/system`; server in a child process with event loop metrics |
@@ -63,7 +64,11 @@ await server.data.cleanup();
 process.exit(code);
 ```
 
-For plugin classes not covered by `createClient`, use `bundlePlugin({ Name: "path/in/src.ts" })`.
+`createClient` takes `role: "user"` for a regular user and exposes `initialSync` and
+`fullSyncs` (initial syncs RemoteVaultChangeService asked for). Call `installZipWorker()` from
+`lib/zip-worker.ts` before anything runs an initial sync: it replaces the Web Worker with one
+that really unzips with the plugin's JSZip. For plugin classes not covered by `createClient`,
+use `bundlePlugin({ Name: "path/in/src.ts" })`.
 
 ## Things that cost time before
 
@@ -75,7 +80,8 @@ For plugin classes not covered by `createClient`, use `bundlePlugin({ Name: "pat
 - Do not start the Gene watcher in a process that deletes its temp dir itself: the watcher keeps
   rewriting `gene.json` and the cleanup hangs. That is why `multiuser` runs the server in
   `server-process.ts`. Running server and clients in one process also mixes their event loops,
-  which once looked like a 26s server stall that was really the harness.
+  which once looked like a 26s server stall that was really the harness. Without the watcher
+  `gene.json` never changes, so a second initial sync gets a 204: write a new gene first.
 - The fake `requestUrl` must keep Obsidian's contract (`status`, `headers`, `arrayBuffer`,
   `text`, lazy `json`, throws on >= 400 unless `throw: false`), or AuthService-style code falls
   into its generic error path.

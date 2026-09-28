@@ -45,11 +45,7 @@ export class SyncFilesController {
   };
 
   //TODO:: add a dynamic time for the timeout based on the size of the vault
-  /**
-   * Sends the whole vault as a zip, unless the gene the client got from its last complete
-   * initial sync (`X-ObSync-Gene`) matches the current one: then nothing changed and it
-   * answers 204. The zip response carries the current gene in the same header.
-   */
+  /** 204 when the client's `X-ObSync-Gene` matches the current gene, otherwise the zip with the current gene. */
   initSync = async (req: Request, res: Response): Promise<void> => {
     const clientId = res.locals.clientId as string;
     const clientGene = req.headers["x-obsync-gene"];
@@ -222,23 +218,28 @@ export class SyncFilesController {
 
     const queue = this.#queueManager.getOrCreateQueue(clientId);
     try {
-      // Keyed on the source path: it is the resource that stops existing, and
-      // locking both paths at once would open the door to a deadlock.
+      // Keyed on the source only: locking both paths could deadlock
       await queue.addTask(async () => {
         await this.#collaborationServer.renamePersistedStatePath(
           oldPath,
           newPath,
         );
-        const moved = await this.#fileManager.rename(oldPath, newPath);
+        const result = await this.#fileManager.rename(oldPath, newPath);
         // Already applied in the canonical vault, so there is nothing to spread
-        if (!moved) {
+        if (result === "already-applied") {
           res.sendStatus(200);
+          return;
+        }
+        // The vault never had it: a 404, not a server failure
+        if (result === "not-found") {
+          res.status(404).json({ error: "Path not found" });
           return;
         }
         publishVaultChange({
           type: "rename",
           oldPath,
           newPath,
+          isFolder: await this.#fileManager.isFolder(newPath),
           originClientId: clientId,
         });
         res.sendStatus(200);
@@ -293,8 +294,7 @@ export class SyncFilesController {
 
     try {
       await queue.addTask(async () => {
-        // Only files inside the vault. One that is gone was renamed or deleted after its
-        // event was published: the client expects that and waits for the next event.
+        // A file that's gone was renamed or deleted after its event, the client waits for the next one
         const filePath = await this.#fileManager.getFilePath(String(fileNameOrDirectory));
         if (!filePath) {
           res.status(404).json({ error: "File not found" });

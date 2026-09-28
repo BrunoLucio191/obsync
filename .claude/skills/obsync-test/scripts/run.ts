@@ -6,7 +6,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
 
-const SCENARIOS = ["queue", "move", "getfile", "gene", "color", "multiuser"];
+const SCENARIOS = ["queue", "move", "getfile", "readonly-user", "gene", "color", "multiuser"];
 const REPO = path.resolve(import.meta.dirname, "../../../..");
 const DATA = path.join(REPO, "backend/data");
 

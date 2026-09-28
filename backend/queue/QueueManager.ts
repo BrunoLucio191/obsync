@@ -2,13 +2,8 @@ import Queue from "../queue/Queue.ts";
 import type { KeyedLock } from "./KeyedLock.ts";
 
 /**
- * Menages all queues that are created per user. Every queue it builds shares the
- * same Keyed Lock, so two users running the same keyed operation still
- * wait for each other even though their queues are independent.
- *
- * A queue is removed as soon as it drains and the next request creates a new one,
- * so callers must add their task right after getOrCreateQueue instead of keeping
- * the queue around across an await.
+ * One queue per user, all sharing the same KeyedLock. A queue is removed once it drains, so
+ * add the task right after getOrCreateQueue instead of holding the queue across an await.
  */
 export class QueueManager {
   #dbQueuesRecord = new Map<string, Queue>();

@@ -95,6 +95,25 @@ for (const scenario of scenarios) {
   });
 }
 
+// created, renamed and deleted before the first task ran: the server never hears of it
+{
+  await fs.rm(server.data.paths.vault, { recursive: true, force: true });
+  await fs.mkdir(server.data.paths.vault, { recursive: true });
+  const client = await createClient({ clientId: "churn", token, websocket: false });
+  const before = netStats.requests;
+  const errorsBefore = logs.pluginErrors.length + logs.backendErrors.length;
+  client.vault.createFile("tmp.md", "x");
+  client.vault.rename("tmp.md", "tmp2.md");
+  client.vault.delete("tmp2.md");
+  await waitForQuiet(netStats, 150);
+  await checks.check("cria, renomeia e apaga em seguida: nenhuma requisicao e nenhum erro", async () => {
+    const sent = netStats.requests - before;
+    const errors = logs.pluginErrors.length + logs.backendErrors.length - errorsBefore;
+    const onServer = await diskTree(server.data.paths.vault);
+    if (sent || errors || onServer.length) throw new Error(`${sent} requisicoes, ${errors} erros, servidor: ${onServer}`);
+  });
+}
+
 const code = checks.finish();
 await server.data.cleanup();
 process.exit(code);

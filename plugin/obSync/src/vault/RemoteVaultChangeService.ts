@@ -1,4 +1,4 @@
-import { requestUrl, type App } from 'obsidian';
+import { Notice, requestUrl, type App } from 'obsidian';
 import type { VaultChange } from './VaultChange.ts';
 import type { AuthService } from '../auth/AuthService.ts';
 import type { CollaborationController } from '../collab/CollaborationController.ts';
@@ -6,16 +6,12 @@ import { PathMuteRegistry } from './PathMuteRegistry.ts';
 import { getApiBaseUrl } from '../config/ApiConfig.ts';
 import type { QueueManager } from '../queue/QueueManager.ts';
 import { t } from '../i18n/i18n.ts';
+import { ensureParentFolder } from './ensureParentFolder.ts';
+import type { ServerVersionMerger } from './ServerVersionMerger.ts';
 
 /**
- * Applies vault changes received from other clients (via {@link SystemChannel})
- * to the local Obsidian vault: writing/creating/deleting/renaming files and
- * folders. Every affected path is muted first so applying the change doesn't
- * trigger a local vault event that gets re-published back to the server.
- *
- * Changes are applied as tasks in this client's queue, the same one used by
- * {@link SyncVaultChanges}, so they never run concurrently with each other or
- * with a local change being published.
+ * Applies vault changes from other clients, muting each path so the local event isn't
+ * republished. Regular users never publish, so their files go through ServerVersionMerger.
  */
 export class RemoteVaultChangeService {
 	readonly #app: App;
@@ -23,11 +19,10 @@ export class RemoteVaultChangeService {
 	readonly #mutedPaths: PathMuteRegistry;
 	readonly #collaboration: CollaborationController;
 	readonly #queueManager: QueueManager;
-	/**
-	 * Binaries announced by the server that were already renamed or deleted when this client
-	 * tried to download them. A later rename says where they went; a delete drops them.
-	 */
+	/** Binaries already gone when announced; a later rename says where they went. */
 	readonly #missedBinaries = new Set<string>();
+	readonly #merger: ServerVersionMerger;
+	readonly #requestFullSync: () => void;
 
 	public constructor(
 		app: App,
@@ -35,80 +30,64 @@ export class RemoteVaultChangeService {
 		mutedPaths: PathMuteRegistry,
 		collaboration: CollaborationController,
 		queueManager: QueueManager,
+		merger: ServerVersionMerger,
+		requestFullSync: () => void,
 	) {
 		this.#app = app;
 		this.#auth = auth;
 		this.#mutedPaths = mutedPaths;
 		this.#collaboration = collaboration;
 		this.#queueManager = queueManager;
+		this.#merger = merger;
+		this.#requestFullSync = requestFullSync;
 	}
 
-	/**
-	 * Queues a remote vault change to be applied to the local vault. Failures
-	 * are logged instead of thrown.
-	 * @param change - The remote change to apply.
-	 */
 	public async apply(change: VaultChange): Promise<void> {
 		const path = change.type === 'rename' ? change.oldPath : change.path;
 		const queue = this.#queueManager.getOrCreateQueue(this.#auth.clientId);
 		try {
-			await queue.addTask(() => this.#applyChange(change), `remote:${path}:${change.type}`);
+			await queue.addTask(
+				() => this.#applyChange(change),
+				`remote:${path}:${change.type}`,
+			);
 		} catch (error) {
 			console.error(t('sync.applyRemoteChangeFailed', { path }), error);
 		}
 	}
 
-	/**
-	 * Applies a single remote vault change to the local vault. For read-only
-	 * users, `create`/`modify` are skipped when the local file already exists,
-	 * so their local edits aren't clobbered by remote history. Deletes trash
-	 * the file when Obsidian is tracking it (so it can be recovered), falling
-	 * back to a raw adapter removal otherwise. Renames create any missing
-	 * parent folders before moving the file.
-	 * @param change - The remote change to apply.
-	 */
+	/** Deletes go to Obsidian's trash when it tracks the file, so they can be recovered. */
 	async #applyChange(change: VaultChange): Promise<void> {
 		const adapter = this.#app.vault.adapter;
 
 		if (change.type === 'create') {
-			if (this.#auth.isReadOnlyUser() && (await adapter.exists(change.path))) {
-				return;
-			}
-
 			this.#mutedPaths.mute(change.path);
-			if (change.isBinary) {
-				if (!(await this.#downloadBinary(change.path))) {
-					this.#missedBinaries.add(change.path);
-				}
-				return;
-			}
 			if (change.isFolder) {
 				if (!(await adapter.exists(change.path))) {
 					await adapter.mkdir(change.path);
 				}
-			} else {
-				await this.#ensureParentFolder(change.path);
-				await adapter.write(change.path, change.content!);
+				return;
 			}
+			if (change.isBinary) {
+				if (!(await this.#downloadFile(change.path))) {
+					this.#missedBinaries.add(change.path);
+				}
+				return;
+			}
+			await this.#writeServerFile(change.path, change.content ?? '');
 			return;
 		}
 
 		if (change.type === 'modify') {
-			if (this.#auth.isReadOnlyUser() && (await adapter.exists(change.path))) {
-				return;
-			}
-
-			this.#mutedPaths.mute(change.path);
-			await this.#ensureParentFolder(change.path);
-			await adapter.write(change.path, change.content);
-
+			await this.#writeServerFile(change.path, change.content);
 			return;
 		}
 
 		if (change.type === 'delete') {
 			for (const missed of [...this.#missedBinaries]) {
-				if (PathMuteRegistry.contains(change.path, missed)) this.#missedBinaries.delete(missed);
+				if (PathMuteRegistry.contains(change.path, missed))
+					this.#missedBinaries.delete(missed);
 			}
+			await this.#merger.forget(change.path);
 			this.#collaboration.disconnectIfAffected(change.path);
 			this.#mutedPaths.mute(change.path);
 
@@ -130,19 +109,68 @@ export class RemoteVaultChangeService {
 		this.#mutedPaths.mute(change.oldPath);
 		this.#mutedPaths.mute(change.newPath);
 		if (await adapter.exists(change.oldPath)) {
-			await this.#ensureParentFolder(change.newPath);
+			await ensureParentFolder(adapter, this.#mutedPaths, change.newPath);
 			await adapter.rename(change.oldPath, change.newPath);
+		} else if (
+			this.#auth.isReadOnlyUser() &&
+			!this.#missedBinaries.has(change.oldPath)
+		) {
+			await this.#followServerRename(
+				change.oldPath,
+				change.newPath,
+				change.isFolder,
+			);
 		}
+		await this.#merger.rename(change.oldPath, change.newPath);
 		await this.#recoverMissedBinaries(change.oldPath, change.newPath);
 	}
 
-	/**
-	 * Downloads a binary file from the server into the vault, at the same path.
-	 * @param path - Vault-relative path of the file.
-	 * @returns `false` when the server no longer has the file (404), because it was renamed
-	 * or deleted before this client got to it; any other failure throws.
-	 */
-	async #downloadBinary(path: string): Promise<boolean> {
+	/** The user moved what the admin renamed: an unedited copy follows, else the server's version is fetched. */
+	async #followServerRename(
+		oldPath: string,
+		newPath: string,
+		isFolder: boolean,
+	): Promise<void> {
+		const adapter = this.#app.vault.adapter;
+		const movedCopy = isFolder
+			? null
+			: await this.#merger.findMovedCopy(oldPath);
+		if (movedCopy && !(await adapter.exists(newPath))) {
+			this.#mutedPaths.mute(movedCopy);
+			await ensureParentFolder(adapter, this.#mutedPaths, newPath);
+			await adapter.rename(movedCopy, newPath);
+			new Notice(
+				t('sync.adminMovedYourCopy', {
+					oldPath,
+					newPath,
+					copyPath: movedCopy,
+				}),
+			);
+			return;
+		}
+
+		if (isFolder) this.#requestFullSync();
+		else await this.#downloadFile(newPath);
+		new Notice(t('sync.adminMovedDownloaded', { oldPath, newPath }));
+	}
+
+	async #writeServerFile(
+		path: string,
+		data: string | ArrayBuffer,
+	): Promise<void> {
+		if (this.#auth.isReadOnlyUser()) {
+			await this.#merger.apply(path, data);
+			return;
+		}
+		const adapter = this.#app.vault.adapter;
+		this.#mutedPaths.mute(path);
+		await ensureParentFolder(adapter, this.#mutedPaths, path);
+		if (typeof data === 'string') await adapter.write(path, data);
+		else await adapter.writeBinary(path, data);
+	}
+
+	/** @returns `false` on 404: renamed or deleted before this client got to it. */
+	async #downloadFile(path: string): Promise<boolean> {
 		const params = new URLSearchParams({
 			path,
 			fileName: path.slice(path.lastIndexOf('/') + 1),
@@ -150,7 +178,7 @@ export class RemoteVaultChangeService {
 		const response = await requestUrl({
 			url: `${getApiBaseUrl()}/api/sync/getFile?${params}`,
 			method: 'GET',
-			headers: this.#auth.Authheaders(),
+			headers: this.#auth.AuthHeaders(),
 			throw: false,
 		});
 		if (response.status === 404) return false;
@@ -158,47 +186,20 @@ export class RemoteVaultChangeService {
 			throw new Error(`getFile returned ${response.status} for ${path}`);
 		}
 
-		this.#mutedPaths.mute(path);
-		await this.#ensureParentFolder(path);
-		await this.#app.vault.adapter.writeBinary(path, response.arrayBuffer);
+		await this.#writeServerFile(path, response.arrayBuffer);
 		return true;
 	}
 
-	/**
-	 * Fetches the missed binaries a rename moved (the file itself or a folder above it) from
-	 * their new path. One that is gone again waits for the next rename under its new path.
-	 * @param oldPath - Path before the rename.
-	 * @param newPath - Path after the rename.
-	 */
-	async #recoverMissedBinaries(oldPath: string, newPath: string): Promise<void> {
+	async #recoverMissedBinaries(
+		oldPath: string,
+		newPath: string,
+	): Promise<void> {
 		for (const missed of [...this.#missedBinaries]) {
 			if (!PathMuteRegistry.contains(oldPath, missed)) continue;
 			this.#missedBinaries.delete(missed);
 			const current = newPath + missed.slice(oldPath.length);
-			if (!(await this.#downloadBinary(current))) this.#missedBinaries.add(current);
-		}
-	}
-
-	/**
-	 * Creates any missing folders in the path leading up to (but not
-	 * including) a file, muting each one created so the resulting vault
-	 * events aren't republished.
-	 * @param filePath - Vault-relative file path whose parent folders should exist.
-	 */
-	async #ensureParentFolder(filePath: string): Promise<void> {
-		const parent = filePath.substring(0, filePath.lastIndexOf('/'));
-		if (!parent) return;
-
-		const adapter = this.#app.vault.adapter;
-		const parts = parent.split('/');
-		let current = '';
-
-		for (const part of parts) {
-			current = current ? `${current}/${part}` : part;
-			if (!(await adapter.exists(current))) {
-				this.#mutedPaths.mute(current);
-				await adapter.mkdir(current);
-			}
+			if (!(await this.#downloadFile(current)))
+				this.#missedBinaries.add(current);
 		}
 	}
 }

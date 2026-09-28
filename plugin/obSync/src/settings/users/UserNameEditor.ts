@@ -4,13 +4,7 @@ import { t } from '../../i18n/i18n.ts';
 import type { SettingsController } from '../SettingsController.ts';
 import type { UserDirectory } from './UserDirectory.ts';
 
-/**
- * Renders and debounce-saves a user's editable display-name field, shared
- * between the "Account" section (editing your own name) and the user-list
- * rows (editing another user's name). Validates length, checks for
- * duplicates against the cached directory, and shows inline save-status
- * text instead of requiring an explicit save button.
- */
+/** Display-name field that saves itself, used both in Account and in the user list. */
 export class UserNameEditor {
 	readonly #saveTimers = new Map<number, number>();
 	readonly #saveGenerations = new Map<number, number>();
@@ -26,7 +20,6 @@ export class UserNameEditor {
 		this.#directory = directory;
 	}
 
-	/** Renders a labeled name field with an inline save-status indicator, and wires its `onChange` to `scheduleSave`. */
 	public render(
 		setting: Setting,
 		user: AuthenticatedUser,
@@ -52,12 +45,7 @@ export class UserNameEditor {
 		});
 	}
 
-	/**
-	 * Debounces (500ms) a name change and persists it once the input settles,
-	 * after validating length and checking for a duplicate name. Uses a
-	 * per-user generation counter so an in-flight save can't overwrite a
-	 * newer edit or write into a stale/detached input.
-	 */
+	/** The per-user generation keeps an in-flight save from overwriting a newer edit. */
 	public scheduleSave(
 		user: AuthenticatedUser,
 		value: string,
@@ -112,7 +100,6 @@ export class UserNameEditor {
 		this.#saveTimers.set(user.id, timer);
 	}
 
-	/** Cancels every pending debounced save timer, e.g. when the settings tab closes. */
 	public destroy(): void {
 		for (const timer of this.#saveTimers.values()) {
 			window.clearTimeout(timer);
@@ -120,11 +107,6 @@ export class UserNameEditor {
 		this.#saveTimers.clear();
 	}
 
-	/**
-	 * Sends the name update to the backend and reconciles UI/cache state,
-	 * bailing out silently if a newer edit superseded this one or the input
-	 * has since been removed from the DOM.
-	 */
 	async #persist(
 		user: AuthenticatedUser,
 		name: string,

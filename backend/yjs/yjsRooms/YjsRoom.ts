@@ -7,11 +7,7 @@ import { MESSAGE_AWARENESS, MESSAGE_SYNC } from "../yjs.const.ts";
 import type { YjsConnectionState } from "../yjs.types.ts";
 import { sendBinaryMessage } from "../yjsUtils/wsTransport.utils.ts";
 
-/**
- * Represents a single collaborative document ("room"): its Yjs CRDT document, its awareness
- * state, and the set of WebSocket connections currently joined to it. Owned and lifecycle-managed
- * by {@link YjsRoomRegistry}; connections are attached/detached by {@link YjsCollaborationServer}.
- */
+/** One collaborative document, its awareness and its connections. Lifecycle lives in {@link YjsRoomRegistry}. */
 export class YjsRoom {
   public readonly docName: string;
   public readonly filePath: string;
@@ -25,7 +21,6 @@ export class YjsRoom {
   public reservations = 1;
   public closingPromise: Promise<void> | null = null;
 
-  /** Guards {@link attachListeners} so document/awareness listeners are only wired once per room. */
   #listenersAttached = false;
 
   public constructor(docName: string, filePath: string) {
@@ -34,12 +29,7 @@ export class YjsRoom {
     this.awareness = new awarenessProtocol.Awareness(this.doc);
   }
 
-  /**
-   * Wires the Yjs document and awareness instance to broadcast their changes to all joined
-   * connections. Idempotent: subsequent calls are no-ops.
-   * @param isInvalidated - Callback checked before broadcasting a document update, to suppress
-   * broadcasts for a document that was invalidated by a path deletion mid-flight.
-   */
+  /** `isInvalidated` stops broadcasts of a document deleted while the room was loading. */
   public attachListeners(isInvalidated: () => boolean): void {
     if (this.#listenersAttached) return;
     this.#listenersAttached = true;
@@ -70,21 +60,12 @@ export class YjsRoom {
     );
   }
 
-  /**
-   * Sends a pre-encoded binary message to every connection currently joined to the room.
-   * @param message - Encoded Yjs protocol message to broadcast.
-   */
   public broadcast(message: Uint8Array): void {
     for (const connection of this.connections.keys()) {
       sendBinaryMessage(connection, message);
     }
   }
 
-  /**
-   * Sends the current awareness state of every known client in the room to a single connection.
-   * Used both for initial sync and in response to an explicit awareness query.
-   * @param connection - Connection to receive the snapshot.
-   */
   public sendAwarenessSnapshot(connection: WebSocket): void {
     const clientIds = Array.from(this.awareness.getStates().keys());
     if (clientIds.length === 0) return;
@@ -98,11 +79,6 @@ export class YjsRoom {
     sendBinaryMessage(connection, encoding.toUint8Array(encoder));
   }
 
-  /**
-   * Sends the initial handshake to a newly joined connection: a sync-step-1 message (state
-   * vector) followed by the current awareness snapshot.
-   * @param connection - Newly joined connection to initialize.
-   */
   public sendInitialSync(connection: WebSocket): void {
     const encoder = encoding.createEncoder();
     encoding.writeVarUint(encoder, MESSAGE_SYNC);
@@ -112,12 +88,6 @@ export class YjsRoom {
     this.sendAwarenessSnapshot(connection);
   }
 
-  /**
-   * Called when releasing a connection that disconnected: revokes the awareness ownership
-   * it controlled (broadcasting removal to remaining peers) and clears its room state.
-   * No-ops if the connection was already released.
-   * @param connection - Connection being removed from the room.
-   */
   public releaseConnection(connection: WebSocket): void {
     const state = this.connections.get(connection);
     if (!state || state.closed) return;
@@ -140,7 +110,6 @@ export class YjsRoom {
     }
   }
 
-  /** Destroys the awareness instance and the underlying Yjs document, releasing their resources. */
   public destroyDocument(): void {
     this.awareness.destroy();
     this.doc.destroy();

@@ -13,6 +13,8 @@ await fs.writeFile(`${server.data.paths.vault}/note.md`, "hello");
 const { token } = await server.createUser(0);
 const plugin = await bundlePlugin({
   ZipWorkerSon: "Workers/zipWorker/ZipWorkerSon.ts",
+  QueueManager: "queue/QueueManager.ts",
+  KeyedLock: "queue/KeyedLock.ts",
   configureApiEndpoint: "config/ApiConfig.ts",
   initI18n: "i18n/i18n.ts",
 });
@@ -69,6 +71,7 @@ const makeApp = (vaultName: string, secretStorage = makeSecrets(), failWrites = 
   workspace: { onLayoutReady: (cb: () => void) => cb() },
 });
 const auth = {
+  clientId: "gene-client",
   prepareAuthenticatedRequest: async () => true,
   Authheaders: () => ({ Authorization: `Bearer ${token}`, "X-ObSync-Client": "gene-client" }),
   isAdmin: () => true,
@@ -77,7 +80,8 @@ const auth = {
 async function initialSync(app: ReturnType<typeof makeApp>) {
   const noticesBefore = notices.length;
   const workersBefore = workers;
-  await new plugin.ZipWorkerSon(app, { mute: () => {} }, auth).startWorking();
+  const queueManager = new plugin.QueueManager(new plugin.KeyedLock());
+  await new plugin.ZipWorkerSon(app, { mute: () => {} }, auth, queueManager, { apply: async () => {} }).startWorking();
   for (let i = 0; i < 100 && notices.length === noticesBefore; i++) await new Promise((r) => setTimeout(r, 10));
   return { notice: notices.slice(noticesBefore).join(" | "), downloaded: workers > workersBefore };
 }

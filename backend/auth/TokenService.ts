@@ -24,24 +24,16 @@ const TOKEN_ISSUER = "obsync";
 const TOKEN_AUDIENCE = "obsync-api";
 
 /**
- * Issues and validates the app's authentication tokens: short-lived signed access tokens
- * (a hand-rolled JWT-like format), long-lived opaque refresh tokens, and single-use WebSocket
- * connection tickets. All session and ticket state is kept in memory (not persisted), so it is
- * lost on process restart.
+ * Access tokens (a hand-rolled JWT), refresh tokens and WebSocket tickets. Sessions live
+ * only in memory, so a restart signs everyone out.
  */
 export class TokenService {
   readonly #secret: string;
   readonly #dbService: DBServices;
   readonly #sessions = new Map<string, SessionRecord>();
   readonly #webSocketTickets = new Map<string, WebSocketTicketRecord>();
-  /** Callbacks notified whenever a session is revoked (e.g. so open WebSocket connections can be closed). */
   readonly #revocationListeners = new Set<(sessionId: string) => void>();
 
-  /**
-   * @param options.secret - HMAC signing secret; must be at least 32 bytes long.
-   * @param options.dbService - Service used to re-fetch user records when validating tokens/sessions.
-   * @throws If `secret` is missing or shorter than 32 bytes.
-   */
   public constructor({ secret, dbService }: TokenServiceConstructor) {
     if (!secret || Buffer.byteLength(secret, "utf8") < 32) {
       throw new Error("OBSYNC_TOKEN_SECRET must contain at least 32 random bytes.");
@@ -51,11 +43,6 @@ export class TokenService {
     this.#dbService = dbService;
   }
 
-  /**
-   * Creates a brand-new session (and its refresh token) for an already-authenticated user, e.g. right after login.
-   * @param user - The user to create a session for.
-   * @returns A fresh {@link AuthSession} containing an access token and refresh token.
-   */
   public sessionFor(user: AuthenticatedUser): AuthSession {
     this.#removeExpiredState();
     const sessionId = this.#randomValue();
@@ -70,20 +57,11 @@ export class TokenService {
     return this.#buildSession(user, sessionId, refreshToken);
   }
 
-  /**
-   * Validates an access token (signature, claims, expiry, and backing session) and resolves the current user.
-   * @param token - The bearer access token to verify, or `null`/`undefined` if none was supplied.
-   * @returns The {@link AuthenticatedUser} the token belongs to, or `null` if the token is missing/invalid/expired.
-   */
   public async verifyToken(token: string | null | undefined): Promise<AuthenticatedUser | null> {
     return (await this.#authorizeAccessToken(token))?.user ?? null;
   }
 
-  /**
-   * Exchanges a valid refresh token for a brand-new session, rotating the refresh token in the process.
-   * @param refreshToken - The opaque refresh token to redeem, or `null`/`undefined` if none was supplied.
-   * @returns A new {@link AuthSession}, or `null` if the refresh token is missing/invalid/expired or its user no longer exists.
-   */
+  /** Rotates the refresh token on every use. */
   public async refreshSession(
     refreshToken: string | null | undefined,
   ): Promise<AuthSession | null> {
@@ -117,10 +95,6 @@ export class TokenService {
     return this.#buildSession(user, sessionId, rotatedRefreshToken);
   }
 
-  /**
-   * Revokes the session identified by a refresh token (e.g. on logout), invalidating its access tokens and tickets.
-   * @param refreshToken - The refresh token identifying the session to revoke, or `null`/`undefined` to no-op.
-   */
   public revokeSession(refreshToken: string | null | undefined): void {
     if (!refreshToken) return;
 
@@ -133,13 +107,7 @@ export class TokenService {
     }
   }
 
-  /**
-   * Issues a short-lived, single-use ticket that a client can use to authenticate a WebSocket upgrade
-   * (WebSocket handshakes cannot carry an `Authorization` header, hence this ticket indirection).
-   * @param accessToken - A currently-valid access token identifying the requesting user.
-   * @param channel - The WebSocket channel (`"system"` or `"yjs"`) the ticket will be valid for.
-   * @returns A new {@link WebSocketTicket}, or `null` if the access token is invalid.
-   */
+  /** WebSocket handshakes can't carry an `Authorization` header, hence the ticket. */
   public async issueWebSocketTicket(
     accessToken: string | null | undefined,
     channel: WebSocketChannel,
@@ -158,13 +126,6 @@ export class TokenService {
     return { ticket, expiresIn: WEB_SOCKET_TICKET_LIFETIME_SECONDS };
   }
 
-  /**
-   * Redeems a WebSocket ticket exactly once, validating it against the requested channel, its own
-   * expiry, and the backing session's expiry.
-   * @param ticket - The ticket value presented by the client during the WebSocket upgrade.
-   * @param channel - The channel the connection is being made on; must match the ticket's issued channel.
-   * @returns The resolved {@link WebSocketAuthorization}, or `null` if the ticket is missing/invalid/expired/wrong-channel.
-   */
   public async consumeWebSocketTicket(
     ticket: string | null | undefined,
     channel: WebSocketChannel,
@@ -199,17 +160,11 @@ export class TokenService {
     };
   }
 
-  /**
-   * Subscribes to session revocation events (e.g. so a WebSocket server can close connections for a revoked session).
-   * @param listener - Called with the session id whenever a session is revoked.
-   * @returns An unsubscribe function that removes the listener.
-   */
   public onSessionRevoked(listener: (sessionId: string) => void): () => void {
     this.#revocationListeners.add(listener);
     return () => this.#revocationListeners.delete(listener);
   }
 
-  /** Assembles the client-facing {@link AuthSession} object: a fresh access token plus the given refresh token. */
   #buildSession(
     user: AuthenticatedUser,
     sessionId: string,
@@ -223,7 +178,6 @@ export class TokenService {
     };
   }
 
-  /** Builds and signs a new access token (header.payload.signature) for the given user and session. */
   #issueAccessToken(user: AuthenticatedUser, sessionId: string): string {
     //transform in seconds;
     const now = Math.floor(Date.now() / 1_000);
@@ -242,10 +196,6 @@ export class TokenService {
     return `${signed}.${this.#sign(signed)}`;
   }
 
-  /**
-   * Full validation pipeline for an access token: signature check, structural/claim checks,
-   * expiry checks, and cross-referencing the live session and current user record.
-   */
   async #authorizeAccessToken(
     token: string | null | undefined,
   ): Promise<AccessAuthorization | null> {
@@ -307,7 +257,6 @@ export class TokenService {
     }
   }
 
-  /** Removes a session and any WebSocket tickets tied to it, then notifies revocation listeners. */
   #revokeSessionId(sessionId: string): void {
     if (!this.#sessions.delete(sessionId)) return;
 
@@ -321,7 +270,7 @@ export class TokenService {
     }
   }
 
-  /** Sweeps expired sessions (revoking them) and expired WebSocket tickets. Called lazily before mutating state. */
+  /** Lazy sweep, run before each change instead of on a timer. */
   #removeExpiredState(): void {
     const now = Date.now();
 
@@ -335,31 +284,23 @@ export class TokenService {
     }
   }
 
-  /** Builds a new opaque refresh token string in the form `"<sessionId>.<random>"`. */
   #createRefreshToken(sessionId: string): string {
     return `${sessionId}.${this.#randomValue()}`;
   }
 
-  /**
-   * Generates a cryptographically random, base64url-encoded value.
-   * @param bytes - Number of random bytes to generate (default 32).
-   * @returns The random value as a base64url string.
-   */
   #randomValue(bytes = 32): string {
     return randomBytes(bytes).toString("base64url");
   }
 
-  /** Computes an HMAC-SHA256 signature (base64url) over a value, using the service secret. */
   #sign(value: string): string {
     return createHmac("sha256", this.#secret).update(value).digest("base64url");
   }
 
-  /** Hashes an opaque token (e.g. a refresh token or ticket) so only its HMAC is kept in memory, not the raw value. */
+  /** Only the HMAC of opaque tokens is kept in memory, never the raw value. */
   #hashOpaqueToken(value: string): string {
     return createHmac("sha256", this.#secret).update(`opaque:${value}`).digest("base64url");
   }
 
-  /** Constant-time string equality check, used to compare secrets/hashes without leaking timing information. */
   #safeEqual(left: string, right: string): boolean {
     const leftBuffer = Buffer.from(left);
     const rightBuffer = Buffer.from(right);
