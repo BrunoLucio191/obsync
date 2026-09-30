@@ -22,8 +22,9 @@ are kept in memory, so restarting the backend revokes all active sessions.
 sessionFor(user: AuthenticatedUser): AuthSession
 ```
 
-Creates a new session ID, 15-minute access token, and rotating refresh token.
-Only the HMAC hash of the refresh token is retained on the backend.
+Creates a new session id, a 15-minute access token, and a refresh token of the
+form `<session id>.<random>`, valid for 30 days. Only the HMAC hash of the
+refresh token is retained on the backend.
 
 ### `verifyToken()`
 
@@ -94,6 +95,30 @@ onSessionRevoked(
 Registers a listener and returns an unsubscribe function. The WebSocket server
 uses it to close every connection owned by a revoked session.
 
+### How secrets are derived
+
+`#sign(value)` (JWT signatures) and `#hashOpaqueToken(value)` (refresh tokens
+and tickets) are both HMAC-SHA256 with the same secret. `#hashOpaqueToken`
+prefixes its input with `opaque:`, which a JWT signing input can never start
+with, so the two uses cannot be confused. Keep that prefix. See
+[Security](../../security.md#why-the-same-hmac-key-hashes-tokens-and-signs-jwts).
+
+State is cleaned lazily: `#removeExpiredState()` runs before each operation
+instead of on a timer.
+
+## AuthService
+
+Source: [`backend/auth/authService.ts`](../../../backend/auth/authService.ts)
+
+```ts
+new AuthService(userDB: UserDB, dbService: DBServices, tokenService: TokenService)
+login(email: string, password: string): Promise<AuthSession | null | undefined>
+```
+
+Loads the **active** user by normalized e-mail, checks the password with
+`passwordMatches()`, and returns `tokenService.sessionFor(user)`, or `null`.
+Rate limiting happens in `AuthController.login`, not here.
+
 ## LoginRateLimiter
 
 Source: [`backend/auth/LoginRateLimiter.ts`](../../../backend/auth/LoginRateLimiter.ts)
@@ -108,8 +133,10 @@ new LoginRateLimiter({
 ```
 
 Defaults are a 15-minute attempt window, 15-minute block, five failures, and
-10,000 tracked keys. `ExpressServer` uses separate instances for account and IP
-limits; the IP instance allows 25 failures.
+10,000 tracked keys. `ExpressServer` creates three instances: per account (5
+failures), per IP (25 failures), and per user for password changes (5 wrong
+current passwords). `LoginRateLimiter.loginRateLimitKeys(req, email)` builds the
+`account:<e-mail>` and `ip:<address>` keys.
 
 | Method | Return | Behavior |
 | --- | --- | --- |
@@ -133,8 +160,8 @@ Source: [`backend/auth/PasswordUtil.ts`](../../../backend/auth/PasswordUtil.ts)
 
 | Function | Purpose |
 | --- | --- |
-| `hashPassword(password)` | Creates a salted password hash for storage |
-| `passwordMatches(password, storedHash)` | Compares a submitted password with a stored hash |
+| `hashPassword(password)` | NFC-normalizes the password and returns `"<salt>:<scrypt hash>"` (16-byte salt, 64-byte key, hex) |
+| `passwordMatches(password, storedHash)` | Recomputes the hash with the stored salt and compares in constant time |
 
 ## Related references
 

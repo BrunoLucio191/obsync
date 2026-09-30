@@ -120,6 +120,16 @@ Delegates to `AuthService`. Lets the signed-in account change its own
 password. Unlike `resetUserPassword`, this always requires the caller's
 current password, whether they're an admin or a regular user.
 
+### `changeColor()`
+
+```ts
+changeColor(color: string): Promise<UserActionResult<null>>
+```
+
+Delegates to `AuthService.changeColor()`, which calls `PATCH /api/auth/color`.
+On success the session profile is refreshed, and the active collaboration room
+is rebuilt so other users see the new cursor color.
+
 ### `setBackendUrl()`
 
 ```ts

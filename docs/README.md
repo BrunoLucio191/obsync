@@ -1,58 +1,58 @@
 # ObSync developer documentation
 
-This documentation is organized as a developer portal. Concept pages explain
-why the system behaves as it does. Reference pages describe the classes,
-methods, objects, endpoints, and protocols that implement that behavior.
+These pages are for developers who are new to the codebase and need to change
+it safely. Concept pages explain how the system behaves and why; reference
+pages list the classes, endpoints and protocols that implement it.
 
-## Start here
+## Suggested reading order
 
-| Page | Use it when you need to |
-| --- | --- |
-| [System overview](overview.md) | Understand the product, roles, and trust boundaries |
-| [Architecture](architecture.md) | Find the source module responsible for a behavior |
-| [API reference](reference/README.md) | Look up a class, method, object, endpoint, or protocol |
-| [Glossary](glossary.md) | Decode project-specific names such as `networkDoc` and muted path |
+1. [System overview](overview.md): the parts, the two roles, and three
+   end-to-end flows. Start here.
+2. [Architecture](architecture.md): every module, what it owns, and the
+   conventions used across the code.
+3. [File synchronization](file-sync.md) and [Collaboration](collaboration.md):
+   the two sync mechanisms.
+4. [Concurrency and ordering](concurrency.md): the queues that keep operation
+   order predictable.
+5. [Common changes](common-changes.md): where to edit for typical tasks.
+
+Before changing a boundary, read [Design decisions](decisions.md). Before
+debugging something that looks wrong, check [Known issues](known-issues.md).
 
 ## Concepts
 
-- [Collaboration model](collaboration.md) — document ownership, Yjs flow, and presence
-- [Authorization model](permissions.md) — capabilities and enforcement points
-- [Storage](storage.md) — SQLite, Markdown, Yjs state, IndexedDB, and SecretStorage
-- [Security](security.md) — sessions, WebSocket tickets, and TLS deployment
-- [Design decisions](decisions.md) — reasons behind the current boundaries
+| Page | Covers |
+| --- | --- |
+| [System overview](overview.md) | Roles, components, sign-in, typing, and file-operation flows |
+| [Architecture](architecture.md) | Module map for backend and plugin, composition roots, channels |
+| [File synchronization](file-sync.md) | Vault gene, initial download, publishing, `/system`, three-way merge |
+| [Collaboration](collaboration.md) | Yjs rooms on client and server, write check, awareness, persistence |
+| [Concurrency and ordering](concurrency.md) | Promise chains, `KeyedLock`, `Queue`, the room message queue |
+| [Authorization](permissions.md) | Capabilities per role and every enforcement point |
+| [Security](security.md) | Sessions, tokens, WebSocket tickets, TLS deployment, rate limits |
+| [Storage](storage.md) | Every file and database on the backend and the client |
+| [Design decisions](decisions.md) | Why the current boundaries exist and what they cost |
+| [Glossary](glossary.md) | Project-specific terms |
+
+## Working on the code
+
+- [Getting started](../README.md#getting-started): run everything locally
+- [Common changes](common-changes.md): where to edit
+- [Troubleshooting](debugging.md): startup, connection and sync problems
+- [Known issues](known-issues.md): verified bugs and open questions
 
 ## API reference
 
 - [Reference index](reference/README.md)
-- [Plugin API](reference/plugin/README.md)
-  - [ObSync](reference/plugin/ObSync.md)
-  - [AuthService and UserAdminService](reference/plugin/authentication.md)
-  - [Collaboration API](reference/plugin/collaboration.md)
-  - [Synchronization and vault services](reference/plugin/synchronization.md)
-  - [Plugin data types](reference/plugin/types.md)
-- [Backend API](reference/backend/README.md)
-  - [Authentication services](reference/backend/authentication.md)
-  - [Backend services](reference/backend/services.md)
-  - [HTTP API](reference/backend/http.md)
-  - [WebSocket API](reference/backend/websocket.md)
-  - [Backend data types](reference/backend/types.md)
-
-## Operations
-
-- [Getting started](../README.md#getting-started) — first-time setup, from a fresh clone to a signed-in plugin
-- [Troubleshooting](debugging.md) — build, startup, authentication, and synchronization checks
-- [Security deployment](security.md#transport-rules) — local and remote transport configuration
-- [Database setup](storage.md#sqlite-user-database) — explicit database creation and seed
-
-## Suggested reading paths
-
-New contributors should read the [system overview](overview.md),
-[architecture](architecture.md), and [collaboration model](collaboration.md), then
-use the [plugin](reference/plugin/README.md) or
-[backend](reference/backend/README.md) reference while changing code.
-
-For an authentication change, start with
-[AuthService](reference/plugin/authentication.md#authservice), continue with
-[TokenService](reference/backend/authentication.md#tokenservice), and finish at
-the [HTTP](reference/backend/http.md#authentication) and
-[WebSocket](reference/backend/websocket.md#authentication-handshake) contracts.
+- Plugin: [ObSync](reference/plugin/ObSync.md),
+  [authentication](reference/plugin/authentication.md),
+  [collaboration](reference/plugin/collaboration.md),
+  [synchronization](reference/plugin/synchronization.md),
+  [settings](reference/plugin/settings.md),
+  [i18n](reference/plugin/i18n.md),
+  [types](reference/plugin/types.md)
+- Backend: [authentication](reference/backend/authentication.md),
+  [services](reference/backend/services.md),
+  [HTTP API](reference/backend/http.md),
+  [WebSocket API](reference/backend/websocket.md),
+  [types](reference/backend/types.md)

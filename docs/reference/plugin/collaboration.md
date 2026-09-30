@@ -44,6 +44,9 @@ join(filePath: string): Promise<void>
 Closes the previous room, prepares local persistence, restores editor text,
 installs the CodeMirror Yjs extension, and then enables network connection. A
 generation counter discards completion from an outdated asynchronous join.
+Regular users see a one-time "private mode" notice per note. If the room
+cannot be built, the controller disconnects and shows a notice that the
+offline history could not be restored.
 
 #### `disconnect()`
 
@@ -58,7 +61,7 @@ and clears `currentPath`.
 
 | Method | Behavior |
 | --- | --- |
-| `refreshAfterProfileChange()` | Recreates the active room using the current role and identity |
+| `refreshAfterProfileChange()` | Recreates the active room using the current role and identity (for example after a role or color change) |
 | `disconnectIfAffected(path)` | Disconnects when a deleted path contains the active note |
 | `destroy()` | Cancels the scheduled active-file check and disconnects |
 
@@ -91,7 +94,21 @@ provider uses `networkDoc`; received server updates are copied into the private
 editor document, but private editor updates do not flow back to the provider.
 
 Every connection and reconnection calls `requestWebSocketTicket()` and places
-the ticket in `Sec-WebSocket-Protocol`.
+the ticket in `Sec-WebSocket-Protocol`. On `connection-close` the room sets
+`provider.shouldConnect = false`, so `y-websocket` does not reconnect with the
+consumed ticket, and schedules its own reconnect with backoff
+(`MAX_RECONNECT_BACKOFF_MS`, 30 s). The provider also resyncs state vectors
+every 5 minutes (`PERIODIC_STATE_VECTOR_SYNC_MS`).
+
+The local awareness state is `getPresenceUser(user)`:
+`{ id: <normalized e-mail>, name, color, colorLight }`. The backend accepts
+awareness only when `id` matches the authenticated e-mail. Join and leave
+callbacks are grouped per user, and a leave is delayed by
+`PRESENCE_LEAVE_GRACE_MS` (1 s) so a quick reconnect does not produce notices.
+
+The resolved `PreparedCollabRoom.initialText` is the text restored from
+IndexedDB. `CollaborationController` puts it in the editor before calling
+`connect()`.
 
 ## Room utility functions
 
@@ -102,7 +119,9 @@ closeCollabRoom(): void
 ```
 
 Removes awareness and browser listeners, stops reconnect timers, destroys the
-provider and documents, and releases IndexedDB persistence.
+provider and the network document, and closes the IndexedDB connection before
+destroying `ydoc`. The IndexedDB database itself is kept, so reopening the note
+restores its history.
 
 ### `getCurrentCollabRoomPath()`
 
@@ -111,6 +130,9 @@ getCurrentCollabRoomPath(): string | null
 ```
 
 Returns the path stored by the module-level active room.
+
+`collab.ts` keeps its state in a module-level `activeRoom` variable; see
+[Known issues](../../known-issues.md#collabts-keeps-state-at-module-level).
 
 ## Offline persistence
 

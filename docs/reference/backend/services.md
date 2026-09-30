@@ -2,9 +2,9 @@
 
 ## DBServices
 
-`DBServices` is the user-domain layer over SQLite. It normalizes input,
-maintains last-admin rules, and emits authorization-change events after a
-successful mutation.
+The user-domain layer over SQLite. It normalizes input, enforces unique e-mail
+and name and the last-admin rule, and emits `authorization-changed` after
+mutations that affect what a user may do.
 
 Source: [`backend/users/DBServices.ts`](../../../backend/users/DBServices.ts)
 
@@ -15,251 +15,250 @@ new DBServices(userDB: UserDB)
 | Method | Result | Description |
 | --- | --- | --- |
 | `isUserRole(value)` | type predicate | Accepts only `admin` or `user` |
-| `runImmediateTransaction(operation)` | generic result | Runs a synchronous `BEGIN IMMEDIATE` transaction |
+| `runImmediateTransaction(operation)` | generic | Runs a synchronous `BEGIN IMMEDIATE` transaction |
 | `rowToUser(row)` | `AuthenticatedUser` | Converts SQLite fields and validates the stored role |
 | `getUserById(id, includeInactive?)` | user or `null` | Excludes inactive accounts by default |
-| `listUsers()` | user array | Lists active and inactive users by ID |
-| `createUser(name, email, password, role?)` | `CreateUserResult` | Hashes the password and enforces unique email and name |
-| `updateUserName(id, name)` | `UserMutationResult` | Normalizes and updates a unique display name |
-| `updateUserRole(id, role)` | `UserMutationResult` | Prevents demotion of the last active admin |
-| `updateUserStatus(id, active)` | `UserMutationResult` | Prevents deactivating the last active admin |
-| `updateUserPassword(id, currentPassword, newPassword)` | `UserMutationResult` | Verifies the current password before hashing and storing the new one |
-| `adminSetUserPassword(id, newPassword)` | `UserMutationResult` | Sets a new password without the current one; route-level checks restrict the target to `user`-role accounts |
-| `deleteUser(id)` | `UserMutationResult` | Prevents deleting the last active admin |
+| `listUsers()` | user array | Active and inactive users, by id |
+| `createUser(name, email, password, role?)` | `CreateUserResult` | Hashes the password, picks a random cursor color |
+| `updateUserName(id, name)` | `UserMutationResult` | Emits `authorization-changed` |
+| `updateUserColor(id, color)` | `UserMutationResult` | Does **not** emit: color is not an authorization change, so live sockets stay open |
+| `updateUserRole(id, role)` | `UserMutationResult` | Refuses to demote the last active admin; emits |
+| `updateUserStatus(id, active)` | `UserMutationResult` | Refuses to deactivate the last active admin; emits |
+| `updateUserPassword(id, currentPassword, newPassword)` | `UserMutationResult` | Verifies the current password first |
+| `adminSetUserPassword(id, newPassword)` | `UserMutationResult` | No current password; the controller restricts it to `user` targets |
+| `deleteUser(id)` | `UserMutationResult` | Refuses to delete the last active admin; emits |
 
 ## ExpressServer
 
-`ExpressServer` owns the Express app and Node HTTP server. It builds one
-router instance per domain (`RouteAuth`, `RouteUsers`, `RouteSyncFiles`),
-mounts each at its `/api/*` prefix, and registers the unauthenticated health
-check. Route handlers themselves live in the router classes below, not in
-`ExpressServer`.
+Owns the Express app and the Node HTTP server, defines the three middlewares,
+builds the routers and controllers, and mounts each router. It has no route
+handlers of its own.
 
 Source: [`backend/Server/ExpressServer/ExpressServer.ts`](../../../backend/Server/ExpressServer/ExpressServer.ts)
 
 ```ts
 new ExpressServer({
-	port,
-	host,
-	requireTls,
-	trustProxy,
-	fileManager,
-	tokenService,
-	dbService,
-	authService,
-	collaborationServer,
-	queueManager,
+  port, host, requireTls, trustProxy,
+  fileManager, tokenService, dbService, authService,
+  collaborationServer, keyedLock, vaultGene,
 })
 ```
 
 | Member | Description |
 | --- | --- |
-| `initializeMiddleware()` | Installs TLS enforcement, JSON parsing, a no-store header on `/api/auth`, and mounts each router |
-| `initializeRoutes()` | Calls `startRoute()` on each router and registers `GET /api/serverHealth` |
-| `serverStart(port?)` | Starts the Node HTTP server on the configured host |
-| `getHttpServer` | Returns the underlying `node:http` server for WebSocket upgrades |
+| `initializeMiddleware()` | TLS enforcement (`426`), JSON parsing (25 MB), `Cache-Control: no-store` on `/api/auth`, router mounting |
+| `serverStart(port?)` | Starts listening on the configured host |
+| `getHttpServer` | The underlying `node:http` server, used for WebSocket upgrades |
+| `#requireAuth` | Bearer token → `res.locals.authenticatedUser` and `res.locals.accessToken`; `401` otherwise |
+| `#requireAdmin` | `403` and an audit log unless the current user is an admin |
+| `#requireClientId` | `X-ObSync-Client` header → `res.locals.clientId`; `400` otherwise |
 
-Routes are documented in [HTTP API](http.md). Every route that creates,
-updates, or deletes a user runs through a per-user queue instead of
-directly; see [QueueManager](#queuemanager) below.
+The constructor creates a separate `QueueManager` for each controller, all over
+the same `KeyedLock`, and three `LoginRateLimiter` instances (account 5, IP 25,
+password change 5).
 
-### RouteAuth
+## Routers
 
-Session endpoints mounted at `/api/auth`: login, refresh, logout, current
-user, WebSocket ticket issuance, and self-service password change. Login is
-rate-limited by both account and IP; a failed attempt only counts against the
-limit once the credentials are confirmed invalid.
+Each router class owns an `express.Router`, receives the middlewares and its
+controller in the constructor, and registers routes in `startRoute()`. Paths
+are relative to the mount prefix. The full route list is in
+[HTTP API](http.md).
 
-Source: [`backend/Server/ExpressServer/routes/route.auth.ts`](../../../backend/Server/ExpressServer/routes/route.auth.ts)
+| Class | Source | Mounted at |
+| --- | --- | --- |
+| `RouteAuth` | [`routes/route.auth.ts`](../../../backend/Server/ExpressServer/routes/route.auth.ts) | `/api/auth` |
+| `RouteUsers` | [`routes/route.users.ts`](../../../backend/Server/ExpressServer/routes/route.users.ts) | `/api/users` |
+| `RouteSyncFiles` | [`routes/route.syncFiles.ts`](../../../backend/Server/ExpressServer/routes/route.syncFiles.ts) | `/api/sync` |
 
-| Member | Description |
+## Controllers
+
+Handlers are arrow-function properties, so they keep `this` when Express calls
+them. Mutations run inside `queue.addTask()` on the caller's client-id queue.
+
+| Class | Handlers |
 | --- | --- |
-| `requireAuth` | Middleware: resolves the bearer token, rejects with 401 if missing/invalid |
-| `startRoute()` | Registers `/login`, `/refresh`, `/logout`, `/me`, `/ws-ticket`, `/change-password` on `router` |
+| `AuthController` | `login`, `refreash` (refresh), `logout`, `me`, `wsTicket`, `changePassword`, `changeColor` |
+| `UsersController` | `listUsers`, `createUser`, `renameUser`, `changePassword`, `changeRole`, `changeStatus`, `deleteUser` |
+| `SyncFilesController` | `initSync`, `create`, `delete`, `modify`, `rename`, `createFile`, `getFile` |
 
-### RouteUsers
-
-Admin-only user management endpoints mounted at `/api/users`: list, create,
-rename, reset password, change role, activate/deactivate, and delete.
-
-Source: [`backend/Server/ExpressServer/routes/route.users.ts`](../../../backend/Server/ExpressServer/routes/route.users.ts)
-
-| Member | Description |
-| --- | --- |
-| `requireAuth` | Middleware: resolves the bearer token, rejects with 401 if missing/invalid |
-| `requireAdmin` | Middleware: rejects with 403 (and audit-logs) unless the caller is an admin |
-| `startRoute()` | Registers `/`, `/:id/name`, `/:id/password`, `/:id/role`, `/:id/status`, `/:id` on `router` |
-
-### RouteSyncFiles
-
-Vault sync endpoints mounted at `/api/sync`: the initial full-vault zip
-download (`/initSync`, any authenticated role) and the admin-only structure
-mutations (`/create`, `/delete`, `/modify`, `/rename`) that also broadcast a
-`VaultChange` over the WebSocket for other connected clients.
-
-Source: [`backend/Server/ExpressServer/routes/route.syncFiles.ts`](../../../backend/Server/ExpressServer/routes/route.syncFiles.ts)
-
-| Member | Description |
-| --- | --- |
-| `requireAuth` | Middleware: resolves the bearer token, rejects with 401 if missing/invalid |
-| `requireAdmin` | Middleware: rejects with 403 (and audit-logs) unless the caller is an admin |
-| `startRoute()` | Registers `/initSync`, `/create`, `/delete`, `/modify`, `/rename` on `router` |
+`routes/mutationMessage/userMessageMutation.ts` provides
+`userMutationErrorStatus(result)` and `UserMutationErrorMessage(result)`, which
+turn a failed `UserMutationResult` into an HTTP status and message.
 
 ## WebSocketServer
 
-`WebSocketServer` is the exported WebSocket transport class. Note the `ws`
-package also exports a class named `WebSocketServer`; this file imports it
-under the alias `WsServer` to avoid the collision.
+The exported class wraps two `ws` servers (imported as `WsServer`, because `ws`
+also exports a class named `WebSocketServer`).
 
 Source: [`backend/Server/WebSocketServer.ts`](../../../backend/Server/WebSocketServer.ts)
 
 ```ts
-new WebSocketServer(
-	server: Server,
-	tokenService: TokenService,
-	requireTls: boolean,
-	trustProxy: boolean,
-	collaborationServer: YjsCollaborationServer,
-)
+new WebSocketServer(server, tokenService, requireTls, trustProxy, collaborationServer)
 ```
 
-| Member | Type | Description |
-| --- | --- | --- |
-| `wssSystem` | `WsServer` (`ws`) | Receive-only vault-event server |
-| `wssYjs` | `WsServer` (`ws`) | Collaborative Yjs server |
-| `initializeWebSockets()` | method | Installs persistence, connection handlers, event broadcasting, and heartbeat |
+| Member | Description |
+| --- | --- |
+| `wssSystem` | `/system`: receive-only vault events |
+| `wssYjs` | Every other path: one Yjs room per note |
+| `initializeWebSockets()` | Creates `YjsPersistence` and attaches it, installs connection handlers, forwards `vaultEvents` to `/system`, starts the heartbeat |
 
-Upgrade behavior and close codes are documented in
-[WebSocket API](websocket.md).
+Behavior worth knowing:
+
+- Both servers use `noServer: true`; the only way in is `#handleUpgrade`, which
+  checks TLS, reads the ticket from `Sec-WebSocket-Protocol` and consumes it.
+- A timer closes each socket with `4003` when its access token expires.
+- The constructor subscribes to session revocations and
+  `authorization-changed` events and closes the affected sockets with `4003`.
+- The heartbeat pings every 30 s and terminates sockets that did not answer the
+  previous ping.
 
 ## YjsCollaborationServer
 
-`YjsCollaborationServer` is the composition root and public API for the Yjs
-backend. It owns a `YjsRoomRegistry`, `YjsPersistenceGateway`,
-`DeletedPathRegistry`, `AwarenessOwnershipGuard`, and the `syncMessageHandler`
-function, and is constructor-injected into both `ExpressServer` and
-`WebSocketServer` so REST mutations and live rooms share the same state.
+Entry point of the collaboration backend. It owns a `YjsRoomRegistry`,
+`YjsPersistenceGateway`, `DeletedPathRegistry`, `AwarenessOwnershipGuard` and
+the `syncMessageHandler` function.
 
 Source: [`backend/yjs/YjsCollaborationServer.ts`](../../../backend/yjs/YjsCollaborationServer.ts)
 
+| Method | Description |
+| --- | --- |
+| `setPersistence(adapter)` | Attaches the persistence adapter; until then every persistence call is a no-op |
+| `setupConnection(connection, request, user)` | Parses the note path, reserves a room, builds `YjsConnectionState`, sends the initial sync |
+| `isPathDeleted(path)` | Whether the path or an ancestor is marked deleted |
+| `isDocumentInvalidated(doc)` | Whether a document was invalidated by a deletion |
+| `markPathDeleted(path)` | Marks the path deleted and closes every room under it with `1008` |
+| `clearPathDeleted(path)` | Clears the mark, and marks above or below it (a recreated file) |
+| `deletePersistedStateUnderPath(path)` | Removes `.yjs-state` for a note or folder |
+| `renamePersistedStatePath(oldPath, newPath)` | Moves `.yjs-state` with a vault rename |
+
+Internal collaborators in `backend/yjs/`:
+
+| Class or function | Role |
+| --- | --- |
+| `YjsRoomRegistry` | `reserve()`, `release()`, `invalidateUnderPath()`; creates rooms and runs their shutdown |
+| `YjsRoom` | `doc`, `awareness`, `connections`, `awarenessOwners`, `ready`, `messageQueue`; `broadcast()`, `sendInitialSync()` |
+| `YjsConnectionSession` | `handleRawMessage()`: binary check, room queue, dispatch by message type |
+| `syncMessageHandler` | Sync steps; drops writes when `canWriteGlobal` is false |
+| `AwarenessOwnershipGuard` | Filters awareness entries by authenticated identity and ownership |
+| `DeletedPathRegistry` | Deleted roots and invalidated documents |
+| `YjsPersistenceGateway` | Optional-adapter wrapper |
+| `yjsUtils/*` | Path parsing and normalization, presence identity, WebSocket send/close helpers |
+
+## YjsPersistence
+
+Stores each note's binary Yjs state (the authority) and its Markdown text.
+
+Source: [`backend/Server/YjsPersistence.ts`](../../../backend/Server/YjsPersistence.ts)
+
 ```ts
-new YjsCollaborationServer()
+new YjsPersistence(vaultPath: string, statePath: string, collaborationServer: YjsCollaborationServer)
 ```
 
 | Method | Description |
 | --- | --- |
-| `setPersistence(adapter)` | Registers the `YjsPersistenceAdapter` backing every room (see `YjsPersistence`) |
-| `setupConnection(connection, request, authenticatedUser)` | Reserves a room, wires message/close/error handlers, and sends the initial sync |
-| `isPathDeleted(filePath)` | Whether the path or an ancestor is currently marked deleted |
-| `isDocumentInvalidated(doc)` | Whether a specific Yjs document was invalidated by a deletion |
-| `markPathDeleted(targetPath)` | Marks a path deleted and closes any live rooms under it |
-| `clearPathDeleted(targetPath)` | Clears a deletion mark, e.g. when a path is recreated |
-| `deletePersistedStateUnderPath(targetPath)` | Removes on-disk Yjs state for a note or folder subtree |
-| `renamePersistedStatePath(oldPath, newPath)` | Moves on-disk Yjs state to match a vault rename |
+| `bindState(docName, ydoc)` | Loads `.yjs-state`, or seeds from the `.md` file; then saves on every update |
+| `writeState(docName, ydoc)` | Forces a flush (used when a room closes) |
+| `destroyState(docName, ydoc)` | Waits for a running write and stops observing the document |
+| `deleteStateUnderPath(path)` | Removes one note's state or a folder subtree |
+| `renameStatePath(oldPath, newPath)` | Moves state files and folders |
 
-The finer-grained collaborators (`YjsRoom`, `YjsRoomRegistry`,
-`YjsConnectionSession`, `syncMessageHandler`, `AwarenessOwnershipGuard`,
-`DeletedPathRegistry`, `YjsPersistenceGateway`) are internal to
-`backend/yjs/` and are not constructed directly outside it; see
-[Architecture](../../architecture.md#backend-modules) for their individual
-responsibilities.
-
-## QueueManager
-
-`QueueManager` creates and looks up one `DbQueue` per user id, so mutations
-targeting the same user never run concurrently against each other.
-
-Source: [`backend/queue/QueueManager.ts`](../../../backend/queue/QueueManager.ts)
-
-```ts
-new QueueManager()
-```
-
-| Method | Description |
-| --- | --- |
-| `creatQueueOrReturn(userId)` | Returns the existing `DbQueue` for `userId`, creating one on first use |
-
-### DbQueue
-
-Source: [`backend/queue/dbQueue.ts`](../../../backend/queue/dbQueue.ts)
-
-A minimal FIFO queue of async tasks. Tasks are run one at a time, in the
-order they were added; a task that throws is logged and does not stop the
-queue from processing the next one.
-
-| Method | Description |
-| --- | --- |
-| `addTask(task)` | Appends `task` to the queue and starts processing if idle |
-| `numberOfTaks()` | Returns the number of tasks still waiting (not counting the one in flight) |
-
-`ExpressServer` uses this for every user-mutating route — `POST /api/users`,
-`PATCH /api/users/:id/name`, `PATCH /api/users/:id/password`,
-`PATCH /api/users/:id/role`, `PATCH /api/users/:id/status`, and
-`DELETE /api/users/:id` — each keyed by the target user's id.
-`POST /api/users` has no id yet, so it queues by the submitted email
-instead. See [HTTP API](http.md#user-administration).
+Writes are serialized per document, coalesced while a write is running, skipped
+for deleted paths, and atomic (temporary file and rename). See
+[Collaboration](../../collaboration.md#persistence-backendserveryjspersistencets).
 
 ## FileManager
 
-`FileManager` performs shared-vault filesystem operations. Every relative path
-is resolved under the configured vault root; absolute paths and traversal
-outside that root are rejected.
+Every filesystem operation on the shared vault. Each relative path is resolved
+under `data/vault/`; absolute paths and paths that resolve outside it throw.
 
 Source: [`backend/Server/FileManager.ts`](../../../backend/Server/FileManager.ts)
 
 | Method | Description |
 | --- | --- |
-| `stringToFile(content, name)` | Compatibility wrapper for `createOrModifyFile()` |
-| `createOrModifyFile(path, content)` | Creates parent folders and writes UTF-8 content |
-| `createFolder(path)` | Recursively creates a folder |
-| `deletePath(path)` | Recursively removes a file or folder |
-| `rename(oldPath, newPath)` | Creates the destination parent and renames the path |
-| `directoryZiped()` | Writes a ZIP snapshot used by initial sync |
+| `createOrModifyFile(path, content)` | Creates parent folders and writes a string or `Buffer` |
+| `stringToFile(content, name)` | Wrapper around `createOrModifyFile()` |
+| `createFolder(path)` | Recursive `mkdir` |
+| `deletePath(path)` | Recursive delete of a file or folder |
+| `rename(oldPath, newPath)` | Returns `"moved"`, `"already-applied"` (only the destination exists) or `"not-found"` |
+| `getFilePath(path)` | Absolute path of an existing file, or `null` (folders, missing, outside the vault) |
+| `isFolder(path)` | Whether the path is an existing folder |
+| `directoryZiped(zipDir, clientId)` | Writes `<zipDir>/<clientId>.zip` of the vault, skipping hidden files |
 
-## YjsPersistence
+## Gene
 
-`YjsPersistence` keeps each shared Yjs document and its Markdown snapshot in
-sync.
+Maintains `data/gene.json`, the vault fingerprint used by `initSync`.
 
-Source: [`backend/Server/YjsPersistence.ts`](../../../backend/Server/YjsPersistence.ts)
+Source: [`backend/Server/Gene.ts`](../../../backend/Server/Gene.ts)
 
 ```ts
-new YjsPersistence(vaultPath: string, statePath: string)
+new Gene(vaultDirectory: string, genePath: string, queueManager: QueueManager)
 ```
 
 | Method | Description |
 | --- | --- |
-| `bindState(docName, ydoc)` | Restores binary state or bootstraps from Markdown, then observes updates |
-| `writeState(docName, ydoc)` | Marks the document dirty and flushes state |
-| `destroyState(docName, ydoc)` | Waits for writes, removes listeners, and releases tracking |
-| `deleteStateUnderPath(path)` | Removes one note state or a complete folder subtree |
-| `renameStatePath(oldPath, newPath)` | Moves state files and directories with their vault path |
+| `mutateVaultGene()` | Starts a recursive `fs.watch` on the vault; every event queues an update |
+| `readGene()` | The gene as a JSON string, read in the gene queue; `null` if missing or invalid |
+| `makeNewGene()` | Writes an empty gene |
+| `getBytesAndNumOfFiles()` | Total size and count of non-empty files |
+| `compareGenes(a, b)` | Constant-time comparison of two gene objects |
 
-Writes are serialized per document. A flush saves a consistent Yjs binary
-state and the current `codemirror` text.
+An update increments `generation`, recomputes `bytes` and `filesCount`, and
+sets `lastModification`. At most one update waits in the queue at a time.
+
+## Queue, QueueManager and KeyedLock
+
+Source: [`backend/queue/`](../../../backend/queue/). The plugin has identical
+copies in `plugin/obSync/src/queue/`. The concepts are explained in
+[Concurrency](../../concurrency.md).
+
+### KeyedLock
+
+```ts
+new KeyedLock()
+run<T>(operation: () => Promise<T>, key: string): Promise<T>
+busyKeys: number
+```
+
+`run()` waits until no earlier operation with the same key is running, runs
+`operation`, and releases the key even if it throws.
+
+### Queue
+
+```ts
+new Queue(lock: KeyedLock, onEmpty?: () => void)
+addTask<T>(task: () => Promise<T>, taskKey: string): Promise<T>
+numberOfTaks: number            // waiting tasks
+getTaskIdentifiers: string[]    // keys of waiting tasks
+isProcessing: boolean
+```
+
+Runs tasks one at a time in arrival order, each through `lock.run(task, key)`.
+The promise returned by `addTask()` settles with the task's own result. A
+failing task is logged and does not stop the queue.
+
+### QueueManager
+
+```ts
+new QueueManager(lock: KeyedLock)
+getOrCreateQueue(id: string): Queue
+```
+
+One `Queue` per id, removed when it drains. Add the task immediately after
+getting the queue; do not keep the queue object across an `await`.
 
 ## Database lifecycle
 
 Source: [`backend/users/databaseLifecycle.ts`](../../../backend/users/databaseLifecycle.ts)
 
-### `openUserDatabase()`
-
 ```ts
 openUserDatabase(databasePath: string): UserDB
-```
-
-Opens an existing database and validates it for runtime use. It throws an
-instructional error when the file is missing or invalid; startup never creates
-the database implicitly.
-
-### `createUserDatabase()`
-
-```ts
 createUserDatabase(databasePath: string): Promise<void>
 ```
 
-Creates schema and seed data only when the target file does not exist. Failed
-setup removes the incomplete database and its SQLite sidecar files.
+`openUserDatabase()` requires an existing file with a `users` table and an
+active admin, and throws an error naming `npm run db:setup` otherwise.
+`createUserDatabase()` refuses an existing file, creates the schema and seed,
+and removes the partial file and its WAL/SHM sidecars on failure.
 
 ## ServerConfig
 
@@ -269,6 +268,6 @@ Source: [`backend/serverConfig.ts`](../../../backend/serverConfig.ts)
 loadServerConfig(environment = process.env): ServerConfig
 ```
 
-Parses host, port, TLS, proxy trust, and signing secret. Plaintext on a
-non-loopback host is rejected, and proxy-terminated TLS requires explicit proxy
-trust.
+Parses host, port, TLS, proxy trust and the signing secret. Throws when TLS is
+off on a non-loopback host, or when TLS is required without proxy trust. The
+secret length is checked by `TokenService`.

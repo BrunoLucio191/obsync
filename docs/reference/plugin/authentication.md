@@ -60,9 +60,14 @@ completed successfully.
 prepareAuthenticatedRequest(): Promise<boolean>
 ```
 
-Ensures the access token has more than one minute remaining. If not, rotates
-the refresh token and obtains a new access token before the caller sends its
-request.
+Ensures the access token has more than one minute remaining
+(`REFRESH_EARLY_MS`). If not, rotates the refresh token and obtains a new
+access token before the caller sends its request.
+
+Refreshing is single-flight: concurrent callers share one in-flight refresh
+(`#refreshPromise`). Because refresh tokens rotate, two parallel refreshes
+would make the second one present an invalidated token and sign the user out.
+A `401` from the refresh endpoint clears the local session and shows a notice.
 
 Typical request pattern:
 
@@ -75,14 +80,24 @@ await requestUrl({
 });
 ```
 
-### `headers()`
+### `clientId`
 
 ```ts
-headers(): Record<string, string>
+readonly clientId: string   // crypto.randomUUID(), new on every plugin load
 ```
 
-Builds JSON request headers with the bearer access token and the per-plugin
-`X-ObSync-Client` identifier.
+Identifies this plugin instance to the backend. It is sent as
+`X-ObSync-Client`, selects the backend queue a request runs on, and is used to
+ignore this client's own `/system` broadcasts. It also names the client-side
+queue used by the sync services.
+
+### Request headers
+
+| Method | Headers |
+| --- | --- |
+| `headers()` | `Content-Type: application/json`, `Authorization: Bearer <token>`, `X-ObSync-Client` |
+| `AuthHeaders()` | `Authorization` and `X-ObSync-Client` only (for raw uploads and downloads) |
+| `GeneHeader(gene)` | `X-ObSync-Gene: <gene>` for the initial download |
 
 ### `createWebSocketTicket()`
 
@@ -106,9 +121,20 @@ changePassword(
 ```
 
 Calls `POST /api/auth/change-password` for the current user, retrying once after a
-token refresh on `401`. Available to both roles — changing your own password
-is not an admin-only action. Exposed in the plugin settings under **Conta →
-Trocar senha** (see `AccountSettingsSection`).
+token refresh on `401`. Available to both roles: changing your own password
+is not an admin-only action. Exposed in the plugin settings under
+**Account** (see `AccountSettingsSection`).
+
+### `changeColor()`
+
+```ts
+changeColor(color: string): Promise<UserActionResult<null>>
+```
+
+Calls `PATCH /api/auth/color`, retrying once after a refresh on `401`, and
+stores the returned profile. A changed profile is reported through
+`onSessionChanged`, which makes `ObSync` rebuild the active room with the new
+color.
 
 ### Session maintenance
 

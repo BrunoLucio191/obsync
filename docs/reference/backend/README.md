@@ -1,38 +1,43 @@
 # Backend API
 
-The backend composes its services in `main.ts`. HTTP and WebSocket transports
-share `TokenService`, `DBServices`, filesystem storage, and authorization rules.
+The backend composes its services in `backend/main.ts`. HTTP and WebSocket
+transports share the same `TokenService` and `YjsCollaborationServer`
+instances, and every queue shares one `KeyedLock`.
 
 ```text
 main.ts
 ├── loadServerConfig()
-├── openUserDatabase()
+├── openUserDatabase() ── UserDB
 ├── DBServices
 ├── TokenService ── AuthService
+├── FileManager
 ├── YjsCollaborationServer
-├── QueueManager
-├── FileManager ── ExpressServer
+├── KeyedLock ── QueueManager (one per consumer)
+├── Gene
+├── ExpressServer
+│   ├── RouteAuth ── AuthController
+│   ├── RouteUsers ── UsersController
+│   └── RouteSyncFiles ── SyncFilesController
 └── WebSocketServer ── YjsPersistence
 ```
-
-`ExpressServer` and `WebSocketServer` both receive the same
-`YjsCollaborationServer` instance, so REST mutations (create, delete, rename)
-and live WebSocket rooms observe the same deleted-path and room state.
 
 ## Services
 
 | Symbol | Responsibility | Reference |
 | --- | --- | --- |
-| `TokenService` | Access tokens, refresh sessions, revocation, and WS tickets | [Authentication](authentication.md#tokenservice) |
+| `TokenService` | Sessions, access and refresh tokens, WebSocket tickets, revocation | [Authentication](authentication.md#tokenservice) |
+| `AuthService` | Password login | [Authentication](authentication.md#authservice) |
 | `LoginRateLimiter` | In-memory failure windows and blocking | [Authentication](authentication.md#loginratelimiter) |
 | `DBServices` | User queries and protected mutations | [Services](services.md#dbservices) |
 | `ExpressServer` | Middleware and router mounting | [Services](services.md#expressserver) |
-| `RouteAuth` / `RouteUsers` / `RouteSyncFiles` | HTTP routes and route authorization, one class per domain | [Services](services.md#expressserver) |
-| `WebSocketServer` | Upgrade authentication and channel routing | [Services](services.md#websocketserver) |
-| `YjsCollaborationServer` | Yjs room lifecycle, sync, and awareness | [Services](services.md#yjscollaborationserver) |
-| `QueueManager` | Per-user task queues, used to serialize same-user mutations | [Services](services.md#queuemanager) |
-| `FileManager` | Shared-vault filesystem operations | [Services](services.md#filemanager) |
-| `YjsPersistence` | Binary Yjs state and Markdown snapshots | [Services](services.md#yjspersistence) |
+| `RouteAuth`, `RouteUsers`, `RouteSyncFiles` | Endpoint registration per domain | [Services](services.md#routers) |
+| `AuthController`, `UsersController`, `SyncFilesController` | Request handling | [Services](services.md#controllers) |
+| `WebSocketServer` | Upgrade authentication, channels, heartbeat | [Services](services.md#websocketserver) |
+| `YjsCollaborationServer` | Collaboration rooms and shared Yjs state | [Services](services.md#yjscollaborationserver) |
+| `YjsPersistence` | Binary Yjs state and Markdown files | [Services](services.md#yjspersistence) |
+| `FileManager` | Vault filesystem operations | [Services](services.md#filemanager) |
+| `Gene` | Vault fingerprint for the initial download | [Services](services.md#gene) |
+| `Queue`, `QueueManager`, `KeyedLock` | Operation ordering | [Services](services.md#queue-queuemanager-and-keyedlock) |
 
 ## Protocol contracts
 

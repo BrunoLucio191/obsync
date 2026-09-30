@@ -12,8 +12,10 @@ backend.
 | [Plugin API index](plugin/README.md) | Composition and lifecycle map |
 | [ObSync](plugin/ObSync.md) | Plugin lifecycle and settings-facing commands |
 | [Authentication](plugin/authentication.md) | `AuthService`, `UserAdminService` |
-| [Collaboration](plugin/collaboration.md) | `CollaborationController`, room functions |
-| [Synchronization](plugin/synchronization.md) | File sync, system events, muted paths |
+| [Collaboration](plugin/collaboration.md) | `CollaborationController`, room functions, offline persistence |
+| [Synchronization](plugin/synchronization.md) | Initial download, publishing, `/system`, merge for regular users, muted paths |
+| [Settings](plugin/settings.md) | `SettingsController` and the settings sections |
+| [Internationalization](plugin/i18n.md) | `initI18n()`, `t()`, backend error localization |
 | [Data types](plugin/types.md) | Sessions, users, rooms, and vault changes |
 
 ## Backend
@@ -21,8 +23,8 @@ backend.
 | Reference | Main symbols |
 | --- | --- |
 | [Backend API index](backend/README.md) | Composition and service map |
-| [Authentication](backend/authentication.md) | `TokenService`, `LoginRateLimiter` |
-| [Services](backend/services.md) | Database, filesystem, Yjs, HTTP, WebSocket, and per-user queue services |
+| [Authentication](backend/authentication.md) | `TokenService`, `AuthService`, `LoginRateLimiter`, password hashing |
+| [Services](backend/services.md) | Database, HTTP layer, WebSocket, Yjs, persistence, files, gene, queues |
 | [HTTP API](backend/http.md) | Routes, request bodies, responses, and authorization |
 | [WebSocket API](backend/websocket.md) | Ticket handshake, channels, close codes, and messages |
 | [Data types](backend/types.md) | Backend authentication and mutation objects |

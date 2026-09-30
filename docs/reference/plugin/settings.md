@@ -28,6 +28,7 @@ interface SettingsController {
 	deleteUser(userId: number): Promise<UserActionResult<AuthenticatedUser>>;
 	resetUserPassword(userId: number, newPassword: string): Promise<UserActionResult<AuthenticatedUser>>;
 	changePassword(currentPassword: string, newPassword: string): Promise<UserActionResult<null>>;
+	changeColor(color: string): Promise<UserActionResult<null>>;
 }
 ```
 
@@ -57,33 +58,36 @@ which sections are visible for the current state, in order:
 | Signed in as `user` | Backend field, plus the account section |
 | Signed in as `admin` | Backend field, account section, plus the full user-management section |
 
-`hide()` calls `UserManagementSection.destroy()` so its list stops polling
-and any pending debounced name-save timers are cleared when the settings tab
-closes.
+`hide()` calls `UserManagementSection.destroy()`, which invalidates any
+in-flight user-list request and clears pending debounced name saves when the
+settings tab closes.
 
 ## `BackendConnectionSection`
 
 Source: [`BackendConnectionSection.ts`](../../../plugin/obSync/src/settings/BackendConnectionSection.ts)
 
 Renders the **Backend server URL** field that every other section depends on.
-The field was originally role-gated after sign-in (editable pre-setup, then
-admin-only), but that gate is currently disabled: `canEdit` is hardcoded to
-`true`, so the field stays editable for every signed-in role, not just admins.
-The original role-check logic was removed rather than left as a comment; only
-the dead `canEdit` variable remains. Saving calls
-`SettingsController.setBackendUrl()` and shows its `UserActionResult` error
-inline through a `Notice` on failure.
+Saving calls `SettingsController.setBackendUrl()` and shows its
+`UserActionResult` error through a `Notice` on failure.
+
+The class comment says only admins can edit the URL after the first sign-in,
+but the code has no role check: every signed-in account can change it. See
+[Known issues](../../known-issues.md#the-backend-url-is-editable-by-every-role).
 
 ## `AccountSettingsSection`
 
 Source: [`AccountSettingsSection.ts`](../../../plugin/obSync/src/settings/AccountSettingsSection.ts)
 
-Renders the signed-in account's own settings: connected e-mail and role,
-an editable display name (admins edit it inline here through
-`UserManagementSection.renderEditableName()`; regular users only see it,
-since only admins can rename themselves without going through another
-admin), a private-mode notice shown only to `user` accounts, a change-password
-form that calls `SettingsController.changePassword()`, and a sign-out button.
+Renders the signed-in account's own settings:
+
+- connected e-mail and role;
+- display name: editable inline for admins (through the shared
+  `UserNameEditor`), read-only for regular users;
+- cursor color: a color picker and a save button that call
+  `SettingsController.changeColor()`;
+- for `user` accounts, a notice explaining private mode;
+- a change-password form that calls `SettingsController.changePassword()`;
+- a sign-out button.
 
 ## `UserManagementSection`
 

@@ -1,168 +1,214 @@
 # Architecture
 
-This page maps responsibilities and dependency direction. For individual
-constructors, methods, parameters, and return values, use the
-[API reference](reference/README.md).
+Both halves of ObSync follow the same shape: one composition root builds every
+service and passes each one its dependencies through the constructor. Nothing
+reaches for a global instance, so reading a constructor tells you everything a
+class can touch. This page lists the modules, what each one owns, and the
+reasons behind the less obvious boundaries.
 
-## Plugin structure
+For method signatures, see the [API reference](reference/README.md).
 
-The plugin follows the same composition-oriented structure as the backend.
-`main.ts` is the composition root: it loads configuration, constructs the
-objects, connects their dependencies, and controls their lifecycle. Business
-rules and integration details live in dedicated classes instead of the plugin
-entry point.
+## Conventions used across the codebase
 
-```text
-plugin/obSync/src/
-├── main.ts                         plugin composition and lifecycle
-├── auth/
-│   ├── AuthService.ts              login, session, role, and auth headers
-│   ├── UserAdminService.ts         user-management API
-│   ├── LoginModal.ts               login UI
-│   └── auth.types.ts               authentication domain types
-├── collab/
-│   ├── CollaborationController.ts  active-note room lifecycle
-│   ├── OfflinePersistence.ts       per-user IndexedDB persistence
-│   └── collab.*                    low-level Yjs and awareness protocol
-├── config/
-│   ├── ApiConfig.ts                runtime backend endpoint (set from settings, not build)
-│   └── ObSyncConfig.ts            persisted plugin configuration
-├── i18n/
-│   ├── i18n.ts                     i18next setup and Obsidian-locale detection
-│   ├── backendErrors.ts            maps backend `reason` codes to localized text
-│   └── locales/                    en.ts and pt.ts translation dictionaries
-├── settings/
-│   ├── ObSyncSettingTab.ts        settings composition
-│   ├── BackendConnectionSection.ts backend URL field (currently editable by any role)
-│   ├── AccountSettingsSection.ts   current-account UI
-│   ├── UserManagementSection.ts    user-management composition
-│   └── users/                      create, list, cache, and name editor
-├── sync/
-│   ├── SystemChannel.ts            server-to-client vault events
-│   ├── SyncInitialVault.ts         initial shared-vault download
-│   └── SyncVaultChanges.ts         admin-only local change publisher
-└── vault/
-    ├── RemoteVaultChangeService.ts remote change application
-    ├── PathMuteRegistry.ts         local event-loop suppression
-    └── VaultChange.ts              vault-event types
+- **`#` private fields**, not the TypeScript `private` keyword, for class
+  members. They are enforced at runtime, not only by the compiler.
+- **Constructor injection.** Services receive collaborators as constructor
+  arguments. The only exception is `SyncVaultChanges`, which needs the
+  `Plugin` instance to register vault events with Obsidian's lifecycle.
+- **Bracketed log prefixes** in the backend (`[Yjs]`, `[Sync]`, `[Audit]`,
+  `[Users]`...), naming the module a message came from.
+- **Result objects instead of exceptions** for expected failures, for example
+  `UserMutationResult` (`{ ok: true, user }` or `{ ok: false, reason }`) in the
+  backend and `UserActionResult<T>` in the plugin.
+- **No backward compatibility code.** ObSync is in development; the SQLite file
+  and all runtime data are disposable, so there are no migrations.
+
+## Backend
+
+### Composition (`backend/main.ts`)
+
+```ts
+const config = loadServerConfig();                           // env vars, TLS rules
+const userDB = openUserDatabase(systemPaths.usersDatabase);  // refuses a missing or invalid DB
+const dbService = new DBServices(userDB);
+const tokenService = new TokenService({ secret: config.tokenSecret, dbService });
+const authService = new AuthService(userDB, dbService, tokenService);
+const collaborationServer = new YjsCollaborationServer();
+const keyedLock = new KeyedLock();                           // one lock shared by every queue
+const vaultGene = new Gene(systemPaths.vault, systemPaths.vaultGene, new QueueManager(keyedLock));
+
+const server = new ExpressServer({ ..., collaborationServer, keyedLock, vaultGene });
+server.serverStart();
+vaultGene.mutateVaultGene();                                 // starts watching data/vault/
+const webSocketServer = new WebSocketServer(server.getHttpServer, tokenService, ..., collaborationServer);
+webSocketServer.initializeWebSockets();                      // also wires YjsPersistence
 ```
 
-## Plugin responsibilities
+Two instances are deliberately shared:
+
+- **`TokenService`** is used by the HTTP middleware and by the WebSocket
+  upgrade handler. A ticket issued over HTTP can only be consumed on upgrade
+  because both read the same in-memory maps.
+- **`YjsCollaborationServer`** is used by the HTTP file routes and by the
+  WebSocket server, so a delete or rename over HTTP immediately affects the
+  live collaboration rooms and their stored state.
+
+### HTTP layer (`backend/Server/ExpressServer/`)
+
+The HTTP layer is split in three levels:
+
+| Level | Files | Owns |
+| --- | --- | --- |
+| App | `ExpressServer.ts` | TLS enforcement, JSON parsing, the three middlewares, mounting routers |
+| Routes | `routes/route.auth.ts`, `route.users.ts`, `route.syncFiles.ts` | URL, HTTP method and middleware chain of each endpoint |
+| Controllers | `controllers/AuthController.ts`, `UsersController.ts`, `SyncFilesController.ts` | Input validation, the queued operation, the response |
+
+The three middlewares are defined once in `ExpressServer` and passed into each
+router:
+
+- `#requireAuth` reads `Authorization: Bearer <token>`, calls
+  `TokenService.verifyToken()`, and stores the current user (reloaded from
+  SQLite) in `res.locals.authenticatedUser`.
+- `#requireAdmin` rejects non-admins with `403` and writes an audit log.
+- `#requireClientId` requires the `X-ObSync-Client` header and stores it in
+  `res.locals.clientId`. Every mutating route needs it, because the client id
+  selects the queue the operation runs on and becomes `originClientId` on
+  broadcasts.
+
+Routers are mounted with a prefix (`/api/auth`, `/api/users`, `/api/sync`), so
+paths inside a router are relative: `RouteUsers` registers `/:id/name`, not
+`/api/users/:id/name`.
+
+`routes/mutationMessage/userMessageMutation.ts` maps a
+`UserMutationResult.reason` to an HTTP status and an English message, so every
+controller answers the same failure the same way.
+
+### Backend modules
 
 | Module | Responsibility |
 | --- | --- |
-| `plugin/obSync/src/main.ts` | Constructs services and starts or stops the plugin lifecycle |
-| `plugin/obSync/src/auth/AuthService.ts` | Owns login, token validation, session refresh, current user, and role checks |
-| `plugin/obSync/src/auth/UserAdminService.ts` | Encapsulates user-list and user-mutation HTTP requests |
-| `plugin/obSync/src/collab/CollaborationController.ts` | Selects the active Markdown room and manages editor extensions and reconnection |
-| `plugin/obSync/src/collab/collab.ts` | Implements Yjs documents, provider wiring, awareness, and role-specific document ownership |
-| `plugin/obSync/src/collab/OfflinePersistence.ts` | Owns IndexedDB database naming, loading, and lifecycle |
-| `plugin/obSync/src/sync/SystemChannel.ts` | Receives shared-vault changes from the backend |
-| `plugin/obSync/src/sync/SyncInitialVault.ts` | Initial shared-vault download |
-| `plugin/obSync/src/sync/SyncVaultChanges.ts` | Admin-only file create, modify, delete, and rename requests |
-| `plugin/obSync/src/vault/RemoteVaultChangeService.ts` | Applies server events to the local vault without creating publish loops |
-| `plugin/obSync/src/vault/PathMuteRegistry.ts` | Temporarily marks remote paths so Obsidian events are not sent back to the server |
-| `plugin/obSync/src/settings/ObSyncSettingTab.ts` | Composes the backend-connection, account, and user-management settings sections |
-| `plugin/obSync/src/settings/BackendConnectionSection.ts` | Backend URL field: the admin-only gate after sign-in is currently disabled (`canEdit` is hardcoded `true`), so the field stays editable for every role |
-| `plugin/obSync/src/config/ApiConfig.ts` | Holds the resolved backend endpoint in memory; every plugin install ships the same build, and each user configures their own URL at runtime |
-| `plugin/obSync/src/settings/users/*` | Separates the user directory, creation form, list actions, and debounced name updates |
-| `plugin/obSync/src/i18n/i18n.ts` | Initializes i18next with the `en`/`pt` dictionaries, chosen from Obsidian's own configured language (`moment.locale()`), not the OS locale |
-| `plugin/obSync/src/i18n/backendErrors.ts` | Maps a structured-mutation endpoint's `reason` code to a localized message, falling back to the backend's English text for codes it doesn't recognize |
+| `serverConfig.ts` | Reads `OBSYNC_HOST`, `PORT`, `OBSYNC_REQUIRE_TLS`, `OBSYNC_TRUST_PROXY`, `OBSYNC_TOKEN_SECRET`; refuses unsafe combinations |
+| `env.ts` | Loads `backend/.env` if present (imported for its side effect) |
+| `paths.ts` | Absolute paths of everything under `backend/data/`, resolved from the backend folder so the working directory does not matter |
+| `auth/TokenService.ts` | Sessions, access tokens (signed JWT), refresh tokens, WebSocket tickets, revocation |
+| `auth/authService.ts` | Login: loads the user row and checks the password |
+| `auth/LoginRateLimiter.ts` | Sliding-window failure counter per key (account, IP, password change) |
+| `auth/PasswordUtil.ts` | scrypt hashing and constant-time comparison |
+| `users/UserDB.ts` | `node:sqlite` database: schema, seed, runtime validation |
+| `users/DBServices.ts` | User queries and mutations, last-admin protection, authorization-change events |
+| `users/DBEvents.ts` | Event emitter that tells the WebSocket server a user's role or status changed |
+| `users/databaseLifecycle.ts` | `createUserDatabase()` for setup, `openUserDatabase()` for startup |
+| `users/userColor.ts` | Default cursor colors and `#rrggbb` validation |
+| `Server/FileManager.ts` | Every filesystem operation on `data/vault/`, with path-traversal protection, plus the ZIP export |
+| `Server/Gene.ts` | The vault gene: a small JSON fingerprint of the vault, used to skip unnecessary initial downloads |
+| `Server/WebSocketServer.ts` | Upgrade authentication, `/system` broadcasts, `/yjs` connections, heartbeat, closing sockets on revocation |
+| `Server/YjsPersistence.ts` | Stores each note twice: binary Yjs state and the Markdown file |
+| `syncEvents.ts` | `VaultChange` type and the in-process event emitter the controllers publish to |
+| `yjs/YjsCollaborationServer.ts` | Public entry point of the collaboration backend |
+| `yjs/yjsRooms/YjsRoomRegistry.ts` | Creates, reuses and tears down rooms |
+| `yjs/yjsRooms/YjsRoom.ts` | One note: its `Y.Doc`, awareness, connections and message queue |
+| `yjs/YjsConnectionSession.ts` | Per-socket message intake: queueing and dispatch by message type |
+| `yjs/SyncMessageHandler.ts` | Yjs sync protocol steps and the admin-only write check |
+| `yjs/AwarenessOwnershipGuard.ts` | Stops a connection from faking or removing another user's cursor |
+| `yjs/DeletedPathRegistry.ts` | Remembers deleted paths so stale rooms and late writes can be refused |
+| `yjs/YjsPersistenceGateway.ts` | Forwards to the persistence adapter, or does nothing until one is set |
+| `queue/Queue.ts`, `QueueManager.ts`, `KeyedLock.ts` | Operation ordering; see [Concurrency](concurrency.md) |
+| `scripts/setupDatabase.ts` | `npm run db:setup` entry point |
+| `scripts/generateRandomVault.ts` | Fills `data/vault/` with random folders and notes for manual testing |
 
-## Dependency direction
+### Why the Yjs backend is split into many small classes
+
+It used to be one module with module-level state mixing room lifecycle,
+persistence, protocol handling and awareness validation. The current split
+gives each concern one owner, and `YjsCollaborationServer` is the only class
+the rest of the server talks to. `syncMessageHandler` is a plain function, not
+a class, because it holds no state between calls.
+
+## Plugin
+
+### Composition (`plugin/obSync/src/main.ts`)
+
+`ObSync` (the `Plugin` subclass) builds the services in `#composeServices()`:
 
 ```text
-ObSync (composition root)
-  ├── AuthService ── UserAdminService
-  ├── CollaborationController ── Yjs/IndexedDB helpers
-  ├── SystemChannel ── RemoteVaultChangeService
-  ├── SyncInitialVault
-  ├── SyncVaultChanges
-  └── ObSyncSettingTab ── SettingsController interface
+ObSync
+├── AuthService ── UserAdminService
+├── PathMuteRegistry                     shared by everything that writes to the vault
+├── CollaborationController              one Yjs room for the active note
+├── QueueManager(new KeyedLock())        client-side operation ordering
+├── ServerVersionMerger ── SyncBaseStore regular users only: merge server versions
+├── RemoteVaultChangeService             applies /system events
+├── SystemChannel                        the /system WebSocket
+├── SyncInitialVault ── Boss ── ZipWorkerSon ── Web Worker
+├── SyncVaultChanges                     admins only: publishes local vault events
+└── ObSyncSettingTab                     talks to ObSync through the SettingsController interface
 ```
 
-Services receive their dependencies through constructors. They do not receive
-the complete `ObSync` object, except where the Obsidian `Plugin` lifecycle API
-is explicitly required to register vault events. The settings sections depend
-on `SettingsController`, so their code is not coupled to the concrete plugin
-entry class.
+Synchronization starts only after Obsidian's layout is ready and a session
+exists (`#initializeSynchronization()`). If no backend URL is configured, the
+plugin does nothing at startup, so it never opens a login prompt for a backend
+that does not exist.
 
-The plugin's low-level Yjs protocol helpers (`collab/collab.ts` and
-`collab/collab.utils.ts`) remain functions over a single active-room variable.
-There is only ever one editor open at a time, so a class would add indirection
-without creating a useful object boundary.
-
-## Backend modules
+### Plugin modules
 
 | Module | Responsibility |
 | --- | --- |
-| `backend/main.ts` | Application composition and startup |
-| `backend/Server/ExpressServer/ExpressServer.ts` | Express app setup: mounts each router, no route handlers of its own |
-| `backend/Server/ExpressServer/routes/route.auth.ts` | `/api/auth/*` routes and their authorization |
-| `backend/Server/ExpressServer/routes/route.users.ts` | `/api/users/*` routes and their authorization |
-| `backend/Server/ExpressServer/routes/route.syncFiles.ts` | `/api/sync/*` routes and their authorization |
-| `backend/Server/WebSocketServer.ts` | WebSocket upgrade authentication and channel routing |
-| `backend/yjs/YjsCollaborationServer.ts` | Composition root for the Yjs backend: wires the room registry, persistence gateway, and message handlers, and exposes the public API used by `ExpressServer` and `WebSocketServer` |
-| `backend/yjs/yjsRooms/YjsRoomRegistry.ts` | Shared-room lifecycle: reservation, creation, cleanup, and path invalidation |
-| `backend/yjs/yjsRooms/YjsRoom.ts` | One shared Yjs document: connections, awareness state, and broadcast |
-| `backend/yjs/YjsConnectionSession.ts` | Per-connection message queue and dispatch |
-| `backend/yjs/SyncMessageHandler.ts` | Plain `syncMessageHandler()` function implementing Yjs sync-protocol steps and write-permission enforcement |
-| `backend/yjs/AwarenessOwnershipGuard.ts` | Awareness update validation and per-client ownership |
-| `backend/yjs/DeletedPathRegistry.ts` | Tracks deleted vault paths and invalidated documents |
-| `backend/yjs/YjsPersistenceGateway.ts` | Optional-adapter wrapper around `YjsPersistence` |
-| `backend/Server/YjsPersistence.ts` | Persistent Yjs state and Markdown snapshots |
-| `backend/Server/FileManager.ts` | Shared-vault filesystem operations |
-| `backend/auth/TokenService.ts` | Token issuance and verification |
-| `backend/users/DBServices.ts` | User lookup and role management |
-| `backend/users/databaseLifecycle.ts` | Explicit database creation and runtime validation |
-| `backend/scripts/setupDatabase.ts` | Command-line entry point for schema creation and user seeding |
-| `backend/queue/QueueManager.ts` | Creates and looks up one `DbQueue` per user id |
-| `backend/queue/dbQueue.ts` | FIFO task queue that runs one async task at a time, used to serialize mutations to the same user row |
+| `auth/AuthService.ts` | Login, token refresh (single-flight), `SecretStorage`, role checks, request headers, WebSocket tickets |
+| `auth/UserAdminService.ts` | Typed HTTP client for `/api/users` |
+| `auth/LoginModal.ts` | Sign-in dialog |
+| `config/ApiConfig.ts` | Validates the backend URL and derives the WebSocket URL, kept in memory |
+| `config/ObSyncConfig.ts` | Shape of `data.json`: backend URL, current user, token expiry |
+| `collab/CollaborationController.ts` | Follows the active Markdown file; joins and leaves rooms; installs the editor extension |
+| `collab/collab.ts` | Builds a room: `Y.Doc`s, IndexedDB cache, `WebsocketProvider`, awareness, ticket reconnects |
+| `collab/OfflinePersistence.ts` | IndexedDB database naming and lifecycle for a `Y.Doc` |
+| `sync/SyncInitialVault.ts` | Starts the initial download |
+| `Workers/Boss.ts`, `Workers/zipWorker/ZipWorkerSon.ts` | Downloads the vault ZIP (main thread), hands it to the Worker, writes the result |
+| `Workers/zipWorker/zip.worker.ts` | Runs inside a Web Worker; only unzips |
+| `sync/SyncVaultChanges.ts` | Publishes an admin's local create, modify, delete and rename events |
+| `sync/SystemChannel.ts` | `/system` WebSocket with ticket reconnects and backoff |
+| `vault/RemoteVaultChangeService.ts` | Applies `/system` events to the local vault |
+| `vault/ServerVersionMerger.ts` | Regular users: three-way merge of server versions into local files |
+| `vault/SyncBaseStore.ts` | Regular users: stores the last server version of each file (the merge base) |
+| `vault/PathMuteRegistry.ts` | Paths the plugin is writing itself, so the resulting vault events are not published back |
+| `vault/binaryExtensions.ts` | Which extensions are treated as binary |
+| `queue/*` | Same Queue/KeyedLock design as the backend |
+| `settings/*` | Settings tab sections |
+| `i18n/*` | `t()` lookup, `en` and `pt` dictionaries, backend error localization |
 
-The Yjs backend used to live in a single `backend/yjsUtils.ts` file mixing room
-lifecycle, persistence, sync-protocol handling, and awareness validation behind
-module-level state. It was split into the single-responsibility classes above,
-composed by `YjsCollaborationServer` and constructor-injected into
-`ExpressServer` and `WebSocketServer` from `main.ts`, matching how the plugin
-composes its own services.
+### Why the Web Worker is compiled into a string
 
-`SyncMessageHandler.ts` was originally a class with a single `handle()`
-method; it is now a plain function (`syncMessageHandler`) taking a params
-object, since it held no state of its own between calls.
+Obsidian loads a single `main.js`, and there is no reliable file path to give
+`new Worker(...)`, especially on mobile. `esbuild.config.mjs` therefore builds
+`zip.worker.ts` first and writes the bundled code as a string into
+`zip.worker.generated.ts`. `ZipWorkerSon` turns that string into a Blob URL and
+starts the Worker from it. The generated file is git-ignored, which is why the
+first build on a fresh clone needs an extra step (see the
+[README](../README.md#getting-started)).
 
-`ExpressServer.ts` used to register every route handler directly, mixing
-Express app setup with three unrelated domains' worth of authorization logic
-in one file. Routes were split by domain into `RouteAuth`, `RouteUsers`, and
-`RouteSyncFiles` (`backend/Server/ExpressServer/routes/`), each owning its
-own `requireAuth`/`requireAdmin` middleware and building an `express.Router`
-that `ExpressServer` mounts at the matching `/api/*` prefix. Every route path
-inside a router is relative to that prefix (e.g. `RouteUsers` registers
-`/:id/name`, not `/api/users/:id/name`) — a router mounted with a path
-already registered under its own full path would double the prefix.
+The Worker only unzips. It has no access to the Obsidian API, so the main
+thread writes the files.
 
-`ExpressServer` is also constructor-injected with a `QueueManager`. Every
-route that mutates a user's row (`POST /api/users`,
-`PATCH /api/users/:id/name`, `PATCH /api/users/:id/password`,
-`PATCH /api/users/:id/role`, `PATCH /api/users/:id/status`,
-`DELETE /api/users/:id`) enqueues its work on that user's `DbQueue` instead
-of running it inline, so concurrent requests targeting the same user never
-race each other. `POST /api/users` queues by the submitted email since no id
-exists yet. `GET /api/users` is a read and is unaffected.
+### `collab.ts` is a module with state
+
+Unlike the rest of the plugin, `collab.ts` is a set of functions over a
+module-level `activeRoom` variable and an `ActiveRoom` object that every
+function receives. It behaves like a class without being one. This is a known
+inconsistency, listed in [Known issues](known-issues.md#collabts-keeps-state-at-module-level).
 
 ## Communication channels
 
 | Channel | Direction | Purpose |
 | --- | --- | --- |
-| HTTPS `/api/auth/login` | client → server | Rate-limited login and access/refresh token issuance |
-| HTTPS `/api/auth/refresh` | client ↔ server | Refresh-token rotation and short access-token renewal |
-| HTTPS `/api/auth/logout` | client → server | Session revocation |
-| HTTPS `/api/auth/ws-ticket` | client ← server | One-use, channel-scoped WebSocket ticket |
-| HTTPS `/api/users/*`, `/api/sync/initSync` | client ↔ server | User administration and initial vault download |
-| HTTPS `/api/sync/*` | admin → server | Shared file operations |
-| WSS `/system` | server → client | Shared-vault change notifications |
-| WSS `/<encoded-note-path>` | client ↔ server | Yjs synchronization and awareness |
+| `POST /api/auth/login`, `/refresh`, `/logout` | client ↔ server | Session lifecycle |
+| `GET /api/auth/me` | client ← server | Current profile, reloaded from SQLite |
+| `POST /api/auth/ws-ticket` | client ← server | One-use, channel-scoped WebSocket ticket |
+| `POST /api/auth/change-password`, `PATCH /api/auth/color` | client → server | Self-service account changes |
+| `/api/users/*` | admin ↔ server | User administration |
+| `POST /api/sync/initSync` | client ← server | Whole vault as a ZIP, skipped when the gene matches |
+| `GET /api/sync/getFile` | client ← server | One file, used for binaries and renamed files |
+| `/api/sync/create`, `/modify`, `/delete`, `/rename`, `/createFile` | admin → server | Vault mutations |
+| WSS `/system` | server → client | `VaultChange` broadcasts; any client message closes the socket |
+| WSS `/<encoded note path>` | client ↔ server | Yjs sync and awareness for one note |
 
-The `/system` channel is receive-only from the client's perspective. WebSocket
-handshakes use one-use tickets in `Sec-WebSocket-Protocol`, never bearer tokens
-in URLs. The Yjs channel accepts awareness from authenticated clients, but
-document updates are accepted only from admins.
+Full contracts: [HTTP API](reference/backend/http.md) and
+[WebSocket API](reference/backend/websocket.md).

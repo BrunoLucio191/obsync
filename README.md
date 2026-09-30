@@ -12,17 +12,21 @@
 
 </div>
 
-ObSync pairs an Obsidian plugin with a self-hosted Node.js backend so a vault
-can be edited by several people at once, with every change synchronized
-in real time through [Yjs](https://yjs.dev) CRDTs over a WebSocket connection
-to that backend. There's no third-party service in the loop: you run the
-backend yourself, and every account that connects to it is assigned one of
-two roles, with no limit on how many accounts can hold either one:
+ObSync pairs an Obsidian plugin with a Node.js backend that you host yourself,
+so several people can work on one vault. The note open in the editor is edited
+live, character by character, through [Yjs](https://yjs.dev) over a WebSocket;
+everything else in the vault (files, folders, renames, binaries) is kept in
+sync over HTTP. No third-party service is involved.
 
-- **`admin`** accounts publish changes to the shared vault, so anything they
-  write becomes part of what every other connected account sees.
-- **`user`** accounts edit locally and receive whatever admins publish, but
-  their own edits stay private and are never sent back to the shared vault.
+Every account has one of two roles:
+
+- **`admin`** accounts publish their changes to the shared vault, so everyone
+  connected sees them.
+- **`user`** accounts receive everything admins publish, but their own edits
+  stay on their device and are never sent back.
+
+The backend enforces this on its own, so the guarantee does not depend on the
+plugin behaving correctly.
 
 ## Demonstration
 
@@ -30,54 +34,49 @@ two roles, with no limit on how many accounts can hold either one:
 
 ## Contents
 
-- [Demonstration](#demonstration)
-- [How synchronization works](#how-synchronization-works)
+- [How it works in one diagram](#how-it-works-in-one-diagram)
 - [Repository layout](#repository-layout)
-- [Documentation](#documentation)
 - [Getting started](#getting-started)
-- [Development](#development)
+- [Development workflow](#development-workflow)
+- [Documentation](#documentation)
 
-## How synchronization works
+## How it works in one diagram
 
 ```text
-Admin
-Editor <-> Yjs document <-> WebSocket <-> server
-
-User
-Server -> network document -> private document -> editor
-Editor -> private document -> IndexedDB
+Obsidian (plugin)                                   Backend (Node.js)
+admin edits active note ─── WSS /<note> (Yjs) ────▶ room: check role, apply, broadcast, save
+user edits active note ──── (stays local) 
+any client ◀──────────────── WSS /<note> (Yjs) ──── room broadcasts admin edits
+admin creates/renames file ─ HTTPS /api/sync/* ───▶ write to vault, broadcast event
+any client ◀──────────────── WSS /system ────────── vault events
+plugin start ◀────────────── HTTPS /initSync ────── whole vault as ZIP (skipped if unchanged)
 ```
 
-A `user` account's edits live only in a private Yjs document that's stored in the local IndexedDB database, while a separate network document is the one that actually receives updates from the server. Because the WebSocket provider is only ever attached to that network document, private history has no path back to the server even if the client tried to send it. The server enforces the same boundary independently on its side, rejecting any Yjs update that arrives from an account that isn't an admin, so the guarantee doesn't rely on the plugin behaving correctly.
+A `user` account's editor document is never attached to the network: the
+plugin keeps a separate network document that only receives. On the server,
+Yjs updates from non-admin connections are dropped before they reach the shared
+document. Full explanation: [System overview](docs/overview.md).
 
 ## Repository layout
 
-The codebase is split into three top-level workspaces, each with a single responsibility:
-
 ```text
-backend/         HTTP API, WebSocket server, authentication, and shared storage
-plugin/obSync/   Obsidian plugin source and build configuration
-docs/            architecture and operational documentation
+backend/         HTTP API, WebSocket server, authentication, vault storage (TypeScript run directly by Node)
+plugin/obSync/   Obsidian plugin, bundled into main.js with esbuild
+docs/            developer documentation
 ```
-
-## Documentation
-
-Beyond this README, the `docs/` directory holds the reference material you'll want once you're past initial setup: architecture decisions, the full HTTP and WebSocket API surface, and the operational guides referenced throughout this file.
-
-- [Documentation index](docs/README.md)
-- [System overview](docs/overview.md)
-- [Architecture](docs/architecture.md)
-- [API reference](docs/reference/README.md)
-  - [Plugin classes and methods](docs/reference/plugin/README.md)
-  - [Backend services](docs/reference/backend/README.md)
-  - [HTTP API](docs/reference/backend/http.md)
-  - [WebSocket API](docs/reference/backend/websocket.md)
-- [Concepts and operational guides](docs/README.md#concepts)
 
 ## Getting started
 
 These steps take a fresh clone to a signed-in plugin talking to your own
-backend. Run them from the repository root unless noted otherwise.
+backend on the same machine. Commands run from the repository root unless a
+step says otherwise.
+
+### Requirements
+
+- **Node.js 22.18 or newer.** The backend runs `.ts` files directly (Node's
+  built-in type stripping) and uses the built-in `node:sqlite` module, so there
+  is no backend build step. The project is developed on Node 26.
+- Obsidian 1.13.1 or newer (`minAppVersion` in `plugin/obSync/manifest.json`).
 
 ### 1. Install dependencies
 
@@ -85,9 +84,12 @@ backend. Run them from the repository root unless noted otherwise.
 npm install
 ```
 
+The repository is an npm workspace, so this installs both `backend` and
+`plugin/obSync`.
+
 ### 2. Configure the backend
 
-Generate a signing secret. This is a random value, not a password you choose:
+Generate a signing secret (a random value, not a password you choose):
 
 ```bash
 openssl rand -base64 48
@@ -103,135 +105,136 @@ OBSYNC_REQUIRE_TLS=false
 OBSYNC_TRUST_PROXY=false
 ```
 
-These values are meant for local development only, where the backend never
-leaves your own machine. Before you expose it to anyone else, even just
-another device on your network, read
-[Security: transport rules](docs/security.md#transport-rules) and adjust
-this configuration for that kind of deployment first.
+This configuration is for local development only. Before exposing the backend
+to any other device, read
+[Security: transport rules](docs/security.md#transport-rules).
 
-### 3. Create and seed the user database
+### 3. Create the data folders and the user database
 
 ```bash
+mkdir -p backend/data/vault
 npm run db:setup
 ```
 
-This step is deliberately a one-time thing: it refuses to touch an existing
-`backend/data/users.sqlite`, and separately, the backend itself refuses to
-start against a database that's missing or invalid, so there's no accidental
-way to reseed over real data. When it succeeds, it prints one line per
-seeded account along with a random temporary password, for example:
+`backend/data/vault/` is the shared vault. It must exist before the backend
+starts ([why](docs/known-issues.md#backend-startup-crashes-when-datavault-is-missing)).
+To start with sample content instead of an empty vault, run
+`node backend/scripts/generateRandomVault.ts`, which also creates the folder.
+
+`db:setup` refuses to touch an existing database, and the backend refuses to
+start without one, so nothing can reseed real data by accident. It prints one
+line per seeded account with a random temporary password:
 
 ```text
 [Database] Seed: initial accounts created.
 [Database]   thiago@gmail.com — temporary password (admin): Ax7f...
 [Database]   brunoestudos6@gmail.com — temporary password (user): Qm2k...
-[Database] Save these passwords now: they will not be shown again.
+[Database] Save these passwords now: they will not be shown again. ...
 ```
 
-**Copy the admin account's temporary password now**, since that terminal
-output is the only place it will ever be shown and you'll need it to sign in
-during step 6. The full list of seeded accounts, and how to rotate any of
-these passwords once you're up and running, is covered in
-[Security: account passwords](docs/security.md#account-passwords).
+**Copy the admin password now.** It is shown only once. The seed accounts are
+defined in `backend/users/UserDB.ts`.
 
 ### 4. Start the backend
 
 ```bash
-npm run dev --workspace=backend
+cd backend
+node --watch main.ts
 ```
 
-Leave this running in its own terminal for as long as you plan to use the
-plugin. It needs to stay up the whole time you're editing, and it logs
-`Server running on http://127.0.0.1:3000` once it's ready to accept
-connections.
+`npm run dev --workspace=backend` does not work yet: the script points to a
+`server.ts` file that no longer exists
+([Known issues](docs/known-issues.md#backend-npm-start-and-npm-run-dev-point-to-a-missing-file)).
+
+Leave it running. It prints `Server running on http://127.0.0.1:3000` when it
+is ready. `--watch` restarts it when a backend file changes.
 
 ### 5. Build and install the plugin
 
+On a fresh clone, generate the bundled Web Worker once, then build:
+
 ```bash
-npm run build --workspace=plugin/obSync
+cd plugin/obSync
+node esbuild.config.mjs production
+npm run build
 ```
 
-Copy `plugin/obSync/main.js`, `manifest.json`, and `styles.css` into
-`<vault>/.obsidian/plugins/obSync/` in the Obsidian vault you want to test
-with, then in Obsidian: enable **Community plugins** if you haven't already,
-and turn on **ObSync** in the plugin list.
+The first command is needed because `npm run build` type-checks before esbuild
+generates `src/Workers/zipWorker/zip.worker.generated.ts`
+([details](docs/known-issues.md#plugin-the-first-npm-run-build-fails-on-a-fresh-clone)).
+
+Copy `plugin/obSync/main.js`, `manifest.json` and `styles.css` into
+`<your vault>/.obsidian/plugins/obSync/`. In Obsidian, enable
+**Community plugins** and turn on **ObSync**.
 
 ### 6. Connect and sign in
 
-Open **Settings → ObSync**. Since no account is connected yet, the only field
-shown is the **Backend server URL**. Enter `http://127.0.0.1:3000` and save
-it, using `127.0.0.1` rather than `localhost` (see
-[Troubleshooting](docs/debugging.md#plugin-cant-reach-a-local-backend) if
-you're curious why that distinction matters). Saving it reveals a
-**Sign in** button, where you log in with the admin e-mail and the temporary
-password that step 3 printed to your terminal.
+Open **Settings → ObSync**. With no backend configured, only the
+**Backend server URL** field is shown. Enter `http://127.0.0.1:3000` (use
+`127.0.0.1`, not `localhost`; see
+[Troubleshooting](docs/debugging.md#the-plugin-cannot-reach-a-local-backend))
+and save. A **Sign in** button appears; sign in with the admin e-mail and the
+temporary password from step 3.
+
+The plugin then downloads the shared vault and connects the live channels.
 
 ### 7. Change the temporary password
 
-Go to **Settings → ObSync → Account → Change password** and set a real
-password before doing anything else with this account, since the temporary
-one only ever appeared once, printed to your terminal, and can't be
-retrieved again once you've moved past it.
+Go to **Settings → ObSync → Account** and set a real password. The temporary
+one cannot be shown again.
 
-### 8. Next steps
+### 8. Try it with two accounts
 
-- As admin, add more accounts under **Settings → ObSync → User management**
-  (shown in Portuguese as "Administração de usuários" if Obsidian is set to
-  that language). Each person installs the same plugin build and connects
-  to the same backend URL, then signs in with their own account.
-- Only `admin` accounts publish edits to the shared vault; `user` accounts
-  edit locally and receive shared changes. See
-  [How synchronization works](#how-synchronization-works).
-- Want to reach the backend from outside your own machine? The backend URL
-  field takes any custom domain, not just `127.0.0.1`. Put a TLS reverse
-  proxy in front of it and point the field at that proxy's HTTPS URL. See
-  [Security: transport rules](docs/security.md#transport-rules).
+Sign in as the `user` seed account in a second vault (or a second device) and
+open the same note in both. Text typed by the admin appears in both; text typed
+by the user stays only on the user's side. New accounts are created under
+**Settings → ObSync → User management**.
+
+### Reaching the backend from other devices
+
+The backend refuses plain HTTP on any address other than loopback. To use it
+from a phone or another computer, even on your own network, put a TLS reverse
+proxy in front of it. [Security](docs/security.md#reaching-the-backend-from-other-devices-on-your-lan)
+has a ready-to-use Caddy setup.
 
 ### Installing from the Obsidian Community Plugins directory
 
-Steps 1–5 above are only for the person who builds and runs the backend.
-Everyone else installs ObSync from **Settings → Community plugins → Browse**
-like any other plugin: Obsidian downloads the release's `main.js`,
-`manifest.json`, and `styles.css` for them automatically. They start at
-[step 6](#6-connect-and-sign-in): they still need the backend's URL and an
-account, both provided by whoever is running that backend.
+Only the person running the backend needs steps 1 to 5. Everyone else installs
+ObSync from **Settings → Community plugins → Browse** and starts at step 6 with
+the backend URL and an account provided by that person.
 
-### Testing across devices on your LAN, without hosting it publicly
+## Development workflow
 
-The backend refuses plain HTTP on any host other than loopback
-(`127.0.0.1`/`localhost`). Binding it to your machine's LAN IP (e.g.
-`192.168.1.20`) to reach it from your phone still requires
-`OBSYNC_REQUIRE_TLS=true`, which in turn requires a TLS-terminating reverse
-proxy (`OBSYNC_TRUST_PROXY=true`). There's no "just open the firewall" mode.
-
-The lightest way to satisfy that on your own network is to run a local
-reverse proxy with automatic self-signed HTTPS on the same machine as the
-backend, so the backend itself never has to leave `127.0.0.1`. Only the
-proxy binds to your LAN IP, and the firewall only needs to open for the
-proxy's port, never the backend's. See
-[Security: reaching the backend from other devices on your LAN](docs/security.md#reaching-the-backend-from-other-devices-on-your-lan)
-for the Caddyfile, firewall commands, and certificate-trust steps.
-
-## Development
-
-Once you're set up, there's no need to rebuild by hand after every change,
-since both workspaces support watch mode. Start the backend in watch mode in
-one terminal:
+Run two terminals:
 
 ```bash
-npm run dev --workspace=backend
+# Terminal 1: backend, restarts on change
+cd backend && node --watch main.ts
+
+# Terminal 2: plugin, rebuilds main.js on change
+cd plugin/obSync && npm run dev
 ```
 
-and run the plugin compiler in watch mode in another:
+After each plugin rebuild, reload the plugin in Obsidian (or use a hot-reload
+plugin). If your development vault is not where the build writes `main.js`,
+copy or symlink the three plugin files into the vault's plugin folder.
+
+Type-check both halves:
 
 ```bash
-npm run dev --workspace=plugin/obSync
+cd backend && npx tsc --noEmit -p tsconfig.json
+cd plugin/obSync && npx tsc -noEmit -skipLibCheck
 ```
 
-With that running, `plugin/obSync/main.js` is rewritten automatically on
-every source change, so picking up the update is just a matter of reloading
-the plugin inside Obsidian, or using a hot-reload plugin so you don't even
-have to do that.
+## Documentation
+
+Start with the [documentation index](docs/README.md). The most useful pages
+when you are new:
+
+- [System overview](docs/overview.md): the parts and the main flows
+- [Architecture](docs/architecture.md): where each responsibility lives
+- [Common changes](docs/common-changes.md): where to edit for typical tasks
+- [Known issues](docs/known-issues.md): verified bugs and open questions
 
 ---
 
