@@ -23,7 +23,10 @@ export class WebSocketServer {
   readonly #event;
   readonly #tokenService: TokenService;
   readonly #collaborationServer: YjsCollaborationServer;
-  readonly #authenticatedConnections = new Map<WebSocket, WebSocketAuthorization>();
+  readonly #authenticatedConnections = new Map<
+    WebSocket,
+    WebSocketAuthorization
+  >();
   readonly #aliveConnections = new WeakSet<WebSocket>();
   readonly #unsubscribeAuthorizationChanges: () => void;
   readonly #unsubscribeSessionRevocations: () => void;
@@ -55,11 +58,11 @@ export class WebSocketServer {
     this.#requireTls = requireTls;
     this.#trustProxy = trustProxy;
 
-    this.#unsubscribeAuthorizationChanges = this.#event.onAuthorizationChanged((userId) =>
-      this.#closeUserConnections(userId),
+    this.#unsubscribeAuthorizationChanges = this.#event.onAuthorizationChanged(
+      (userId) => this.#closeUserConnections(userId),
     );
-    this.#unsubscribeSessionRevocations = tokenService.onSessionRevoked((sessionId) =>
-      this.#closeSessionConnections(sessionId),
+    this.#unsubscribeSessionRevocations = tokenService.onSessionRevoked(
+      (sessionId) => this.#closeSessionConnections(sessionId),
     );
 
     server.on("upgrade", (request, socket, head) => {
@@ -97,9 +100,13 @@ export class WebSocketServer {
       return;
     }
 
-    const channel: WebSocketChannel = url.pathname === "/system" ? "system" : "yjs";
+    const channel: WebSocketChannel =
+      url.pathname === "/system" ? "system" : "yjs";
     const ticket = this.#readTicketProtocol(request);
-    const authorization = await this.#tokenService.consumeWebSocketTicket(ticket, channel);
+    const authorization = await this.#tokenService.consumeWebSocketTicket(
+      ticket,
+      channel,
+    );
     if (!authorization) {
       socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
       socket.destroy();
@@ -137,9 +144,12 @@ export class WebSocketServer {
     this.#collaborationServer.setPersistence({
       bindState: (docName, ydoc) => yjsPersistence.bindState(docName, ydoc),
       writeState: (docName, ydoc) => yjsPersistence.writeState(docName, ydoc),
-      destroyState: (docName, ydoc) => yjsPersistence.destroyState(docName, ydoc),
-      deleteStateUnderPath: (targetPath) => yjsPersistence.deleteStateUnderPath(targetPath),
-      renameStatePath: (oldPath, newPath) => yjsPersistence.renameStatePath(oldPath, newPath),
+      destroyState: (docName, ydoc) =>
+        yjsPersistence.destroyState(docName, ydoc),
+      deleteStateUnderPath: (targetPath) =>
+        yjsPersistence.deleteStateUnderPath(targetPath),
+      renameStatePath: (oldPath, newPath) =>
+        yjsPersistence.renameStatePath(oldPath, newPath),
     });
 
     this.wssYjs.on("connection", (webSocket, request) => {
@@ -174,13 +184,16 @@ export class WebSocketServer {
       const { user } = authorization;
 
       webSocket.on("message", () => {
-        console.warn("[Audit] Mutation message refused on the /system channel", {
-          userId: user.id,
-          role: user.role,
-          operation: "system-message",
-          timestamp: new Date().toISOString(),
-          allowed: false,
-        });
+        console.warn(
+          "[Audit] Mutation message refused on the /system channel",
+          {
+            userId: user.id,
+            role: user.role,
+            operation: "system-message",
+            timestamp: new Date().toISOString(),
+            allowed: false,
+          },
+        );
         webSocket.close(1008, "System channel is receive-only");
       });
     });
@@ -236,13 +249,17 @@ export class WebSocketServer {
     return null;
   }
 
+  //check if you are inside a tls, in node, if you are inside a tls connection, the request obj
+  //has an instance of TLSSocket inside the request.socket
   #isSecureRequest(request: IncomingMessage): boolean {
     const encrypted = (request.socket as { encrypted?: boolean }).encrypted;
     if (encrypted) return true;
     if (!this.#trustProxy) return false;
 
     const forwardedProtocol = request.headers["x-forwarded-proto"];
-    const value = Array.isArray(forwardedProtocol) ? forwardedProtocol[0] : forwardedProtocol;
+    const value = Array.isArray(forwardedProtocol)
+      ? forwardedProtocol[0]
+      : forwardedProtocol;
     return value?.split(",")[0]?.trim().toLowerCase() === "https";
   }
 

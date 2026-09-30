@@ -12,7 +12,13 @@ export type VaultChange =
     }
   | { type: "delete"; path: string; isFolder: boolean; originClientId?: string }
   | { type: "modify"; path: string; content: string; originClientId?: string }
-  | { type: "rename"; oldPath: string; newPath: string; isFolder: boolean; originClientId?: string };
+  | {
+      type: "rename";
+      oldPath: string;
+      newPath: string;
+      isFolder: boolean;
+      originClientId?: string;
+    };
 
 export const vaultEvents = new EventEmitter();
 

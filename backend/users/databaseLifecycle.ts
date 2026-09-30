@@ -1,8 +1,4 @@
-import {
-  existsSync,
-  mkdirSync,
-  rmSync,
-} from "node:fs";
+import { existsSync, mkdirSync, rmSync } from "node:fs";
 import path from "node:path";
 import { UserDB } from "./UserDB.ts";
 

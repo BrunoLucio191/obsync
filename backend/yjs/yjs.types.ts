@@ -17,7 +17,6 @@ export type YjsAuthenticatedConnection = {
 
 export type YjsConnectionState = {
   readonly controlledAwarenessIds: Set<number>;
-  /** Lowercased email: awareness sent by this connection must carry it. */
   readonly authenticatedPresenceId: string;
   readonly userId: number;
   readonly userRole: "admin" | "user";

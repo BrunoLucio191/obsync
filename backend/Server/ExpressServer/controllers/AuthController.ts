@@ -54,7 +54,9 @@ export class AuthController {
       case typeof email !== "string" || typeof password !== "string":
         res.status(400).json({ error: "E-mail and password are required" });
         return;
-      case !email.includes("@") || email.length < 10 || email.trim().length === 0:
+      case !email.includes("@") ||
+        email.length < 10 ||
+        email.trim().length === 0:
         res.status(400).json({ error: "E-mail is not valid" });
         return;
       case password.trim().length === 0:
@@ -65,7 +67,10 @@ export class AuthController {
         return;
     }
 
-    const { accountKey, ipKey } = LoginRateLimiter.loginRateLimitKeys(req, email);
+    const { accountKey, ipKey } = LoginRateLimiter.loginRateLimitKeys(
+      req,
+      email,
+    );
     const accountLimit = this.#accountLoginRateLimiter.check(accountKey);
     const ipLimit = this.#ipLoginRateLimiter.check(ipKey);
 
@@ -74,22 +79,30 @@ export class AuthController {
         "Retry-After",
         Math.max(accountLimit.retryAfterSeconds, ipLimit.retryAfterSeconds),
       );
-      res.status(429).json({ error: "Too many login attempts. Try again later." });
+      res
+        .status(429)
+        .json({ error: "Too many login attempts. Try again later." });
       return;
     }
 
     const session = await this.#authService.login(email, password);
 
     if (!session) {
-      const updatedAccountLimit = this.#accountLoginRateLimiter.recordFailure(accountKey);
+      const updatedAccountLimit =
+        this.#accountLoginRateLimiter.recordFailure(accountKey);
       const updatedIpLimit = this.#ipLoginRateLimiter.recordFailure(ipKey);
 
       if (!updatedAccountLimit.allowed || !updatedIpLimit.allowed) {
         res.setHeader(
           "Retry-After",
-          Math.max(updatedAccountLimit.retryAfterSeconds, updatedIpLimit.retryAfterSeconds),
+          Math.max(
+            updatedAccountLimit.retryAfterSeconds,
+            updatedIpLimit.retryAfterSeconds,
+          ),
         );
-        res.status(429).json({ error: "Too many login attempts. Try again later." });
+        res
+          .status(429)
+          .json({ error: "Too many login attempts. Try again later." });
         return;
       }
       res.status(401).json({ error: "Invalid e-mail or password." });
@@ -113,7 +126,9 @@ export class AuthController {
 
   logout = (req: Request, res: Response): void => {
     const refreshToken = req.body?.refreshToken;
-    this.#tokenService.revokeSession(typeof refreshToken === "string" ? refreshToken : null);
+    this.#tokenService.revokeSession(
+      typeof refreshToken === "string" ? refreshToken : null,
+    );
 
     res.sendStatus(204);
   };
@@ -131,14 +146,15 @@ export class AuthController {
 
     if (!isWebSocketChannel(channel)) {
       res.status(400).json({ error: "Invalid WebSocket channel." });
-
       return;
     }
 
-    const ticket = await this.#tokenService.issueWebSocketTicket(res.locals.accessToken, channel);
+    const ticket = await this.#tokenService.issueWebSocketTicket(
+      res.locals.accessToken,
+      channel,
+    );
     if (!ticket) {
       res.status(401).json({ error: "Invalid or expired session." });
-
       return;
     }
     res.json(ticket);
@@ -153,7 +169,9 @@ export class AuthController {
       newPassword.length < 6 ||
       newPassword.length > 128
     ) {
-      console.warn("[Auth] The new password must be between 6 and 128 characters.");
+      console.warn(
+        "[Auth] The new password must be between 6 and 128 characters.",
+      );
       res.status(400).json({
         error: "The new password must be between 6 and 128 characters.",
       });
@@ -195,7 +213,10 @@ export class AuthController {
         res.json({ user: result.user });
       }, `auth:${actor.id}:changePassword`);
     } catch (error) {
-      console.error("[Auth] Unexpected Error while changing the password", error);
+      console.error(
+        "[Auth] Unexpected Error while changing the password",
+        error,
+      );
       res.status(500).json({ error: "Interal Error" });
     }
   };
@@ -206,7 +227,9 @@ export class AuthController {
 
     if (!color) {
       console.warn("[Auth] Invalid cursor color, expected #rrggbb");
-      res.status(400).json({ error: "The color must be a hex value like #3498db." });
+      res
+        .status(400)
+        .json({ error: "The color must be a hex value like #3498db." });
       return;
     }
 
@@ -225,7 +248,10 @@ export class AuthController {
         res.json({ user: result.user });
       }, `user:${actor.id}:changeColor`);
     } catch (error) {
-      console.error("[Auth] Unexpected Error while changing the cursor color", error);
+      console.error(
+        "[Auth] Unexpected Error while changing the cursor color",
+        error,
+      );
       res.status(500).json({ error: "Internal Error" });
     }
   };

@@ -36,7 +36,9 @@ export class TokenService {
 
   public constructor({ secret, dbService }: TokenServiceConstructor) {
     if (!secret || Buffer.byteLength(secret, "utf8") < 32) {
-      throw new Error("OBSYNC_TOKEN_SECRET must contain at least 32 random bytes.");
+      throw new Error(
+        "OBSYNC_TOKEN_SECRET must contain at least 32 random bytes.",
+      );
     }
 
     this.#secret = secret;
@@ -57,8 +59,11 @@ export class TokenService {
     return this.#buildSession(user, sessionId, refreshToken);
   }
 
-  public async verifyToken(token: string | null | undefined): Promise<AuthenticatedUser | null> {
-    return (await this.#authorizeAccessToken(token))?.user ?? null;
+  public async verifyToken(
+    token: string | null | undefined,
+  ): Promise<AuthenticatedUser | null> {
+    const authUserPlusInformation = await this.#authorizeAccessToken(token);
+    return authUserPlusInformation?.user ?? null;
   }
 
   /** Rotates the refresh token on every use. */
@@ -76,7 +81,10 @@ export class TokenService {
     if (
       !record ||
       record.refreshExpiresAt <= Date.now() ||
-      !this.#safeEqual(record.refreshTokenHash, this.#hashOpaqueToken(refreshToken))
+      !this.#safeEqual(
+        record.refreshTokenHash,
+        this.#hashOpaqueToken(refreshToken),
+      )
     ) {
       return null;
     }
@@ -102,7 +110,13 @@ export class TokenService {
     if (!sessionId || !secret || extra) return;
 
     const record = this.#sessions.get(sessionId);
-    if (record && this.#safeEqual(record.refreshTokenHash, this.#hashOpaqueToken(refreshToken))) {
+    if (
+      record &&
+      this.#safeEqual(
+        record.refreshTokenHash,
+        this.#hashOpaqueToken(refreshToken),
+      )
+    ) {
       this.#revokeSessionId(sessionId);
     }
   }
@@ -210,7 +224,9 @@ export class TokenService {
     if (!header || !payload || !signature) return null;
 
     const signedForVerication = `${header}.${payload}`;
-    if (!this.#safeEqual(signature, this.#sign(signedForVerication))) return null;
+    if (!this.#safeEqual(signature, this.#sign(signedForVerication))) {
+      return null;
+    }
 
     try {
       const headerValue = decode<TokenHeader>(header);
@@ -237,7 +253,11 @@ export class TokenService {
       }
 
       const session = this.#sessions.get(payloadValue.sid);
-      if (!session || session.userId !== userId || session.refreshExpiresAt <= Date.now()) {
+      if (
+        !session ||
+        session.userId !== userId ||
+        session.refreshExpiresAt <= Date.now()
+      ) {
         return null;
       }
 
@@ -298,12 +318,17 @@ export class TokenService {
 
   /** Only the HMAC of opaque tokens is kept in memory, never the raw value. */
   #hashOpaqueToken(value: string): string {
-    return createHmac("sha256", this.#secret).update(`opaque:${value}`).digest("base64url");
+    return createHmac("sha256", this.#secret)
+      .update(`opaque:${value}`)
+      .digest("base64url");
   }
 
   #safeEqual(left: string, right: string): boolean {
     const leftBuffer = Buffer.from(left);
     const rightBuffer = Buffer.from(right);
-    return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer);
+    return (
+      leftBuffer.length === rightBuffer.length &&
+      timingSafeEqual(leftBuffer, rightBuffer)
+    );
   }
 }

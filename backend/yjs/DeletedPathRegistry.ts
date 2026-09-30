@@ -1,7 +1,11 @@
 import type * as Y from "yjs";
-import { isSamePathOrChild, normalizeVaultPath } from "./yjsUtils/vaultPath.utils.ts";
+import {
+  isSamePathOrChild,
+  normalizeVaultPath,
+} from "./yjsUtils/vaultPath.utils.ts";
 
-/** Lets new connections be refused and rooms be stopped even while a room creation or flush is still running. */
+/** Lets new connections be refused and rooms be stopped even
+ * while a room creation or flush is still running. */
 export class DeletedPathRegistry {
   readonly #deletedRoots = new Set<string>();
   readonly #invalidatedDocuments = new WeakSet<Y.Doc>();
@@ -35,7 +39,10 @@ export class DeletedPathRegistry {
     const normalizedTarget = normalizeVaultPath(targetPath);
 
     for (const root of this.#deletedRoots) {
-      if (isSamePathOrChild(root, normalizedTarget) || isSamePathOrChild(normalizedTarget, root)) {
+      if (
+        isSamePathOrChild(root, normalizedTarget) ||
+        isSamePathOrChild(normalizedTarget, root)
+      ) {
         this.#deletedRoots.delete(root);
       }
     }

@@ -34,7 +34,9 @@ export class AwarenessOwnershipGuard {
           ignoredEntries.push({
             clientId: entry.clientId,
             reason: "foreign-removal-echo",
-            currentOwner: currentOwner ? this.#describeConnection(currentOwner) : null,
+            currentOwner: currentOwner
+              ? this.#describeConnection(currentOwner)
+              : null,
           });
           continue;
         }
@@ -62,7 +64,9 @@ export class AwarenessOwnershipGuard {
 
       if (currentOwner && currentOwner !== connection) {
         const currentOwnerContext = getYjsDebugConnection(currentOwner);
-        const currentOwnerPresenceId = normalizePresenceIdentity(currentOwnerContext.userEmail);
+        const currentOwnerPresenceId = normalizePresenceIdentity(
+          currentOwnerContext.userEmail,
+        );
 
         if (currentOwnerPresenceId !== authenticatedPresenceId) {
           // Different users colliding: no socket is dropped and ownership stays
@@ -76,20 +80,21 @@ export class AwarenessOwnershipGuard {
         }
 
         // Same user reconnecting: ownership moves, but the old socket stays open to avoid a ping-pong
-        room.connections.get(currentOwner)?.controlledAwarenessIds.delete(entry.clientId);
+        room.connections
+          .get(currentOwner)
+          ?.controlledAwarenessIds.delete(entry.clientId);
       }
 
       acceptedEntries.push(entry);
     }
-    /*
-    if (ignoredEntries.length > 0) {
-      console.warn(`[Yjs] Ignored awareness entries in ${room.filePath}:`, ignoredEntries);
-    }
-    */
     if (acceptedEntries.length === 0) return;
 
     const filteredUpdate = this.#encodeEntries(acceptedEntries);
-    awarenessProtocol.applyAwarenessUpdate(room.awareness, filteredUpdate, connection);
+    awarenessProtocol.applyAwarenessUpdate(
+      room.awareness,
+      filteredUpdate,
+      connection,
+    );
 
     for (const entry of acceptedEntries) {
       if (entry.state === null) {

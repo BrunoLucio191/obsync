@@ -29,7 +29,6 @@ export function syncMessageHandler({
   decoder,
 }: SyncMessageHandlerParams): void {
   const syncMessageType = decoding.readVarUint(decoder);
-
   switch (syncMessageType) {
     case syncProtocol.messageYjsSyncStep1: {
       const remoteStateVector = readBoundedByteArray(decoder, "State Vector");
@@ -53,7 +52,9 @@ export function syncMessageHandler({
           userId: connectionState.userId,
           role: connectionState.userRole,
           operation:
-            syncMessageType === syncProtocol.messageYjsSyncStep2 ? "yjs-sync-step2" : "yjs-update",
+            syncMessageType === syncProtocol.messageYjsSyncStep2
+              ? "yjs-sync-step2"
+              : "yjs-update",
           path: room.filePath,
           timestamp: new Date().toISOString(),
           allowed: false,
@@ -68,6 +69,8 @@ export function syncMessageHandler({
     }
 
     default:
-      throw new Error(`Unknown internal Yjs sync message type: ${syncMessageType}`);
+      throw new Error(
+        `Unknown internal Yjs sync message type: ${syncMessageType}`,
+      );
   }
 }

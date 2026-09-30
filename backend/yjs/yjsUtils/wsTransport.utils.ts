@@ -15,7 +15,10 @@ export function toUint8Array(data: RawData): Uint8Array {
   return new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
 }
 
-export function sendBinaryMessage(connection: WebSocket, message: Uint8Array): void {
+export function sendBinaryMessage(
+  connection: WebSocket,
+  message: Uint8Array,
+): void {
   if (connection.readyState !== WebSocket.OPEN) return;
 
   try {
@@ -27,8 +30,15 @@ export function sendBinaryMessage(connection: WebSocket, message: Uint8Array): v
 }
 
 /** The reason is cut to the protocol's 123-byte limit. */
-export function closeConnection(connection: WebSocket, code: number, reason: string): void {
-  if (connection.readyState === WebSocket.CLOSING || connection.readyState === WebSocket.CLOSED) {
+export function closeConnection(
+  connection: WebSocket,
+  code: number,
+  reason: string,
+): void {
+  if (
+    connection.readyState === WebSocket.CLOSING ||
+    connection.readyState === WebSocket.CLOSED
+  ) {
     return;
   }
 
@@ -45,7 +55,10 @@ export function ensureDecoderConsumed(decoder: decoding.Decoder): void {
   }
 }
 
-export function readBoundedByteArray(decoder: decoding.Decoder, label: string): Uint8Array {
+export function readBoundedByteArray(
+  decoder: decoding.Decoder,
+  label: string,
+): Uint8Array {
   const value = decoding.readVarUint8Array(decoder);
 
   if (value.byteLength > MAX_WS_MESSAGE_BYTES) {

@@ -1,4 +1,9 @@
-import express, { type Express, type NextFunction, type Request, type Response } from "express";
+import express, {
+  type Express,
+  type NextFunction,
+  type Request,
+  type Response,
+} from "express";
 import { type Server } from "node:http";
 import { createServer } from "node:http";
 import { LoginRateLimiter } from "../../auth/LoginRateLimiter.ts";
@@ -75,54 +80,45 @@ export class ExpressServer {
     this.#dbService = dbService;
     this.#authService = authService;
     this.#collaborationServer = collaborationServer;
-    this.#routeUsers = new RouteUsers
-      ({
-        adminMiddleware: this.#requireAdmin,
-        authMiddleware: this.#requireAuth,
-        clientIdMiddleware: this.#requireClientId,
-        usersController: new UsersController
-          ({
-            dbService: this.#dbService,
-            queueManager: new QueueManager(keyedLock),
-          }),
-      });
-    this.#routeAuth = new RouteAuth
-      ({
-        authMiddleware: this.#requireAuth,
-        clientIdMiddleware: this.#requireClientId,
-        authController: new AuthController
-          ({
-            dbService: this.#dbService,
-            queueManager: new QueueManager(keyedLock),
-            authService: this.#authService,
-            passwordChangeRateLimiter: new LoginRateLimiter
-              ({
-                maxFailedAttempts: 5,
-              }),
-            ipLoginRateLimiter: new LoginRateLimiter
-              ({
-                maxFailedAttempts: 25,
-              }),
-            accountLoginRateLimiter: new LoginRateLimiter
-              ({
-                maxFailedAttempts: 5,
-              }),
-            tokenService: this.#tokenService,
-          }),
-      });
-    this.#routeSyncFiles = new RouteSyncFiles
-      ({
-        authMiddleware: this.#requireAuth,
-        adminMiddleware: this.#requireAdmin,
-        clientIdMiddleware: this.#requireClientId,
-        syncfilesController: new SyncFilesController
-          ({
-            collaborationServer: this.#collaborationServer,
-            queueManager: new QueueManager(keyedLock),
-            fileManager: this.#fileManager,
-            vaultGene,
-          }),
-      });
+    this.#routeUsers = new RouteUsers({
+      adminMiddleware: this.#requireAdmin,
+      authMiddleware: this.#requireAuth,
+      clientIdMiddleware: this.#requireClientId,
+      usersController: new UsersController({
+        dbService: this.#dbService,
+        queueManager: new QueueManager(keyedLock),
+      }),
+    });
+    this.#routeAuth = new RouteAuth({
+      authMiddleware: this.#requireAuth,
+      clientIdMiddleware: this.#requireClientId,
+      authController: new AuthController({
+        dbService: this.#dbService,
+        queueManager: new QueueManager(keyedLock),
+        authService: this.#authService,
+        passwordChangeRateLimiter: new LoginRateLimiter({
+          maxFailedAttempts: 5,
+        }),
+        ipLoginRateLimiter: new LoginRateLimiter({
+          maxFailedAttempts: 25,
+        }),
+        accountLoginRateLimiter: new LoginRateLimiter({
+          maxFailedAttempts: 5,
+        }),
+        tokenService: this.#tokenService,
+      }),
+    });
+    this.#routeSyncFiles = new RouteSyncFiles({
+      authMiddleware: this.#requireAuth,
+      adminMiddleware: this.#requireAdmin,
+      clientIdMiddleware: this.#requireClientId,
+      syncfilesController: new SyncFilesController({
+        collaborationServer: this.#collaborationServer,
+        queueManager: new QueueManager(keyedLock),
+        fileManager: this.#fileManager,
+        vaultGene,
+      }),
+    });
     this.initializeMiddleware();
     this.#initializeRoutes();
   }
@@ -130,7 +126,9 @@ export class ExpressServer {
   public initializeMiddleware(): void {
     this.#app.use((req: Request, res: Response, next: NextFunction) => {
       if (this.#requireTls && !req.secure) {
-        res.status(426).json({ error: "This installation requires an HTTPS connection." });
+        res
+          .status(426)
+          .json({ error: "This installation requires an HTTPS connection." });
         return;
       }
       next();
@@ -159,14 +157,20 @@ export class ExpressServer {
 
     this.#server.listen(port, this.#host, () => {
       if (this.#requireTls) {
-        console.log(`Server running behind a trusted TLS proxy on ${this.#host}:${port}`);
+        console.log(
+          `Server running behind a trusted TLS proxy on ${this.#host}:${port}`,
+        );
         return;
       }
       console.log(`Server running on http://${this.#host}:${port}`);
     });
   }
 
-  #requireAuth = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  #requireAuth = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     const token = req.header("Authorization")?.replace(/^Bearer\s+/i, "");
     const authenticatedUser = await this.#tokenService.verifyToken(token);
 
@@ -183,13 +187,19 @@ export class ExpressServer {
     const user = this.#currenteUser(res);
     if (user.role !== "admin") {
       this.#auditDenied(user, req.method, req.path, this.#requestPath(req));
-      res.status(403).json({ error: "Only administrators can perform this action." });
+      res
+        .status(403)
+        .json({ error: "Only administrators can perform this action." });
       return;
     }
     next();
   };
 
-  #requireClientId = (req: Request, res: Response, next: NextFunction): void => {
+  #requireClientId = (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): void => {
     const clientId = req.headers["x-obsync-client"];
     if (typeof clientId !== "string" || !clientId.trim()) {
       console.warn("[ExpressServer] Missing clientId inside the header");

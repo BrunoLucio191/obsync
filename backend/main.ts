@@ -16,11 +16,8 @@ import { QueueManager } from "./queue/QueueManager.ts";
 const main = () => {
   const config = loadServerConfig();
   const userDB = openUserDatabase(systemPaths.usersDatabase);
-
   const fileManager = new FileManager();
-
   const dbService = new DBServices(userDB);
-
   const tokenService = new TokenService({
     secret: config.tokenSecret,
     dbService,
@@ -29,7 +26,11 @@ const main = () => {
   const authService = new AuthService(userDB, dbService, tokenService);
   const collaborationServer = new YjsCollaborationServer();
   const keyedLock = new KeyedLock();
-  const vaultGene = new Gene(systemPaths.vault, systemPaths.vaultGene, new QueueManager(keyedLock));
+  const vaultGene = new Gene(
+    systemPaths.vault,
+    systemPaths.vaultGene,
+    new QueueManager(keyedLock),
+  );
 
   const server = new ExpressServer({
     port: config.port,
@@ -56,7 +57,6 @@ const main = () => {
   webSocketServer.initializeWebSockets();
 };
 
-// A startup failure logs its message and exits non-zero, without a stack trace
 try {
   main();
 } catch (error) {
