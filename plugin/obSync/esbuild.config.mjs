@@ -11,19 +11,6 @@ if you want to view the source, please visit the github repository of this plugi
 
 const prod = process.argv[2] === 'production';
 
-// Obsidian only loads a single main.js, and there is no reliable file path to
-// point `new Worker(...)` at (especially on mobile). So the zip worker is
-// compiled on its own here, and its output is written as the *text* content
-// of a generated .ts module. WorkerFather then imports that string and turns
-// it into a real Worker via `new Worker(URL.createObjectURL(new Blob([...])))`.
-const workerBuild = await esbuild.build({
-	entryPoints: ['src/Workers/zipWorker/zip.worker.ts'],
-	bundle: true,
-	format: 'iife',
-	target: 'es2021',
-	write: false,
-});
-
 writeFileSync(
 	'src/Workers/zipWorker/zip.worker.generated.ts',
 	`export default ${JSON.stringify(workerBuild.outputFiles[0].text)};\n`,
@@ -58,6 +45,20 @@ const context = await esbuild.context({
 	treeShaking: true,
 	outfile: 'main.js',
 	minify: prod,
+});
+
+// Obsidian only loads a single main.js, and there is no reliable file path to
+//
+// point `new Worker(...)` at (especially on mobile). So the zip worker is
+// compiled on its own here, and its output is written as the *text* content
+// of a generated .ts module. WorkerFather then imports that string and turns
+// it into a real Worker via `new Worker(URL.createObjectURL(new Blob([...])))`.
+const workerBuild = await esbuild.build({
+	entryPoints: ['src/Workers/zipWorker/zip.worker.ts'],
+	bundle: true,
+	format: 'iife',
+	target: 'es2021',
+	write: false,
 });
 
 if (prod) {
