@@ -23,9 +23,6 @@ build/
 *.db-shm
 *.db-wal
 
-# Shared vault and user data
-/backend/data/vault/
-
 # Yjs persistent state
 /backend/data/yjs-state/
 
