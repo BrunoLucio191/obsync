@@ -18,7 +18,6 @@ import type {
   YjsPersistenceAdapter,
 } from "./yjs.types.ts";
 import { syncMessageHandler } from "./SyncMessageHandler.ts";
-import { ApplyAwerenessUpdate } from "./ApplyAwerenessUpdate.ts";
 /** Entry point of the Yjs backend for the rest of the server. */
 export class YjsCollaborationServer {
   readonly #deletedPaths = new DeletedPathRegistry();
@@ -69,7 +68,7 @@ export class YjsCollaborationServer {
     connection: WebSocket,
     request: IncomingMessage,
     authenticatedUser: YjsAuthenticatedConnection,
-  ): Promise<void> {
+  ): Promise<typeof room | undefined> {
     let identity: { docName: string; filePath: string };
 
     try {
@@ -142,5 +141,6 @@ export class YjsCollaborationServer {
       console.error(`[Yjs] Failed to initialize ${room.filePath}:`, error);
       closeConnection(connection, 1011, "Document initialization failed");
     }
+    return room;
   }
 }

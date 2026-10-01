@@ -27,7 +27,6 @@ export type YjsConnectionState = {
 export type YjsAwarenessEntry = {
   readonly clientId: number;
   readonly clock: number;
-  /** `null` removes the client id. */
   readonly state: unknown;
 };
 
