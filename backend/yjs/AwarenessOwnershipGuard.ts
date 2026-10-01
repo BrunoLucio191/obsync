@@ -2,7 +2,6 @@ import * as decoding from "lib0/decoding";
 import * as encoding from "lib0/encoding";
 import { WebSocket } from "ws";
 import * as awarenessProtocol from "y-protocols/awareness";
-import { getYjsDebugConnection } from "../yjsDebug.ts";
 import { MAX_AWARENESS_ENTRIES_PER_MESSAGE } from "./yjs.const.ts";
 import type { YjsAwarenessEntry, YjsConnectionState } from "./yjs.types.ts";
 import {
@@ -11,9 +10,21 @@ import {
 } from "./yjsUtils/presence.utils.ts";
 import { ensureDecoderConsumed } from "./yjsUtils/wsTransport.utils.ts";
 import type { YjsRoom } from "./yjsRooms/YjsRoom.ts";
+import type { WebSocketAuthorization } from "../auth/tokenService.types.ts";
 
+type userConnectionContext = {
+  userId: number;
+  userEmail: string;
+  userRole: string;
+};
 /** A connection only claims or removes awareness ids of its own user, so nobody spoofs or evicts another's cursor. */
 export class AwarenessOwnershipGuard {
+  readonly #authenticatedConnections: Map<WebSocket, WebSocketAuthorization>;
+  constructor(
+    authenticatedConnections: Map<WebSocket, WebSocketAuthorization>,
+  ) {
+    this.#authenticatedConnections = authenticatedConnections;
+  }
   public applyUpdate(
     room: YjsRoom,
     connection: WebSocket,
@@ -40,7 +51,6 @@ export class AwarenessOwnershipGuard {
           });
           continue;
         }
-
         acceptedEntries.push(entry);
         continue;
       }
@@ -63,13 +73,12 @@ export class AwarenessOwnershipGuard {
       }
 
       if (currentOwner && currentOwner !== connection) {
-        const currentOwnerContext = getYjsDebugConnection(currentOwner);
+        const currentOwnerContext = this.#describeConnection(connection);
         const currentOwnerPresenceId = normalizePresenceIdentity(
           currentOwnerContext.userEmail,
         );
 
         if (currentOwnerPresenceId !== authenticatedPresenceId) {
-          // Different users colliding: no socket is dropped and ownership stays
           ignoredEntries.push({
             clientId: entry.clientId,
             reason: "cross-user-client-id-collision",
@@ -79,7 +88,6 @@ export class AwarenessOwnershipGuard {
           continue;
         }
 
-        // Same user reconnecting: ownership moves, but the old socket stays open to avoid a ping-pong
         room.connections
           .get(currentOwner)
           ?.controlledAwarenessIds.delete(entry.clientId);
@@ -108,14 +116,13 @@ export class AwarenessOwnershipGuard {
     }
   }
 
-  #describeConnection(connection: WebSocket): unknown {
-    const context = getYjsDebugConnection(connection);
+  #describeConnection(connection: WebSocket): userConnectionContext {
+    const context = this.#authenticatedConnections.get(connection);
 
     return {
-      connectionId: context.connectionId,
-      userId: context.userId,
-      userEmail: context.userEmail,
-      userRole: context.userRole,
+      userId: context!.user.id,
+      userEmail: context!.user.email,
+      userRole: context!.user.role,
     };
   }
 

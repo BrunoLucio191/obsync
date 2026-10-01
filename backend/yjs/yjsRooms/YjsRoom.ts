@@ -45,7 +45,15 @@ export class YjsRoom {
 
     this.awareness.on(
       "update",
-      ({ added, updated, removed }: { added: number[]; updated: number[]; removed: number[] }) => {
+      ({
+        added,
+        updated,
+        removed,
+      }: {
+        added: number[];
+        updated: number[];
+        removed: number[];
+      }) => {
         const changedClients = added.concat(updated, removed);
         if (changedClients.length === 0) return;
 
@@ -53,7 +61,10 @@ export class YjsRoom {
         encoding.writeVarUint(encoder, MESSAGE_AWARENESS);
         encoding.writeVarUint8Array(
           encoder,
-          awarenessProtocol.encodeAwarenessUpdate(this.awareness, changedClients),
+          awarenessProtocol.encodeAwarenessUpdate(
+            this.awareness,
+            changedClients,
+          ),
         );
         this.broadcast(encoding.toUint8Array(encoder));
       },
@@ -106,7 +117,11 @@ export class YjsRoom {
     state.controlledAwarenessIds.clear();
 
     if (ownedClientIds.length > 0) {
-      awarenessProtocol.removeAwarenessStates(this.awareness, ownedClientIds, connection);
+      awarenessProtocol.removeAwarenessStates(
+        this.awareness,
+        ownedClientIds,
+        connection,
+      );
     }
   }
 

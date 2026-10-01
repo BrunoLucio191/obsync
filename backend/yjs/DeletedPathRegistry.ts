@@ -34,7 +34,7 @@ export class DeletedPathRegistry {
     return normalizedTarget;
   }
 
-  /** Also clears deleted roots above or below it, e.g. when a file is recreated. */
+  /** Also clears deleted roots above or below it, when a file is recreated. */
   public clearDeleted(targetPath: string): void {
     const normalizedTarget = normalizeVaultPath(targetPath);
 

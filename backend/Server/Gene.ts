@@ -43,7 +43,11 @@ export class Gene {
   #directory!: string;
   #genePath!: string;
   readonly #queueManager: QueueManager;
-  constructor(vaultDirectory: string, genePath: string, queueManager: QueueManager) {
+  constructor(
+    vaultDirectory: string,
+    genePath: string,
+    queueManager: QueueManager,
+  ) {
     this.#checkPathsValid(vaultDirectory, genePath);
     this.#genePath = genePath;
     this.#directory = vaultDirectory;
@@ -65,6 +69,7 @@ export class Gene {
         return;
     }
   }
+
   /** Makes a new empty gene File*/
   public async makeNewGene(
     vaultDirectory = this.#directory,
@@ -120,7 +125,7 @@ export class Gene {
     });
     const sizeOfFiles = await Promise.all(stats);
 
-    //doesn't count empty files neither folders
+    //doesn't count empty files neither empty folders
     const numberOfFilesNoFolders = sizeOfFiles.filter(
       (number) => number != undefined && number > 0,
     );
@@ -141,7 +146,10 @@ export class Gene {
    *  @params directory - A valid directory
    *  @params genePath - Path for the gene file
    */
-  async mutateVaultGene(directory = this.#directory, genePath = this.#genePath): Promise<void> {
+  async mutateVaultGene(
+    directory = this.#directory,
+    genePath = this.#genePath,
+  ): Promise<void> {
     this.#checkPathsValid(directory, genePath);
     console.log("[Gene] The vault is watching the gene file");
 
@@ -158,7 +166,10 @@ export class Gene {
     const queue = this.#queueManager.getOrCreateQueue(GENE_QUEUE_ID);
     if (queue.getTaskIdentifiers.includes(GENE_UPDATE_KEY)) return;
     try {
-      await queue.addTask(() => this.#updateGene(directory, genePath), GENE_UPDATE_KEY);
+      await queue.addTask(
+        () => this.#updateGene(directory, genePath),
+        GENE_UPDATE_KEY,
+      );
     } catch (error) {
       console.error("[Gene] Could not update the gene file", error);
     }
@@ -169,7 +180,9 @@ export class Gene {
     const queue = this.#queueManager.getOrCreateQueue(GENE_QUEUE_ID);
     try {
       return await queue.addTask(async () => {
-        return JSON.stringify(JSON.parse(await readFile(genePath, { encoding: "utf8" })));
+        return JSON.stringify(
+          JSON.parse(await readFile(genePath, { encoding: "utf8" })),
+        );
       }, GENE_READ_KEY);
     } catch {
       return null;

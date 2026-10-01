@@ -59,7 +59,9 @@ export class FileManager {
 
   public async isFolder(folderPath: string): Promise<boolean> {
     try {
-      return (await fsPromises.stat(this.#resolveVaultPath(folderPath))).isDirectory();
+      return (
+        await fsPromises.stat(this.#resolveVaultPath(folderPath))
+      ).isDirectory();
     } catch {
       return false;
     }
@@ -89,16 +91,15 @@ export class FileManager {
       return fs.existsSync(fullNew) ? "already-applied" : "not-found";
     }
     const newDirName = path.dirname(fullNew);
-    console.log("-------------");
-    console.log(fullOld);
-    console.log(fullNew);
-    console.log(newDirName);
     await fsPromises.mkdir(newDirName, { recursive: true });
     await fsPromises.rename(fullOld, fullNew);
     return "moved";
   }
 
-  public async directoryZiped(zipPath: string, clientId: string): Promise<void> {
+  public async directoryZiped(
+    zipPath: string,
+    clientId: string,
+  ): Promise<void> {
     if (!fs.existsSync(zipPath)) {
       console.error("This is not a valid path");
       return;

@@ -12,8 +12,12 @@ import { YjsCollaborationServer } from "./yjs/YjsCollaborationServer.ts";
 import { KeyedLock } from "./queue/KeyedLock.ts";
 import { Gene } from "./Server/Gene.ts";
 import { QueueManager } from "./queue/QueueManager.ts";
+import type { WebSocketAuthorization } from "./auth/tokenService.types.ts";
+import type WebSocket from "ws";
 
 const main = () => {
+  const authenticatedConnections = new Map<WebSocket, WebSocketAuthorization>();
+
   const config = loadServerConfig();
   const userDB = openUserDatabase(systemPaths.usersDatabase);
   const fileManager = new FileManager();
@@ -24,7 +28,9 @@ const main = () => {
   });
 
   const authService = new AuthService(userDB, dbService, tokenService);
-  const collaborationServer = new YjsCollaborationServer();
+  const collaborationServer = new YjsCollaborationServer(
+    authenticatedConnections,
+  );
   const keyedLock = new KeyedLock();
   const vaultGene = new Gene(
     systemPaths.vault,
@@ -53,6 +59,7 @@ const main = () => {
     config.requireTls,
     config.trustProxy,
     collaborationServer,
+    authenticatedConnections,
   );
   webSocketServer.initializeWebSockets();
 };

@@ -2,7 +2,10 @@ import { type IncomingMessage } from "node:http";
 import { WebSocket, type RawData } from "ws";
 import type * as Y from "yjs";
 import { normalizePresenceIdentity } from "./yjsUtils/presence.utils.ts";
-import { normalizeVaultPath, parseDocumentIdentity } from "./yjsUtils/vaultPath.utils.ts";
+import {
+  normalizeVaultPath,
+  parseDocumentIdentity,
+} from "./yjsUtils/vaultPath.utils.ts";
 import { closeConnection } from "./yjsUtils/wsTransport.utils.ts";
 import { AwarenessOwnershipGuard } from "./AwarenessOwnershipGuard.ts";
 import { DeletedPathRegistry } from "./DeletedPathRegistry.ts";
@@ -16,14 +19,26 @@ import type {
   YjsPersistenceAdapter,
 } from "./yjs.types.ts";
 import { syncMessageHandler } from "./SyncMessageHandler.ts";
+import type { WebSocketAuthorization } from "../auth/tokenService.types.ts";
 
 /** Entry point of the Yjs backend for the rest of the server. */
 export class YjsCollaborationServer {
   readonly #deletedPaths = new DeletedPathRegistry();
   readonly #persistence = new YjsPersistenceGateway();
-  readonly #rooms = new YjsRoomRegistry(this.#deletedPaths, this.#persistence);
+  readonly #rooms: YjsRoomRegistry;
   readonly #syncHandler: SyncMessageHandlerFn = syncMessageHandler;
-  readonly #awarenessGuard = new AwarenessOwnershipGuard();
+  readonly #authenticatedConnections: Map<WebSocket, WebSocketAuthorization>;
+  readonly #awarenessGuard: AwarenessOwnershipGuard;
+
+  constructor(
+    authenticatedConnections: Map<WebSocket, WebSocketAuthorization>,
+  ) {
+    this.#authenticatedConnections = authenticatedConnections;
+    this.#awarenessGuard = new AwarenessOwnershipGuard(
+      this.#authenticatedConnections,
+    );
+    this.#rooms = new YjsRoomRegistry(this.#deletedPaths, this.#persistence);
+  }
 
   public setPersistence(adapter: YjsPersistenceAdapter): void {
     this.#persistence.setAdapter(adapter);
@@ -46,11 +61,18 @@ export class YjsCollaborationServer {
     this.#deletedPaths.clearDeleted(targetPath);
   }
 
-  public async deletePersistedStateUnderPath(targetPath: string): Promise<void> {
-    await this.#persistence.deleteStateUnderPath(normalizeVaultPath(targetPath));
+  public async deletePersistedStateUnderPath(
+    targetPath: string,
+  ): Promise<void> {
+    await this.#persistence.deleteStateUnderPath(
+      normalizeVaultPath(targetPath),
+    );
   }
 
-  public async renamePersistedStatePath(oldPath: string, newPath: string): Promise<void> {
+  public async renamePersistedStatePath(
+    oldPath: string,
+    newPath: string,
+  ): Promise<void> {
     await this.#persistence.renameStatePath(
       normalizeVaultPath(oldPath),
       normalizeVaultPath(newPath),
@@ -83,7 +105,9 @@ export class YjsCollaborationServer {
       return;
     }
 
-    const authenticatedPresenceId = normalizePresenceIdentity(authenticatedUser.userEmail);
+    const authenticatedPresenceId = normalizePresenceIdentity(
+      authenticatedUser.userEmail,
+    );
 
     if (!authenticatedPresenceId) {
       closeConnection(connection, 1008, "Authenticated user has no email");

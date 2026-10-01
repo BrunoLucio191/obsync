@@ -81,7 +81,9 @@ export class SyncFilesController {
         return;
       }
       console.error("[Zip] Error sending the file", error);
-      res.status(500).json({ error: "[Zip] Internal error generating the file." });
+      res
+        .status(500)
+        .json({ error: "[Zip] Internal error generating the file." });
     }
   };
 
@@ -218,23 +220,33 @@ export class SyncFilesController {
 
     const queue = this.#queueManager.getOrCreateQueue(clientId);
     try {
-      // Keyed on the source only: locking both paths could deadlock
       await queue.addTask(async () => {
-        await this.#collaborationServer.renamePersistedStatePath(
-          oldPath,
-          newPath,
-        );
-        const result = await this.#fileManager.rename(oldPath, newPath);
-        // Already applied in the canonical vault, so there is nothing to spread
-        if (result === "already-applied") {
-          res.sendStatus(200);
-          return;
+        try {
+          this.#collaborationServer.markPathDeleted(oldPath);
+          await this.#collaborationServer.renamePersistedStatePath(
+            oldPath,
+            newPath,
+          );
+          const result = await this.#fileManager.rename(oldPath, newPath);
+          if (result === "already-applied") {
+            res.sendStatus(200);
+            return;
+          }
+          if (result === "not-found") {
+            res.status(404).json({ error: "Path not found" });
+            return;
+          }
+        } catch (error) {
+          //revert changes if an error occurs
+          this.#collaborationServer.clearPathDeleted(oldPath);
+          await this.#collaborationServer.renamePersistedStatePath(
+            newPath,
+            oldPath,
+          );
+          throw error;
         }
-        // The vault never had it: a 404, not a server failure
-        if (result === "not-found") {
-          res.status(404).json({ error: "Path not found" });
-          return;
-        }
+        await this.#collaborationServer.deletePersistedStateUnderPath(oldPath);
+
         publishVaultChange({
           type: "rename",
           oldPath,
@@ -261,7 +273,9 @@ export class SyncFilesController {
     }
 
     if (!Buffer.isBuffer(req.body) || req.body.byteLength === 0) {
-      console.error("[Sync] The file is empty or is missing an important field");
+      console.error(
+        "[Sync] The file is empty or is missing an important field",
+      );
       res.status(400).json({ error: "Error making file" });
       return;
     }
@@ -295,7 +309,9 @@ export class SyncFilesController {
     try {
       await queue.addTask(async () => {
         // A file that's gone was renamed or deleted after its event, the client waits for the next one
-        const filePath = await this.#fileManager.getFilePath(String(fileNameOrDirectory));
+        const filePath = await this.#fileManager.getFilePath(
+          String(fileNameOrDirectory),
+        );
         if (!filePath) {
           res.status(404).json({ error: "File not found" });
           return;
@@ -304,7 +320,10 @@ export class SyncFilesController {
       }, `file:${clientId}:send`);
     } catch (error) {
       // Deleted by its owner between the lookup and the transfer: same as not found
-      if (!res.headersSent && (error as NodeJS.ErrnoException).code === "ENOENT") {
+      if (
+        !res.headersSent &&
+        (error as NodeJS.ErrnoException).code === "ENOENT"
+      ) {
         res.status(404).json({ error: "File not found" });
         return;
       }
