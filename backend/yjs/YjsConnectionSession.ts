@@ -17,7 +17,7 @@ import {
 } from "./yjsUtils/wsTransport.utils.ts";
 import type { DeletedPathRegistry } from "./DeletedPathRegistry.ts";
 import type { SyncMessageHandlerFn } from "./SyncMessageHandler.ts";
-import type { AwarenessOwnershipGuard } from "./AwarenessOwnershipGuard.ts";
+import { ApplyAwerenessUpdate } from "./ApplyAwerenessUpdate.ts";
 import type { YjsRoom } from "./yjsRooms/YjsRoom.ts";
 
 export class YjsConnectionSession {
@@ -26,7 +26,6 @@ export class YjsConnectionSession {
   readonly #connectionState: YjsConnectionState;
   readonly #deletedPaths: DeletedPathRegistry;
   readonly #syncHandler: SyncMessageHandlerFn;
-  readonly #awarenessGuard: AwarenessOwnershipGuard;
 
   public constructor(
     room: YjsRoom,
@@ -34,14 +33,12 @@ export class YjsConnectionSession {
     connectionState: YjsConnectionState,
     deletedPaths: DeletedPathRegistry,
     syncHandler: SyncMessageHandlerFn,
-    awarenessGuard: AwarenessOwnershipGuard,
   ) {
     this.#room = room;
     this.#connection = connection;
     this.#connectionState = connectionState;
     this.#deletedPaths = deletedPaths;
     this.#syncHandler = syncHandler;
-    this.#awarenessGuard = awarenessGuard;
   }
 
   public handleRawMessage(rawData: RawData, isBinary: boolean): void {
@@ -115,7 +112,12 @@ export class YjsConnectionSession {
       case MESSAGE_AWARENESS: {
         const update = readBoundedByteArray(decoder, "Awareness update");
         ensureDecoderConsumed(decoder);
-        this.#awarenessGuard.applyUpdate(this.#room, this.#connection, this.#connectionState, update);
+        ApplyAwerenessUpdate(
+          this.#room,
+          this.#connection,
+          //this.#connectionState,
+          update,
+        );
         return;
       }
 

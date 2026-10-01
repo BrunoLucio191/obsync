@@ -23,7 +23,10 @@ export class WebSocketServer {
   readonly #event;
   readonly #tokenService: TokenService;
   readonly #collaborationServer: YjsCollaborationServer;
-  readonly #authenticatedConnections: Map<WebSocket, WebSocketAuthorization>;
+  readonly #authenticatedConnections = new Map<
+    WebSocket,
+    WebSocketAuthorization
+  >();
   readonly #aliveConnections = new WeakSet<WebSocket>();
   readonly #unsubscribeAuthorizationChanges: () => void;
   readonly #unsubscribeSessionRevocations: () => void;
@@ -38,9 +41,7 @@ export class WebSocketServer {
     requireTls: boolean,
     trustProxy: boolean,
     collaborationServer: YjsCollaborationServer,
-    authenticatedConnections: Map<WebSocket, WebSocketAuthorization>,
   ) {
-    this.#authenticatedConnections = authenticatedConnections;
     this.#collaborationServer = collaborationServer;
     this.wssSystem = new WsServer({
       noServer: true,

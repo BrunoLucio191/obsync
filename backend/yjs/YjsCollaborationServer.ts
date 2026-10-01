@@ -7,7 +7,6 @@ import {
   parseDocumentIdentity,
 } from "./yjsUtils/vaultPath.utils.ts";
 import { closeConnection } from "./yjsUtils/wsTransport.utils.ts";
-import { AwarenessOwnershipGuard } from "./AwarenessOwnershipGuard.ts";
 import { DeletedPathRegistry } from "./DeletedPathRegistry.ts";
 import type { SyncMessageHandlerFn } from "./SyncMessageHandler.ts";
 import { YjsConnectionSession } from "./YjsConnectionSession.ts";
@@ -19,26 +18,13 @@ import type {
   YjsPersistenceAdapter,
 } from "./yjs.types.ts";
 import { syncMessageHandler } from "./SyncMessageHandler.ts";
-import type { WebSocketAuthorization } from "../auth/tokenService.types.ts";
-
+import { ApplyAwerenessUpdate } from "./ApplyAwerenessUpdate.ts";
 /** Entry point of the Yjs backend for the rest of the server. */
 export class YjsCollaborationServer {
   readonly #deletedPaths = new DeletedPathRegistry();
   readonly #persistence = new YjsPersistenceGateway();
-  readonly #rooms: YjsRoomRegistry;
+  readonly #rooms = new YjsRoomRegistry(this.#deletedPaths, this.#persistence);
   readonly #syncHandler: SyncMessageHandlerFn = syncMessageHandler;
-  readonly #authenticatedConnections: Map<WebSocket, WebSocketAuthorization>;
-  readonly #awarenessGuard: AwarenessOwnershipGuard;
-
-  constructor(
-    authenticatedConnections: Map<WebSocket, WebSocketAuthorization>,
-  ) {
-    this.#authenticatedConnections = authenticatedConnections;
-    this.#awarenessGuard = new AwarenessOwnershipGuard(
-      this.#authenticatedConnections,
-    );
-    this.#rooms = new YjsRoomRegistry(this.#deletedPaths, this.#persistence);
-  }
 
   public setPersistence(adapter: YjsPersistenceAdapter): void {
     this.#persistence.setAdapter(adapter);
@@ -132,7 +118,6 @@ export class YjsCollaborationServer {
       connectionState,
       this.#deletedPaths,
       this.#syncHandler,
-      this.#awarenessGuard,
     );
 
     connection.on("message", (rawData: RawData, isBinary: boolean) => {
