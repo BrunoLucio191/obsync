@@ -64,7 +64,6 @@ export class SyncVaultChanges {
 						) {
 							const buffer =
 								await this.#plugin.app.vault.readBinary(file);
-							// Empty binaries go through /create
 							if (buffer.byteLength > 0) {
 								await this.#uploadBinary(path, buffer);
 								return;
@@ -223,7 +222,8 @@ export class SyncVaultChanges {
 		);
 	}
 
-	/** Checked when the event fires, not in the task: keeps event order, and a mute can't expire in the queue. */
+	/** Checked when the event fires, not in the task: keeps event order,
+	 * and a mute can't expire in the queue. */
 	#shouldPublish(...paths: string[]): boolean {
 		return (
 			this.#auth.isAdmin() &&

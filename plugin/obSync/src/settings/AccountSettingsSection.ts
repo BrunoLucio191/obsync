@@ -79,7 +79,7 @@ export class AccountSettingsSection {
 							);
 							button.setDisabled(false);
 
-							if (!result.ok) {
+							if (result.ok == false) {
 								new Notice(result.error);
 								return;
 							}
@@ -104,9 +104,9 @@ export class AccountSettingsSection {
 			render: (setting) => {
 				setting.addText((text) => {
 					text.inputEl.type = 'password';
-					text
-						.setValue(this.#currentPassword)
-						.onChange((value) => (this.#currentPassword = value));
+					text.setValue(this.#currentPassword).onChange(
+						(value) => (this.#currentPassword = value),
+					);
 				});
 			},
 		});
@@ -117,9 +117,9 @@ export class AccountSettingsSection {
 			render: (setting) => {
 				setting.addText((text) => {
 					text.inputEl.type = 'password';
-					text
-						.setValue(this.#newPassword)
-						.onChange((value) => (this.#newPassword = value));
+					text.setValue(this.#newPassword).onChange(
+						(value) => (this.#newPassword = value),
+					);
 				});
 			},
 		});
@@ -140,13 +140,14 @@ export class AccountSettingsSection {
 							}
 
 							button.setDisabled(true);
-							const result = await this.#controller.changePassword(
-								this.#currentPassword,
-								this.#newPassword,
-							);
+							const result =
+								await this.#controller.changePassword(
+									this.#currentPassword,
+									this.#newPassword,
+								);
 							button.setDisabled(false);
 
-							if (!result.ok) {
+							if (result.ok == false) {
 								new Notice(result.error);
 								return;
 							}
@@ -165,10 +166,12 @@ export class AccountSettingsSection {
 			desc: t('settings.account.sessionDesc'),
 			render: (setting) => {
 				setting.addButton((button) =>
-					button.setButtonText(t('common.signOut')).onClick(async () => {
-						await this.#controller.logout();
-						this.#refresh();
-					}),
+					button
+						.setButtonText(t('common.signOut'))
+						.onClick(async () => {
+							await this.#controller.logout();
+							this.#refresh();
+						}),
 				);
 			},
 		});

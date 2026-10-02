@@ -1,4 +1,7 @@
-import { getWebSocketBaseUrl, webSocketTicketProtocol } from '../config/ApiConfig.ts';
+import {
+	getWebSocketBaseUrl,
+	webSocketTicketProtocol,
+} from '../config/ApiConfig.ts';
 import { t } from '../i18n/i18n.ts';
 import type { AuthService } from '../auth/AuthService.ts';
 import type { RemoteVaultChangeService } from '../vault/RemoteVaultChangeService.ts';
@@ -13,7 +16,6 @@ type backOff = {
 export class SystemChannel {
 	#socket: WebSocket | null = null;
 	#reconnectTimer: number | null = null;
-	/** Bumped on every connect/disconnect, so callbacks from a superseded attempt stop. */
 	#generation: number = 0;
 	#reconnectDelayMs = this.#creatBackoff();
 
@@ -65,7 +67,8 @@ export class SystemChannel {
 		};
 
 		socket.onclose = (event) => {
-			if (this.#socket !== socket || generation !== this.#generation) return;
+			if (this.#socket !== socket || generation !== this.#generation)
+				return;
 			this.#socket = null;
 			if (event.code === 4003) {
 				void this.#auth.refreshSession().finally(() => {
@@ -110,8 +113,13 @@ export class SystemChannel {
 		let localGeneration = this.#generation;
 		return {
 			next() {
-				const exponential = Math.min(base * Math.pow(2, localGeneration), max);
-				const delay = jitter ? exponential * (0.5 + Math.random() * 0.5) : exponential;
+				const exponential = Math.min(
+					base * Math.pow(2, localGeneration),
+					max,
+				);
+				const delay = jitter
+					? exponential * (0.5 + Math.random() * 0.5)
+					: exponential;
 				localGeneration++;
 				return Math.floor(delay);
 			},

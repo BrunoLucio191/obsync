@@ -146,12 +146,16 @@ export class ZipWorkerSon {
 				continue;
 			}
 			if (!this.#auth.isAdmin()) {
-				await this.#merger.apply(entry.path, entry.content);
-				continue;
+				if (entry.isDir == false) {
+					await this.#merger.apply(entry.path, entry.content);
+					continue;
+				}
 			}
 			this.#mutedPath.mute(entry.path);
 			await ensureParentFolder(adapter, this.#mutedPath, entry.path);
-			await adapter.writeBinary(entry.path, entry.content);
+			if (entry.isDir == false) {
+				await adapter.writeBinary(entry.path, entry.content);
+			}
 		}
 	}
 

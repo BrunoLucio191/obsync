@@ -35,12 +35,7 @@ export class UserNameEditor {
 			text.setValue(user.name)
 				.setPlaceholder(t('settings.users.displayName'))
 				.onChange((value) => {
-					this.scheduleSave(
-						user,
-						value,
-						statusEl,
-						text.inputEl,
-					);
+					this.scheduleSave(user, value, statusEl, text.inputEl);
 				});
 		});
 	}
@@ -124,7 +119,7 @@ export class UserNameEditor {
 			return;
 		}
 
-		if (!result.ok) {
+		if (result.ok == false) {
 			inputEl.value = previousName;
 			statusEl.setText(t('settings.users.saveError'));
 			new Notice(result.error);

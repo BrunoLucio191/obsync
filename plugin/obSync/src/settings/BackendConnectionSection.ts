@@ -9,10 +9,7 @@ export class BackendConnectionSection {
 	readonly #controller: SettingsController;
 	readonly #refresh: () => void;
 
-	public constructor(
-		controller: SettingsController,
-		refresh: () => void,
-	) {
+	public constructor(controller: SettingsController, refresh: () => void) {
 		this.#controller = controller;
 		this.#refresh = refresh;
 		this.#url = controller.config.backendUrl;
@@ -28,7 +25,9 @@ export class BackendConnectionSection {
 					desc: t('settings.backend.urlDesc'),
 					render: (setting) => {
 						setting.addText((text) => {
-							text.setPlaceholder(t('settings.backend.urlPlaceholder'))
+							text.setPlaceholder(
+								t('settings.backend.urlPlaceholder'),
+							)
 								.setValue(this.#url)
 								.onChange((value) => (this.#url = value));
 						});
@@ -39,10 +38,13 @@ export class BackendConnectionSection {
 								.setCta()
 								.onClick(async () => {
 									button.setDisabled(true);
-									const result = await this.#controller.setBackendUrl(this.#url);
+									const result =
+										await this.#controller.setBackendUrl(
+											this.#url,
+										);
 									button.setDisabled(false);
 
-									if (!result.ok) {
+									if (result.ok == false) {
 										new Notice(result.error);
 										return;
 									}

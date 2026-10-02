@@ -35,7 +35,9 @@ export class CreateUserSection {
 					render: (setting) =>
 						setting.addText((text) =>
 							text
-								.setPlaceholder(t('settings.users.namePlaceholder'))
+								.setPlaceholder(
+									t('settings.users.namePlaceholder'),
+								)
 								.setValue(this.#name)
 								.onChange((value) => (this.#name = value)),
 						),
@@ -46,7 +48,9 @@ export class CreateUserSection {
 					render: (setting) =>
 						setting.addText((text) =>
 							text
-								.setPlaceholder(t('settings.users.emailPlaceholder'))
+								.setPlaceholder(
+									t('settings.users.emailPlaceholder'),
+								)
 								.setValue(this.#email)
 								.onChange((value) => (this.#email = value)),
 						),
@@ -57,7 +61,9 @@ export class CreateUserSection {
 					render: (setting) => {
 						setting.addText((text) => {
 							text.inputEl.type = 'password';
-							text.setPlaceholder(t('settings.users.minCharsPlaceholder'))
+							text.setPlaceholder(
+								t('settings.users.minCharsPlaceholder'),
+							)
 								.setValue(this.#password)
 								.onChange((value) => (this.#password = value));
 						});
@@ -87,9 +93,8 @@ export class CreateUserSection {
 								.setButtonText(t('settings.users.createUser'))
 								.setCta()
 								.onClick(async () => {
-									const duplicateName = this.#directory.findByName(
-										this.#name,
-									);
+									const duplicateName =
+										this.#directory.findByName(this.#name);
 									if (duplicateName) {
 										new Notice(
 											t('userAdmin.nameAlreadyUsedBy', {
@@ -99,7 +104,9 @@ export class CreateUserSection {
 										return;
 									}
 
-									if (this.#directory.findByEmail(this.#email)) {
+									if (
+										this.#directory.findByEmail(this.#email)
+									) {
 										new Notice(
 											t('userAdmin.emailAlreadyExists'),
 										);
@@ -107,15 +114,16 @@ export class CreateUserSection {
 									}
 
 									button.setDisabled(true);
-									const result = await this.#controller.createUser({
-										name: this.#name,
-										email: this.#email,
-										password: this.#password,
-										role: this.#role,
-									});
+									const result =
+										await this.#controller.createUser({
+											name: this.#name,
+											email: this.#email,
+											password: this.#password,
+											role: this.#role,
+										});
 									button.setDisabled(false);
 
-									if (!result.ok) {
+									if (result.ok == false) {
 										new Notice(result.error);
 										return;
 									}

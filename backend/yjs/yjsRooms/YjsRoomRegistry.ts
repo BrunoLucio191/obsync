@@ -11,7 +11,10 @@ export class YjsRoomRegistry {
   readonly #deletedPaths: DeletedPathRegistry;
   readonly #persistence: YjsPersistenceGateway;
 
-  public constructor(deletedPaths: DeletedPathRegistry, persistence: YjsPersistenceGateway) {
+  public constructor(
+    deletedPaths: DeletedPathRegistry,
+    persistence: YjsPersistenceGateway,
+  ) {
     this.#deletedPaths = deletedPaths;
     this.#persistence = persistence;
   }
@@ -21,7 +24,6 @@ export class YjsRoomRegistry {
     const existing = this.#rooms.get(docName);
 
     if (existing) {
-      // Mid-teardown: the client reconnects a moment later instead of joining a dying room
       if (existing.closingPromise) return null;
 
       existing.reservations += 1;
@@ -54,7 +56,9 @@ export class YjsRoomRegistry {
 
     room.ready = (async () => {
       await this.#persistence.bindState(docName, room.doc);
-      room.attachListeners(() => this.#deletedPaths.isDocumentInvalidated(room.doc));
+      room.attachListeners(() =>
+        this.#deletedPaths.isDocumentInvalidated(room.doc),
+      );
     })().catch((error: unknown) => {
       if (this.#rooms.get(docName) === room) {
         this.#rooms.delete(docName);
@@ -73,7 +77,11 @@ export class YjsRoomRegistry {
 
   /** Re-checks after each await, so a connection arriving mid-flush cancels the teardown. */
   #scheduleCleanup(room: YjsRoom): void {
-    if (room.connections.size > 0 || room.reservations > 0 || room.closingPromise) {
+    if (
+      room.connections.size > 0 ||
+      room.reservations > 0 ||
+      room.closingPromise
+    ) {
       return;
     }
 

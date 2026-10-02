@@ -148,12 +148,12 @@ export class ServerVersionMerger {
 		await this.#app.vault.adapter.writeBinary(path, content);
 	}
 }
-
 /** `folder/name.ext` -> `folder/name (server version).ext` */
 function serverCopyPath(path: string): string {
 	const slash = path.lastIndexOf('/');
 	const dot = path.lastIndexOf('.');
 	const suffix = ` (${t('sync.serverVersion')})`;
+	//the + 1 deal with files that are only ., like .md
 	return dot > slash + 1
 		? `${path.slice(0, dot)}${suffix}${path.slice(dot)}`
 		: `${path}${suffix}`;

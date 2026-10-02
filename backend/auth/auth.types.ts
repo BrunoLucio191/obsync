@@ -42,7 +42,7 @@ export type UserMutationResult =
         | "INVALID_CURRENT_PASSWORD";
     };
 
-export type AuthMutationResul =
+export type AuthMutationResult =
   | { ok: true; user: AuthenticatedUser }
   | { ok: false; reason: "missing_header_info" };
 

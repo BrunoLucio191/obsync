@@ -5,10 +5,7 @@ import {
 	type SettingDefinitionGroup,
 	type SettingDefinitionItem,
 } from 'obsidian';
-import type {
-	AuthenticatedUser,
-	UserRole,
-} from '../../auth/auth.types.ts';
+import type { AuthenticatedUser, UserRole } from '../../auth/auth.types.ts';
 import { t } from '../../i18n/i18n.ts';
 import type { SettingsController } from '../SettingsController.ts';
 import type { UserDirectory } from './UserDirectory.ts';
@@ -82,7 +79,9 @@ export class UserListSection {
 						setting.setClass('obsync-user-search-setting');
 						setting.addSearch((search) => {
 							search
-								.setPlaceholder(t('settings.users.searchPlaceholder'))
+								.setPlaceholder(
+									t('settings.users.searchPlaceholder'),
+								)
 								.setValue(this.#searchQuery)
 								.onChange((value) => {
 									this.#searchQuery = value;
@@ -101,7 +100,11 @@ export class UserListSection {
 			for (const user of this.#directory.all()) {
 				if (!this.#matchesQuery(user, this.#searchQuery)) continue;
 				userItems.push(
-					...this.#userDefinitions(user, currentUser, activeAdminCount),
+					...this.#userDefinitions(
+						user,
+						currentUser,
+						activeAdminCount,
+					),
 				);
 			}
 		}
@@ -139,7 +142,7 @@ export class UserListSection {
 		if (generation !== this.#loadGeneration) return;
 
 		this.#loading = false;
-		if (!result.ok) {
+		if (result.ok == false) {
 			this.#loadError = result.error;
 			this.#refresh();
 			return;
@@ -205,10 +208,7 @@ export class UserListSection {
 		return [identity, editRow];
 	}
 
-	#addNameControl(
-		setting: Setting,
-		user: AuthenticatedUser,
-	): void {
+	#addNameControl(setting: Setting, user: AuthenticatedUser): void {
 		const nameStatus = setting.descEl.createDiv({
 			cls: 'obsync-setting-save-status',
 			text: t('settings.users.nameSaved'),
@@ -228,41 +228,42 @@ export class UserListSection {
 		});
 	}
 
-	#addPasswordResetControl(
-		setting: Setting,
-		user: AuthenticatedUser,
-	): void {
+	#addPasswordResetControl(setting: Setting, user: AuthenticatedUser): void {
 		let newPassword = '';
 		setting.addText((text) => {
 			text.inputEl.type = 'password';
-			text
-				.setPlaceholder(t('settings.users.newPasswordPlaceholder'))
-				.onChange((value) => (newPassword = value));
+			text.setPlaceholder(
+				t('settings.users.newPasswordPlaceholder'),
+			).onChange((value) => (newPassword = value));
 		});
 		setting.addButton((button) =>
-			button.setButtonText(t('settings.users.resetPassword')).onClick(async () => {
-				if (newPassword.length < 6 || newPassword.length > 128) {
-					new Notice(t('auth.passwordTooShort'));
-					return;
-				}
+			button
+				.setButtonText(t('settings.users.resetPassword'))
+				.onClick(async () => {
+					if (newPassword.length < 6 || newPassword.length > 128) {
+						new Notice(t('auth.passwordTooShort'));
+						return;
+					}
 
-				button.setDisabled(true);
-				const result = await this.#controller.resetUserPassword(
-					user.id,
-					newPassword,
-				);
-				button.setDisabled(false);
+					button.setDisabled(true);
+					const result = await this.#controller.resetUserPassword(
+						user.id,
+						newPassword,
+					);
+					button.setDisabled(false);
 
-				if (!result.ok) {
-					new Notice(result.error);
-					return;
-				}
+					if (result.ok == false) {
+						new Notice(result.error);
+						return;
+					}
 
-				new Notice(
-					t('userAdmin.passwordReset', { email: result.value.email }),
-				);
-				this.#refresh();
-			}),
+					new Notice(
+						t('userAdmin.passwordReset', {
+							email: result.value.email,
+						}),
+					);
+					this.#refresh();
+				}),
 		);
 	}
 
@@ -282,7 +283,7 @@ export class UserListSection {
 						user.id,
 						active,
 					);
-					if (!mutation.ok) {
+					if (mutation.ok == false) {
 						toggle.setValue(previousActive);
 						toggle.setDisabled(protectsLastAdmin);
 						new Notice(mutation.error);
@@ -318,7 +319,7 @@ export class UserListSection {
 						user.id,
 						value as UserRole,
 					);
-					if (!mutation.ok) {
+					if (mutation.ok == false) {
 						dropdown.setValue(previousRole);
 						dropdown.setDisabled(protectsLastAdmin);
 						new Notice(mutation.error);
@@ -345,14 +346,16 @@ export class UserListSection {
 				.onClick(async () => {
 					button.setDisabled(true);
 					const mutation = await this.#controller.deleteUser(user.id);
-					if (!mutation.ok) {
+					if (mutation.ok == false) {
 						button.setDisabled(false);
 						new Notice(mutation.error);
 						return;
 					}
 
 					this.#directory.remove(user.id);
-					new Notice(t('userAdmin.userDeleted', { email: user.email }));
+					new Notice(
+						t('userAdmin.userDeleted', { email: user.email }),
+					);
 					this.#refresh();
 				}),
 		);
@@ -364,7 +367,9 @@ export class UserListSection {
 		isCurrent: boolean,
 	): void {
 		const role =
-			user.role === 'admin' ? t('settings.users.admin') : t('settings.users.user');
+			user.role === 'admin'
+				? t('settings.users.admin')
+				: t('settings.users.user');
 		const status = user.active
 			? t('settings.users.active')
 			: t('settings.users.inactive');

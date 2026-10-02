@@ -37,21 +37,30 @@ export class UsersController {
   createUser = async (req: Request, res: Response): Promise<void> => {
     const { name, email, password, role } = req.body ?? {};
     const normalizedName = typeof name === "string" ? name.trim() : "";
-    const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
-    const normalizedRole: UserRole = this.#dbService.isUserRole(role) ? role : "user";
+    const normalizedEmail =
+      typeof email === "string" ? email.trim().toLowerCase() : "";
+    const normalizedRole: UserRole = this.#dbService.isUserRole(role)
+      ? role
+      : "user";
     const clientId = res.locals.clientId as string;
 
     switch (true) {
       case normalizedName.length < 2 || normalizedName.length > 64:
         console.warn("[Users] Invalid name length (must be 2-64 characters)");
-        res.status(400).json({ error: "The name must be between 2 and 64 characters." });
+        res
+          .status(400)
+          .json({ error: "The name must be between 2 and 64 characters." });
         return;
       case !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail):
         console.warn("[Users] Invalid e-mail address");
         res.status(400).json({ error: "Enter a valid e-mail address." });
         return;
-      case typeof password !== "string" || password.length < 6 || password.length > 128:
-        console.warn("[Users] Invalid password length (must be 6-128 characters)");
+      case typeof password !== "string" ||
+        password.length < 6 ||
+        password.length > 128:
+        console.warn(
+          "[Users] Invalid password length (must be 6-128 characters)",
+        );
         res.status(400).json({
           error: "The password must be between 6 and 128 characters.",
         });
@@ -67,7 +76,7 @@ export class UsersController {
           password,
           normalizedRole,
         );
-        if (!result.ok) {
+        if (result.ok == false) {
           res.status(409).json({
             error:
               result.reason === "email_exists"
@@ -80,7 +89,10 @@ export class UsersController {
         res.status(201).json({ user: result.user });
       }, `user:create:${normalizedEmail}`);
     } catch (error) {
-      console.error(`[Users] Something happened while creating a new user`, error);
+      console.error(
+        `[Users] Something happened while creating a new user`,
+        error,
+      );
       res.status(500).json({
         error: "Something happened while creating a new user",
       });
@@ -89,7 +101,8 @@ export class UsersController {
 
   renameUser = async (req: Request, res: Response): Promise<void> => {
     const userId = this.#parseUserId(req.params.id);
-    const normalizedName = typeof req.body?.name === "string" ? req.body.name.trim() : "";
+    const normalizedName =
+      typeof req.body?.name === "string" ? req.body.name.trim() : "";
     const clientId = res.locals.clientId as string;
 
     if (!userId) {
@@ -124,8 +137,11 @@ export class UsersController {
           return;
         }
 
-        const result = await this.#dbService.updateUserName(userId, normalizedName);
-        if (!result.ok) {
+        const result = await this.#dbService.updateUserName(
+          userId,
+          normalizedName,
+        );
+        if (result.ok == false) {
           res.status(userMutationErrorStatus(result)).json({
             error: UserMutationErrorMessage(result),
             reason: result.reason,
@@ -135,7 +151,10 @@ export class UsersController {
         res.json({ user: result.user });
       }, `user:${userId}:renameUser`);
     } catch (error) {
-      console.error(`[Users] Something happened while changing ${userId} name`, error);
+      console.error(
+        `[Users] Something happened while changing ${userId} name`,
+        error,
+      );
       res.status(500).json({
         error: "Something happened while changing some user name",
       });
@@ -152,7 +171,11 @@ export class UsersController {
       res.status(400).json({ error: "Invalid user." });
       return;
     }
-    if (typeof newPassword !== "string" || newPassword.length < 6 || newPassword.length > 128) {
+    if (
+      typeof newPassword !== "string" ||
+      newPassword.length < 6 ||
+      newPassword.length > 128
+    ) {
       res.status(400).json({
         error: "The new password must be between 6 and 128 characters.",
       });
@@ -178,8 +201,11 @@ export class UsersController {
           return;
         }
 
-        const result = await this.#dbService.adminSetUserPassword(userId, newPassword);
-        if (!result.ok) {
+        const result = await this.#dbService.adminSetUserPassword(
+          userId,
+          newPassword,
+        );
+        if (result.ok == false) {
           res.status(userMutationErrorStatus(result)).json({
             error: UserMutationErrorMessage(result),
             reason: result.reason,
@@ -189,7 +215,10 @@ export class UsersController {
         res.json({ user: result.user });
       }, `user:${userId}:changePassword`);
     } catch (error) {
-      console.error(`[Users] Something happened while changing ${userId} password`, error);
+      console.error(
+        `[Users] Something happened while changing ${userId} password`,
+        error,
+      );
       res.status(500).json({
         error: "Something happened while changing some user password",
       });
@@ -212,7 +241,7 @@ export class UsersController {
     try {
       await queue.addTask(async () => {
         const result = await this.#dbService.updateUserRole(userId, role);
-        if (!result.ok) {
+        if (result.ok == false) {
           res.status(userMutationErrorStatus(result)).json({
             error: UserMutationErrorMessage(result),
             reason: result.reason,
@@ -222,7 +251,10 @@ export class UsersController {
         res.json({ user: result.user });
       }, `user:${userId}:changeRole`);
     } catch (error) {
-      console.error("[Users] Something happened while updating a user role", error);
+      console.error(
+        "[Users] Something happened while updating a user role",
+        error,
+      );
       res.status(500).json({
         error: "Something happened while updating a user role",
       });
@@ -244,7 +276,7 @@ export class UsersController {
     try {
       await queue.addTask(async () => {
         const result = await this.#dbService.updateUserStatus(userId, active);
-        if (!result.ok) {
+        if (result.ok == false) {
           res.status(userMutationErrorStatus(result)).json({
             error: UserMutationErrorMessage(result),
             reason: result.reason,
@@ -254,7 +286,10 @@ export class UsersController {
         res.json({ user: result.user });
       }, `user:${userId}:changeStatus`);
     } catch (error) {
-      console.error("[Users] Something happened while updating a user status", error);
+      console.error(
+        "[Users] Something happened while updating a user status",
+        error,
+      );
       res.status(500).json({
         error: "Something happened while updating a user status",
       });
@@ -275,7 +310,7 @@ export class UsersController {
     try {
       await queue.addTask(async () => {
         const result = await this.#dbService.deleteUser(userId);
-        if (!result.ok) {
+        if (result.ok == false) {
           res.status(userMutationErrorStatus(result)).json({
             error: UserMutationErrorMessage(result),
             reason: result.reason,

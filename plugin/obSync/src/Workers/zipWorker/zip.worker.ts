@@ -28,15 +28,28 @@ self.onmessage = async (event: MessageEvent<ArrayBuffer>) => {
 					relativePath.length,
 				);
 
-				entries.push({ path: relativePath, isDir: false, content, ext: fileExtension });
+				entries.push({
+					path: relativePath,
+					isDir: false,
+					content,
+					ext: fileExtension,
+				});
 				transferables.push(content);
 			}
 		}
-		self.postMessage({ status: 'success', entries } satisfies ZipWorkerMessage, {
-			transfer: transferables,
-		});
+		self.postMessage(
+			{ status: 'success', entries } satisfies ZipWorkerMessage,
+			{
+				transfer: transferables,
+			},
+		);
 	} catch (error) {
-		const message = error instanceof Error ? error.message : String(error);
-		self.postMessage({ status: 'error', message } satisfies ZipWorkerMessage);
+		error.toString();
+		const message =
+			error instanceof Error ? error.message : error.toString();
+		self.postMessage({
+			status: 'error',
+			message,
+		} satisfies ZipWorkerMessage);
 	}
 };

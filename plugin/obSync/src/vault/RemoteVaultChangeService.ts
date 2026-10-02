@@ -55,7 +55,6 @@ export class RemoteVaultChangeService {
 		}
 	}
 
-	/** Deletes go to Obsidian's trash when it tracks the file, so they can be recovered. */
 	async #applyChange(change: VaultChange): Promise<void> {
 		const adapter = this.#app.vault.adapter;
 

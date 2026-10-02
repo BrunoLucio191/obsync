@@ -198,7 +198,7 @@ export class AuthController {
           newPassword,
         );
 
-        if (!result.ok) {
+        if (result.ok == false) {
           if (result.reason === "INVALID_CURRENT_PASSWORD") {
             this.#passwordChangeRateLimiter.recordFailure(rateLimitKey);
           }
@@ -238,7 +238,7 @@ export class AuthController {
     try {
       await queue.addTask(async () => {
         const result = await this.#dbService.updateUserColor(actor.id, color);
-        if (!result.ok) {
+        if (result.ok == false) {
           res.status(userMutationErrorStatus(result)).json({
             error: UserMutationErrorMessage(result),
             reason: result.reason,
