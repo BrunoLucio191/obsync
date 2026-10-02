@@ -41,10 +41,12 @@ export class RemoteVaultChangeService {
 		this.#merger = merger;
 		this.#requestFullSync = requestFullSync;
 	}
-
+	/** Add changes inside the client queue*/
 	public async apply(change: VaultChange): Promise<void> {
+		/** the oldpath is used as key because is the one that exists on the cliente */
 		const path = change.type === 'rename' ? change.oldPath : change.path;
 		const queue = this.#queueManager.getOrCreateQueue(this.#auth.clientId);
+
 		try {
 			await queue.addTask(
 				() => this.#applyChange(change),
@@ -122,6 +124,15 @@ export class RemoteVaultChangeService {
 		}
 		await this.#merger.rename(change.oldPath, change.newPath);
 		await this.#recoverMissedBinaries(change.oldPath, change.newPath);
+		if (
+			this.#collaboration.currentPath &&
+			PathMuteRegistry.contains(
+				change.oldPath,
+				this.#collaboration.currentPath,
+			)
+		) {
+			this.#collaboration.scheduleActiveRoomSync();
+		}
 	}
 
 	/** The user moved what the admin renamed: an unedited copy follows, else the server's version is fetched. */

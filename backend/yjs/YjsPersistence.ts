@@ -111,7 +111,10 @@ export class YjsPersistence {
   }
 
   /** Keeps the collaboration history across a vault rename. */
-  public async renameStatePath(oldPath: string, newPath: string): Promise<void> {
+  public async renameStatePath(
+    oldPath: string,
+    newPath: string,
+  ): Promise<void> {
     const normalizedOld = this.#normalizeRelativePath(oldPath);
     const normalizedNew = this.#normalizeRelativePath(newPath);
 
@@ -157,7 +160,11 @@ export class YjsPersistence {
         throw new Error(`Empty or corrupted Yjs state: ${statePath}`);
       }
 
-      const state = new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+      const state = new Uint8Array(
+        buffer.buffer,
+        buffer.byteOffset,
+        buffer.byteLength,
+      );
 
       return state;
     } catch (error) {
@@ -221,7 +228,10 @@ export class YjsPersistence {
     }
   }
 
-  async #writeBinaryState(fileName: string, binaryState: Uint8Array): Promise<void> {
+  async #writeBinaryState(
+    fileName: string,
+    binaryState: Uint8Array,
+  ): Promise<void> {
     await this.#atomicWrite(this.#resolveStateFilePath(fileName), binaryState);
   }
 
@@ -229,7 +239,10 @@ export class YjsPersistence {
     await this.#atomicWrite(this.#resolveVaultPath(fileName), content);
   }
 
-  async #atomicWrite(destination: string, data: string | Uint8Array): Promise<void> {
+  async #atomicWrite(
+    destination: string,
+    data: string | Uint8Array,
+  ): Promise<void> {
     await fsPromises.mkdir(path.dirname(destination), { recursive: true });
 
     const temporaryPath = `${destination}.${process.pid}.${randomUUID()}.tmp`;
@@ -238,7 +251,9 @@ export class YjsPersistence {
       await fsPromises.writeFile(temporaryPath, data);
       await fsPromises.rename(temporaryPath, destination);
     } finally {
-      await fsPromises.rm(temporaryPath, { force: true }).catch(() => undefined);
+      await fsPromises
+        .rm(temporaryPath, { force: true })
+        .catch((): undefined => undefined);
     }
   }
 
@@ -247,7 +262,10 @@ export class YjsPersistence {
   }
 
   #resolveStateFilePath(relativePath: string): string {
-    return this.#resolveInsideRoot(this.#stateRoot, `${relativePath}${BINARY_STATE_EXTENSION}`);
+    return this.#resolveInsideRoot(
+      this.#stateRoot,
+      `${relativePath}${BINARY_STATE_EXTENSION}`,
+    );
   }
 
   #resolveStateDirectoryPath(relativePath: string): string {
@@ -264,7 +282,7 @@ export class YjsPersistence {
 
     return fullPath;
   }
-
+  //..
   #normalizeRelativePath(relativePath: string): string {
     const normalized = relativePath.replace(/\\/g, "/").trim();
 

@@ -73,7 +73,8 @@ const makeApp = (vaultName: string, secretStorage = makeSecrets(), failWrites = 
 const auth = {
   clientId: "gene-client",
   prepareAuthenticatedRequest: async () => true,
-  Authheaders: () => ({ Authorization: `Bearer ${token}`, "X-ObSync-Client": "gene-client" }),
+  AuthHeaders: () => ({ Authorization: `Bearer ${token}`, "X-ObSync-Client": "gene-client" }),
+  GeneHeader: (savedGene: string) => ({ "X-ObSync-Gene": savedGene }),
   isAdmin: () => true,
 };
 

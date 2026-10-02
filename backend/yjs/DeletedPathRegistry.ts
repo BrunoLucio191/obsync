@@ -19,6 +19,14 @@ export class DeletedPathRegistry {
 
     return false;
   }
+  public checkIfIsMarked(targetPath: string): boolean {
+    const normalized = normalizeVaultPath(targetPath);
+
+    if (this.#deletedRoots.has(normalized)) {
+      return true;
+    }
+    return false;
+  }
 
   /** Already-deleted descendants fold into this new root. */
   public markDeleted(targetPath: string): string {

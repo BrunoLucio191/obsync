@@ -1,7 +1,7 @@
 import { type IncomingMessage, type Server } from "node:http";
 import { type Duplex } from "node:stream";
 import { WebSocket, WebSocketServer as WsServer } from "ws";
-import { YjsPersistence } from "./YjsPersistence.ts";
+import { YjsPersistence } from "../yjs/YjsPersistence.ts";
 import type { YjsCollaborationServer } from "../yjs/YjsCollaborationServer.ts";
 import { MAX_WS_MESSAGE_BYTES } from "../yjs/yjs.const.ts";
 import { vaultEvents, type VaultChange } from "../syncEvents.ts";

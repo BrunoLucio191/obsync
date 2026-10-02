@@ -7,7 +7,7 @@ import { MESSAGE_AWARENESS, MESSAGE_SYNC } from "../yjs.const.ts";
 import type { YjsConnectionState } from "../yjs.types.ts";
 import { sendBinaryMessage } from "../yjsUtils/wsTransport.utils.ts";
 
-/** One collaborative document, its awareness and its connections. Lifecycle lives in {@link YjsRoomRegistry}. */
+/** One collaborative document, its awareness and its connections. Lifecycle lives in  YjsRoomRegistry. */
 export class YjsRoom {
   public readonly docName: string;
   public readonly filePath: string;

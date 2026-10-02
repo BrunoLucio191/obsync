@@ -1,6 +1,10 @@
 import { randomBytes } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
-import { normalizeEmailKey, normalizeName, normalizeNameKey } from "./userNormalization.ts";
+import {
+  normalizeEmailKey,
+  normalizeName,
+  normalizeNameKey,
+} from "./userNormalization.ts";
 import { hashPassword } from "../auth/PasswordUtil.ts";
 import { randomUserColor } from "./userColor.ts";
 
@@ -9,7 +13,7 @@ type SeededUser = { id: number; email: string; password: string };
 function generateTemporaryPassword(): string {
   return randomBytes(12).toString("base64url");
 }
-
+/** responsible for all the estructural of the sqlite database */
 export class UserDB extends DatabaseSync {
   constructor(path: string) {
     super(path);
@@ -122,7 +126,9 @@ export class UserDB extends DatabaseSync {
     console.log("[Database] Seed: initial accounts created.");
     for (const user of seeded) {
       const role = user.id === adminId ? "admin" : "user";
-      console.log(`[Database]   ${user.email} — temporary password (${role}): ${user.password}`);
+      console.log(
+        `[Database]   ${user.email} — temporary password (${role}): ${user.password}`,
+      );
     }
     console.log(
       "[Database] Save these passwords now: they will not be shown again. " +

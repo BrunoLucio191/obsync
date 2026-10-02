@@ -39,11 +39,7 @@ function buildDatabaseName(documentId: string, namespace: string): string {
 export function initializeOfflinePersistence(
 	options: OfflinePersistenceOptions,
 ): OfflinePersistenceHandle {
-	const {
-		documentId,
-		ydoc,
-		namespace = DEFAULT_OFFLINE_NAMESPACE,
-	} = options;
+	const { documentId, ydoc, namespace = DEFAULT_OFFLINE_NAMESPACE } = options;
 
 	if (typeof indexedDB === 'undefined') {
 		throw new Error(t('offlinePersistence.indexedDbUnavailable'));
@@ -54,7 +50,7 @@ export function initializeOfflinePersistence(
 
 	const databaseName = buildDatabaseName(documentId, namespace);
 	const provider = new IndexeddbPersistence(databaseName, ydoc);
-	const ready = provider.whenSynced.then(() => undefined);
+	const ready = provider.whenSynced.then((): undefined => undefined);
 	let destroyed = false;
 
 	const handle: OfflinePersistenceHandle = {

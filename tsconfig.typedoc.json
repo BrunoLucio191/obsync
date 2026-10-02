@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "target": "ES2024",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "skipLibCheck": true,
+    "allowImportingTsExtensions": true,
+    "allowSyntheticDefaultImports": true,
+    "strictNullChecks": false,
+    "noEmit": true
+  },
+  "include": ["backend/**/*.ts", "plugin/obSync/src/**/*.ts"]
+}

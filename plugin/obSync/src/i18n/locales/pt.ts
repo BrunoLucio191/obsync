@@ -1,7 +1,7 @@
 /**
  * Portuguese translation strings for the ObSync plugin UI, keyed by
  * feature area (auth, userAdmin, settings, sync, collab, plugin,
- * offlinePersistence). Consumed via {@link t} in `i18n.ts`. Selected when
+ * offlinePersistence). Consumed via `t` in `i18n.ts`. Selected when
  * Obsidian's configured display language starts with `pt`.
  */
 export default {
@@ -12,7 +12,8 @@ export default {
 	},
 	auth: {
 		loginTitle: 'Entrar no ObSync',
-		loginPrompt: 'Informe o e-mail de qualquer conta cadastrada no servidor.',
+		loginPrompt:
+			'Informe o e-mail de qualquer conta cadastrada no servidor.',
 		email: 'E-mail',
 		emailPlaceholder: 'usuario@exemplo.com',
 		password: 'Senha',
@@ -45,7 +46,8 @@ export default {
 		nameAlreadyUsedBy: 'Nome já usado por {{email}}.',
 		emailAlreadyExists: 'Já existe um usuário com esse e-mail.',
 		userNotFound: 'Usuário não encontrado.',
-		lastAdmin: 'A operação deixaria a plataforma sem um administrador ativo.',
+		lastAdmin:
+			'A operação deixaria a plataforma sem um administrador ativo.',
 		invalidRole: 'Papel de usuário inválido.',
 		nameExists: 'Já existe um usuário com esse nome.',
 		userCreated: 'Usuário {{email}} criado.',
@@ -63,9 +65,11 @@ export default {
 				'O backend do ObSync com o qual este vault sincroniza. Precisa usar HTTPS, exceto para endereços locais (127.0.0.1, localhost).',
 			urlPlaceholder: 'https://sync.exemplo.com',
 			saved: 'URL do backend salva.',
-			notConfigured: 'Defina a URL do backend do ObSync nas configurações do plugin.',
+			notConfigured:
+				'Defina a URL do backend do ObSync nas configurações do plugin.',
 			urlRequired: 'Informe a URL do backend do ObSync.',
-			urlInvalid: 'Informe uma URL válida, por exemplo https://sync.exemplo.com.',
+			urlInvalid:
+				'Informe uma URL válida, por exemplo https://sync.exemplo.com.',
 			urlRequiresHttps:
 				'A URL do backend precisa usar HTTPS fora de um endereço local (loopback).',
 			urlDescReadOnly:
@@ -81,9 +85,11 @@ export default {
 			yourDisplayNameDesc:
 				'Como administrador, você pode alterar seu próprio nome. A mudança é enviada automaticamente.',
 			displayName: 'Nome de exibição',
-			displayNameDesc: '{{name}}. Somente administradores podem alterar nomes de usuários.',
+			displayNameDesc:
+				'{{name}}. Somente administradores podem alterar nomes de usuários.',
 			cursorColor: 'Cor do cursor',
-			cursorColorDesc: 'A cor que os outros colaboradores veem no seu cursor e no seu nome.',
+			cursorColorDesc:
+				'A cor que os outros colaboradores veem no seu cursor e no seu nome.',
 			saveColor: 'Salvar cor',
 			colorUpdated: 'Cor do cursor atualizada.',
 			privateMode: 'Modo privado',
@@ -96,7 +102,8 @@ export default {
 			savePassword: 'Salvar nova senha',
 			passwordUpdated: 'Senha atualizada.',
 			session: 'Sessão',
-			sessionDesc: 'Encerra a sessão atual e permite entrar com outra conta.',
+			sessionDesc:
+				'Encerra a sessão atual e permite entrar com outra conta.',
 			disconnectedUser: 'Usuário desconectado',
 			disconnectedUserDesc:
 				'Entre no ObSync para acessar a sincronização e as configurações da conta.',
@@ -148,25 +155,31 @@ export default {
 		vaultUpToDate: 'O vault já está atualizado.',
 		yourVersion: 'sua versão',
 		serverVersion: 'versão do servidor',
-		mergeConflict: 'Você e o servidor alteraram o mesmo trecho de {{path}}. As duas versões estão marcadas no arquivo.',
+		mergeConflict:
+			'Você e o servidor alteraram o mesmo trecho de {{path}}. As duas versões estão marcadas no arquivo.',
 		adminMovedDownloaded:
 			'O admin moveu {{oldPath}} para {{newPath}}. A versão do servidor foi baixada lá; a sua cópia, se ainda existir, não recebe mais atualizações.',
 		adminMovedYourCopy:
 			'O admin moveu {{oldPath}} para {{newPath}}, então a sua cópia sem alterações em {{copyPath}} foi levada junto.',
-		binaryConflict: 'Você alterou {{path}} e o servidor tem uma versão nova. Ela foi salva ao lado da sua como {{copy}}.',
+		binaryConflict:
+			'Você alterou {{path}} e o servidor tem uma versão nova. Ela foi salva ao lado da sua como {{copy}}.',
 		initialSyncFailed: 'Não foi possível sincronizar os arquivos iniciais.',
 		initialSyncError: 'Erro na sincronização inicial:',
 		invalidSyncEvent: 'Evento de sincronização inválido:',
-		publishChangeFailed: 'Não foi possível enviar a alteração local em {{path}} para o servidor:',
-		applyRemoteChangeFailed: 'Não foi possível aplicar a alteração remota em {{path}}:',
+		publishChangeFailed:
+			'Não foi possível enviar a alteração local em {{path}} para o servidor:',
+		applyRemoteChangeFailed:
+			'Não foi possível aplicar a alteração remota em {{path}}:',
 	},
 	collab: {
 		userJoinedNote: '{{name}} entrou nesta nota.',
 		userLeftNote: '{{name}} saiu desta nota.',
 		privateModeNotice:
 			'Você está em modo privado: suas edições ficam apenas neste dispositivo.',
-		couldNotRestoreOfflineHistory: 'Não foi possível restaurar o histórico offline desta nota.',
-		couldNotInitializeCollaboration: 'Não foi possível inicializar a colaboração em {{filePath}}:',
+		couldNotRestoreOfflineHistory:
+			'Não foi possível restaurar o histórico offline desta nota.',
+		couldNotInitializeCollaboration:
+			'Não foi possível inicializar a colaboração em {{filePath}}:',
 	},
 	plugin: {
 		loginCompletedSyncFailed:

@@ -204,6 +204,8 @@ export class SyncFilesController {
     }
   };
 
+  /** Route responsible for dealing with all the renames
+   */
   rename = async (req: Request, res: Response): Promise<void> => {
     const clientId = res.locals.clientId as string;
     const { oldPath, newPath } = req.body;
@@ -222,6 +224,7 @@ export class SyncFilesController {
     try {
       await queue.addTask(async () => {
         try {
+          //mark the old path as deleted
           this.#collaborationServer.markPathDeleted(oldPath);
           await this.#collaborationServer.renamePersistedStatePath(
             oldPath,
@@ -229,6 +232,7 @@ export class SyncFilesController {
           );
           const result = await this.#fileManager.rename(oldPath, newPath);
           if (result === "already-applied") {
+            this.#collaborationServer.clearPathDeleted(newPath);
             res.sendStatus(200);
             return;
           }
@@ -245,6 +249,7 @@ export class SyncFilesController {
           );
           throw error;
         }
+        this.#collaborationServer.clearPathDeleted(newPath);
         await this.#collaborationServer.deletePersistedStateUnderPath(oldPath);
 
         publishVaultChange({

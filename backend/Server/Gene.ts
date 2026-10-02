@@ -35,9 +35,9 @@ const GENE_READ_KEY = "vault:gene:read";
  *  Reads and updates go through their own queue, so an update never reads the file while
  *  another one is writing it, and initSync never gets a half-written gene.
  *
- *  @params directory - A valid directory
- *  @params genePath - Path for the gene file
- *  @params queueManager - Queue manager built with the server's shared KeyedLock
+ *  @param directory - A valid directory
+ *  @param genePath - Path for the gene file
+ *  @param queueManager - Queue manager built with the server's shared KeyedLock
  */
 export class Gene {
   #directory!: string;
@@ -143,8 +143,8 @@ export class Gene {
     };
   }
   /** update the gene file in a specific directory
-   *  @params directory - A valid directory
-   *  @params genePath - Path for the gene file
+   *  @param directory - A valid directory
+   *  @param genePath - Path for the gene file
    */
   async mutateVaultGene(
     directory = this.#directory,

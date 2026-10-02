@@ -1,7 +1,7 @@
 /**
  * English translation strings for the ObSync plugin UI, keyed by feature
  * area (auth, userAdmin, settings, sync, collab, plugin,
- * offlinePersistence). Consumed via {@link t} in `i18n.ts`. Serves as the
+ * offlinePersistence). Consumed via `t` in `i18n.ts`. Serves as the
  * i18next `fallbackLng` bundle.
  */
 export default {
@@ -12,7 +12,8 @@ export default {
 	},
 	auth: {
 		loginTitle: 'Sign in to ObSync',
-		loginPrompt: 'Enter the e-mail of any account registered on the server.',
+		loginPrompt:
+			'Enter the e-mail of any account registered on the server.',
 		email: 'E-mail',
 		emailPlaceholder: 'user@example.com',
 		password: 'Password',
@@ -25,7 +26,8 @@ export default {
 		sessionExpired: 'Your session has expired. Sign in again.',
 		passwordChangeUnknownError: 'Could not change the password.',
 		colorChangeUnknownError: 'Could not change the cursor color.',
-		passwordTooShort: 'The new password must be between 6 and 128 characters.',
+		passwordTooShort:
+			'The new password must be between 6 and 128 characters.',
 		invalidCurrentPassword: 'Incorrect current password.',
 	},
 	userAdmin: {
@@ -45,7 +47,8 @@ export default {
 		nameAlreadyUsedBy: 'Name already used by {{email}}.',
 		emailAlreadyExists: 'A user with that e-mail already exists.',
 		userNotFound: 'User not found.',
-		lastAdmin: 'This operation would leave the platform without an active administrator.',
+		lastAdmin:
+			'This operation would leave the platform without an active administrator.',
 		invalidRole: 'Invalid user role.',
 		nameExists: 'A user with that name already exists.',
 		userCreated: 'User {{email}} created.',
@@ -81,9 +84,11 @@ export default {
 			yourDisplayNameDesc:
 				'As an administrator, you can change your own name. The change is sent automatically.',
 			displayName: 'Display name',
-			displayNameDesc: '{{name}}. Only administrators can change user names.',
+			displayNameDesc:
+				'{{name}}. Only administrators can change user names.',
 			cursorColor: 'Cursor color',
-			cursorColorDesc: 'The color other collaborators see on your cursor and name.',
+			cursorColorDesc:
+				'The color other collaborators see on your cursor and name.',
 			saveColor: 'Save color',
 			colorUpdated: 'Cursor color updated.',
 			privateMode: 'Private mode',
@@ -96,7 +101,8 @@ export default {
 			savePassword: 'Save new password',
 			passwordUpdated: 'Password updated.',
 			session: 'Session',
-			sessionDesc: 'Ends the current session and lets you sign in with another account.',
+			sessionDesc:
+				'Ends the current session and lets you sign in with another account.',
 			disconnectedUser: 'Disconnected user',
 			disconnectedUserDesc:
 				'Sign in to ObSync to access synchronization and account settings.',
@@ -148,25 +154,31 @@ export default {
 		vaultUpToDate: 'The vault is already up to date.',
 		yourVersion: 'your version',
 		serverVersion: 'server version',
-		mergeConflict: 'You and the server changed the same part of {{path}}. Both versions are marked in the file.',
+		mergeConflict:
+			'You and the server changed the same part of {{path}}. Both versions are marked in the file.',
 		adminMovedDownloaded:
 			"The admin moved {{oldPath}} to {{newPath}}. The server's version was downloaded there; your own copy, if it still exists, no longer gets updates.",
 		adminMovedYourCopy:
 			'The admin moved {{oldPath}} to {{newPath}}, so your unchanged copy at {{copyPath}} was moved there too.',
-		binaryConflict: 'You changed {{path}} and the server has a new version. It was saved next to yours as {{copy}}.',
+		binaryConflict:
+			'You changed {{path}} and the server has a new version. It was saved next to yours as {{copy}}.',
 		initialSyncFailed: 'Could not sync the initial files.',
 		initialSyncError: 'Error during initial synchronization:',
 		invalidSyncEvent: 'Invalid synchronization event:',
-		publishChangeFailed: 'Could not send the local change in {{path}} to the server:',
-		applyRemoteChangeFailed: 'Could not apply the remote change in {{path}}:',
+		publishChangeFailed:
+			'Could not send the local change in {{path}} to the server:',
+		applyRemoteChangeFailed:
+			'Could not apply the remote change in {{path}}:',
 	},
 	collab: {
 		userJoinedNote: '{{name}} joined this note.',
 		userLeftNote: '{{name}} left this note.',
 		privateModeNotice:
 			"You're in private mode: your edits stay on this device only.",
-		couldNotRestoreOfflineHistory: "Could not restore this note's offline history.",
-		couldNotInitializeCollaboration: 'Could not initialize collaboration in {{filePath}}:',
+		couldNotRestoreOfflineHistory:
+			"Could not restore this note's offline history.",
+		couldNotInitializeCollaboration:
+			'Could not initialize collaboration in {{filePath}}:',
 	},
 	plugin: {
 		loginCompletedSyncFailed:

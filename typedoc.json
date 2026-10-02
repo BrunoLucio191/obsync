@@ -1,20 +1,28 @@
 {
   "$schema": "https://typedoc.org/schema.json",
-  "entryPoints": [
-    "../obSync/backend/main.ts",
-    "../obSync/plugin/obSync/src/main.ts"
-  ],
+  "entryPoints": ["./backend/", "./plugin/obSync/src/"],
+  "entryPointStrategy": "expand",
+  "plugin": ["typedoc-plugin-merge-modules", "@clean-jsdoc-theme/typedoc"],
+  "tsconfig": "./tsconfig.typedoc.json",
   "out": "../../../Dev/projects/obSyncDocs/",
   "compilerOptions": {
     "skipLibCheck": true,
     "strictNullChecks": false,
     "allowImportingTsExtensions": true,
-    "target": "es2024",
+    "target": "ES2024",
     "allowSyntheticDefaultImports": true,
-    "module": "nodenext"
+    "module": "NodeNext"
   },
   "externalSymbolLinkMappings": {
-    "typescript": { "setInterval": "#" },
-    "obsidian": { "addIcon": "#", "Workspace.updateOptions": "#" }
+    "typescript": {
+      "setInterval": "#"
+    },
+    "obsidian": {
+      "addIcon": "#",
+      "Workspace.updateOptions": "#"
+    },
+    "@types/node": {
+      "\"node:sqlite\".SQLTagStore": "#"
+    }
   }
 }

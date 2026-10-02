@@ -64,10 +64,15 @@ export async function createClient(options: {
       Authorization: `Bearer ${token}`,
       "X-ObSync-Client": clientId,
     }),
-    Authheaders: () => ({ Authorization: `Bearer ${token}`, "X-ObSync-Client": clientId }),
+    AuthHeaders: () => ({ Authorization: `Bearer ${token}`, "X-ObSync-Client": clientId }),
+    GeneHeader: (savedGene: string) => ({ "X-ObSync-Gene": savedGene }),
     createWebSocketTicket: async () => (options.issueTicket ? options.issueTicket() : null),
   };
-  const collaboration = { currentPath: null, disconnectIfAffected: () => {}, scheduleActiveRoomSync: () => {} };
+  const collaboration = {
+    currentPath: null as string | null,
+    disconnectIfAffected: (_path: string) => {},
+    scheduleActiveRoomSync: () => {},
+  };
   const mutedPaths = new plugin.PathMuteRegistry();
   const queueManager = new plugin.QueueManager(new plugin.KeyedLock());
   const merger = new plugin.ServerVersionMerger(
@@ -80,6 +85,7 @@ export async function createClient(options: {
     clientId,
     vault,
     auth,
+    collaboration,
     fullSyncs: 0,
     initialSync,
     remote: null as any,
