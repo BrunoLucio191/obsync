@@ -13,7 +13,11 @@ import { ObSyncSettingTab } from './settings/ObSyncSettingTab.ts';
 import { SyncInitialVault } from './sync/SyncInitialVault.ts';
 import { SystemChannel } from './sync/SystemChannel.ts';
 import { SyncVaultChanges } from './sync/SyncVaultChanges.ts';
-import type { AuthenticatedUser, UserActionResult, UserRole } from './auth/auth.types.ts';
+import type {
+	AuthenticatedUser,
+	UserActionResult,
+	UserRole,
+} from './auth/auth.types.ts';
 import { PathMuteRegistry } from './vault/PathMuteRegistry.ts';
 import { RemoteVaultChangeService } from './vault/RemoteVaultChangeService.ts';
 import { QueueManager } from './queue/QueueManager.ts';
@@ -61,7 +65,8 @@ export default class ObSync extends Plugin {
 	}
 
 	public onunload(): void {
-		if (this.#fullSyncTimer !== null) window.clearTimeout(this.#fullSyncTimer);
+		if (this.#fullSyncTimer !== null)
+			window.clearTimeout(this.#fullSyncTimer);
 		this.#systemChannel.disconnect();
 		this.#collaboration.destroy();
 		this.#auth.destroy();
@@ -135,7 +140,9 @@ export default class ObSync extends Plugin {
 		return this.#userAdmin.updateUserStatus(userId, active);
 	}
 
-	public deleteUser(userId: number): Promise<UserActionResult<AuthenticatedUser>> {
+	public deleteUser(
+		userId: number,
+	): Promise<UserActionResult<AuthenticatedUser>> {
 		return this.#userAdmin.deleteUser(userId);
 	}
 
@@ -173,7 +180,10 @@ export default class ObSync extends Plugin {
 		} catch (error) {
 			return {
 				ok: false,
-				error: error instanceof Error ? error.message : String(error),
+				error:
+					error instanceof Error
+						? error.message
+						: JSON.stringify(error),
 			};
 		}
 
@@ -208,7 +218,9 @@ export default class ObSync extends Plugin {
 		this.#mutedPaths = new PathMuteRegistry();
 		this.#collaboration = new CollaborationController(this.app, this.#auth);
 		this.#queueManager = new QueueManager(new KeyedLock());
-		const pluginDir = this.manifest.dir ?? `${this.app.vault.configDir}/plugins/${this.manifest.id}`;
+		const pluginDir =
+			this.manifest.dir ??
+			`${this.app.vault.configDir}/plugins/${this.manifest.id}`;
 		this.#serverVersions = new ServerVersionMerger(
 			this.app,
 			this.#mutedPaths,
@@ -223,13 +235,18 @@ export default class ObSync extends Plugin {
 			this.#serverVersions,
 			() => this.#scheduleFullSync(),
 		);
-		this.#systemChannel = new SystemChannel(this.#auth, this.#remoteChanges);
 		this.#initialVaultSync = new SyncInitialVault(
 			this.app,
 			this.#auth,
 			this.#mutedPaths,
 			this.#queueManager,
 			this.#serverVersions,
+		);
+		this.#systemChannel = new SystemChannel(
+			this.#auth,
+			this.#remoteChanges,
+			this.app,
+			this.#initialVaultSync,
 		);
 		this.#vaultChangeSync = new SyncVaultChanges(
 			this,
@@ -242,7 +259,8 @@ export default class ObSync extends Plugin {
 
 	/** Debounced, so several folders a regular user missed in a row cost a single download. */
 	#scheduleFullSync(): void {
-		if (this.#fullSyncTimer !== null) window.clearTimeout(this.#fullSyncTimer);
+		if (this.#fullSyncTimer !== null)
+			window.clearTimeout(this.#fullSyncTimer);
 		this.#fullSyncTimer = window.setTimeout(() => {
 			this.#fullSyncTimer = null;
 			void this.#initialVaultSync.sync();

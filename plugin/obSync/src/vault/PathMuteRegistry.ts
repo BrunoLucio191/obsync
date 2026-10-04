@@ -9,6 +9,9 @@ export class PathMuteRegistry {
 	constructor(muteDurationMs = 2_000) {
 		this.#muteDurationMs = muteDurationMs;
 	}
+	/** Mute a path so the changes made on him are not published back
+	 * @param path
+	 * */
 	public mute(path: string): void {
 		this.#mutedPaths.set(path, Date.now() + this.#muteDurationMs);
 	}
@@ -29,7 +32,10 @@ export class PathMuteRegistry {
 	}
 
 	public static contains(rootPath: string, candidatePath: string): boolean {
-		return candidatePath === rootPath || candidatePath.startsWith(`${rootPath}/`);
+		return (
+			candidatePath === rootPath ||
+			candidatePath.startsWith(`${rootPath}/`)
+		);
 	}
 
 	#removeExpiredEntries(): void {

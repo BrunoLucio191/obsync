@@ -57,7 +57,7 @@ export class ZipWorkerSon {
 			}),
 			throw: false,
 		});
-		// 204: the gene matched, nothing changed
+		//Gene matches
 		if (response.status === 204) {
 			new Notice(t('sync.vaultUpToDate'));
 			return;
@@ -73,6 +73,7 @@ export class ZipWorkerSon {
 			new Notice(t('sync.initialSyncFailed'));
 			return;
 		}
+
 		// Object.entries() returns key values pair inside an array.
 		// find the gene header value and stores it
 		this.#receivedGene =

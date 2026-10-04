@@ -342,8 +342,8 @@ export class AuthService {
 	}
 
 	/** Concurrent callers share one in-flight request, so simultaneous 401s refresh once. */
-	#refreshAccessToken(): Promise<boolean> {
-		if (this.#refreshPromise) return this.#refreshPromise;
+	async #refreshAccessToken(): Promise<boolean> {
+		if (await this.#refreshPromise) return this.#refreshPromise;
 
 		this.#refreshPromise = this.#exchangeRefreshToken().finally(() => {
 			this.#refreshPromise = null;

@@ -6,7 +6,9 @@ import { t } from '../i18n/i18n.ts';
 import type { AuthService } from '../auth/AuthService.ts';
 import type { RemoteVaultChangeService } from '../vault/RemoteVaultChangeService.ts';
 import type { VaultChange } from '../vault/VaultChange.ts';
-
+import { ResyncWarning } from './ReSyncWarning.ts';
+import { App } from 'obsidian';
+import { SyncInitialVault } from './SyncInitialVault.ts';
 type backOff = {
 	next: () => number;
 	reset: () => void;
@@ -18,16 +20,22 @@ export class SystemChannel {
 	#reconnectTimer: number | null = null;
 	#generation: number = 0;
 	#reconnectDelayMs = this.#creatBackoff();
-
+	#disconnected = false;
+	readonly #app: App;
 	readonly #auth: AuthService;
 	readonly #remoteChanges: RemoteVaultChangeService;
+	readonly #initialVaultSync: SyncInitialVault;
 
 	public constructor(
 		auth: AuthService,
 		remoteChanges: RemoteVaultChangeService,
+		app: App,
+		initialVaultSync: SyncInitialVault,
 	) {
 		this.#auth = auth;
 		this.#remoteChanges = remoteChanges;
+		this.#app = app;
+		this.#initialVaultSync = initialVaultSync;
 	}
 
 	public connect(): void {
@@ -55,6 +63,12 @@ export class SystemChannel {
 		this.#socket = socket;
 
 		socket.onmessage = (event) => {
+			if (this.#disconnected) {
+				new ResyncWarning(this.#app, () =>
+					this.#initialVaultSync.sync(),
+				).open();
+				this.#disconnected = false;
+			}
 			try {
 				const change = JSON.parse(event.data as string) as VaultChange;
 
@@ -67,8 +81,10 @@ export class SystemChannel {
 		};
 
 		socket.onclose = (event) => {
+			this.#disconnected = true;
 			if (this.#socket !== socket || generation !== this.#generation)
 				return;
+
 			this.#socket = null;
 			if (event.code === 4003) {
 				void this.#auth.refreshSession().finally(() => {
@@ -77,6 +93,9 @@ export class SystemChannel {
 				return;
 			}
 			this.#scheduleReconnect(generation);
+		};
+		socket.onerror = () => {
+			this.#disconnected = true;
 		};
 	}
 

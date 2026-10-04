@@ -14,17 +14,13 @@ export interface CollaborationAuth {
 export class CollaborationController {
 	public readonly editorExtensions: Extension[] = [];
 	#activePath: string | null = null;
-	/** Bumped on every join/disconnect, so async work from a stale attempt stops. */
 	#roomGeneration = 0;
 	#roomSyncTimer: number | null = null;
 	readonly #privateModeNotices = new Set<string>();
 	readonly #app: App;
 	readonly #auth: CollaborationAuth;
 
-	public constructor(
-		app: App,
-		auth: CollaborationAuth,
-	) {
+	public constructor(app: App, auth: CollaborationAuth) {
 		this.#app = app;
 		this.#auth = auth;
 	}
@@ -67,7 +63,10 @@ export class CollaborationController {
 
 	/** Also when `path` is a folder above the active file. */
 	public disconnectIfAffected(path: string): void {
-		if (this.#activePath && PathMuteRegistry.contains(path, this.#activePath)) {
+		if (
+			this.#activePath &&
+			PathMuteRegistry.contains(path, this.#activePath)
+		) {
 			this.disconnect();
 		}
 	}
@@ -84,7 +83,8 @@ export class CollaborationController {
 		try {
 			this.#showPrivateModeNotice(filePath);
 
-			const initialView = this.#app.workspace.getActiveViewOfType(MarkdownView);
+			const initialView =
+				this.#app.workspace.getActiveViewOfType(MarkdownView);
 			if (!initialView || initialView.file?.path !== filePath) {
 				this.disconnect();
 				return;
@@ -114,7 +114,8 @@ export class CollaborationController {
 				return;
 			}
 
-			const activeView = this.#app.workspace.getActiveViewOfType(MarkdownView);
+			const activeView =
+				this.#app.workspace.getActiveViewOfType(MarkdownView);
 			if (!activeView || activeView.file?.path !== filePath) {
 				this.disconnect();
 				return;
@@ -127,7 +128,10 @@ export class CollaborationController {
 		} catch (error) {
 			if (generation !== this.#roomGeneration) return;
 
-			console.error(t('collab.couldNotInitializeCollaboration', { filePath }), error);
+			console.error(
+				t('collab.couldNotInitializeCollaboration', { filePath }),
+				error,
+			);
 			this.disconnect();
 			new Notice(t('collab.couldNotRestoreOfflineHistory'));
 		}
@@ -158,7 +162,10 @@ export class CollaborationController {
 	}
 
 	#showPrivateModeNotice(filePath: string): void {
-		if (!this.#auth.isReadOnlyUser() || this.#privateModeNotices.has(filePath)) {
+		if (
+			!this.#auth.isReadOnlyUser() ||
+			this.#privateModeNotices.has(filePath)
+		) {
 			return;
 		}
 
@@ -171,6 +178,8 @@ export class CollaborationController {
 
 		const cursorOffset = view.editor.posToOffset(view.editor.getCursor());
 		view.editor.setValue(initialText);
-		view.editor.setCursor(view.editor.offsetToPos(Math.min(cursorOffset, initialText.length)));
+		view.editor.setCursor(
+			view.editor.offsetToPos(Math.min(cursorOffset, initialText.length)),
+		);
 	}
 }

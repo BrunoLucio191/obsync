@@ -1,13 +1,3 @@
-/*
-
-This CSS file will be included with your plugin, and
-available in the app when your plugin is enabled.
-
-If your plugin does not need CSS, delete this file.
-
-*/
-
-/* Keeps the collaborator's colored name visible, like in Google Docs. */
 .cm-ySelectionInfo {
 	opacity: 1 !important;
 	border-radius: 3px;
@@ -16,7 +6,6 @@ If your plugin does not need CSS, delete this file.
 	padding: 1px 4px !important;
 }
 
-/* Lets one account's controls wrap onto multiple lines on narrow screens. */
 .obsync-settings-user-row .setting-item-control {
 	align-items: center;
 	column-gap: var(--size-4-3);
@@ -38,9 +27,6 @@ If your plugin does not need CSS, delete this file.
 	color: var(--text-muted);
 }
 
-/* A user's edit row (name + password): tight, indented, no divider from the
-   identity row above, so it reads as attached to that one account instead
-   of as its own full-height setting. */
 .obsync-settings-user-subrow {
 	padding: var(--size-4-1) 0 var(--size-4-2) var(--size-4-6);
 	border-top: none;
@@ -61,20 +47,10 @@ If your plugin does not need CSS, delete this file.
 .obsync-settings-user-subrow .setting-item-control button {
 	flex: 0 0 auto;
 }
+.obsync-network-warning {
+	margin: 0 10px;
+}
 
-/*
- * Caps the account list to ~9 visible rows, scrolling for the rest. Row
- * height varies (an admin row is a single line, a regular user spans an
- * identity row plus a name row and a password row), so
- * --obsync-user-row-height is an approximation: adjust it if 9 rows don't
- * fit exactly. The search box lives in the sibling info group above this
- * one (see obsync-user-search-setting), so it never scrolls away with it.
- *
- * clip-path (not just border-radius+overflow) is what keeps the corners
- * round once a scrollbar appears: Chromium renders the native scrollbar
- * track outside the border-radius clip in some cases, but clip-path always
- * clips it along with the content.
- */
 .obsync-user-list-scroll {
 	--obsync-user-row-height: 60px;
 	max-height: calc(var(--obsync-user-row-height) * 9);
@@ -83,11 +59,6 @@ If your plugin does not need CSS, delete this file.
 	clip-path: inset(0 round var(--radius-m));
 }
 
-/*
- * The user-search Setting only hosts a search box: hide the name/description
- * column and let the input take the full row width, matching the framework's
- * own full-width search styling instead of the standard name+control layout.
- */
 .obsync-user-search-setting {
 	border: none;
 }

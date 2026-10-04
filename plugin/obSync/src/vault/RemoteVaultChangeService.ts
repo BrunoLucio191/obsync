@@ -41,7 +41,9 @@ export class RemoteVaultChangeService {
 		this.#merger = merger;
 		this.#requestFullSync = requestFullSync;
 	}
-	/** Add changes inside the client queue*/
+	/** Add changes inside the client queue
+	 *	@param - change
+	 * */
 	public async apply(change: VaultChange): Promise<void> {
 		/** the oldpath is used as key because is the one that exists on the cliente */
 		const path = change.type === 'rename' ? change.oldPath : change.path;
@@ -56,7 +58,6 @@ export class RemoteVaultChangeService {
 			console.error(t('sync.applyRemoteChangeFailed', { path }), error);
 		}
 	}
-
 	async #applyChange(change: VaultChange): Promise<void> {
 		const adapter = this.#app.vault.adapter;
 
@@ -163,7 +164,11 @@ export class RemoteVaultChangeService {
 		else await this.#downloadFile(newPath);
 		new Notice(t('sync.adminMovedDownloaded', { oldPath, newPath }));
 	}
-
+	/**
+	 * writes a file from the server
+	 * @param path file path
+	 * @param data can be a string or a buffer
+	 * */
 	async #writeServerFile(
 		path: string,
 		data: string | ArrayBuffer,
@@ -175,11 +180,15 @@ export class RemoteVaultChangeService {
 		const adapter = this.#app.vault.adapter;
 		this.#mutedPaths.mute(path);
 		await ensureParentFolder(adapter, this.#mutedPaths, path);
-		if (typeof data === 'string') await adapter.write(path, data);
-		else await adapter.writeBinary(path, data);
+		if (typeof data === 'string') {
+			await adapter.write(path, data);
+		} else {
+			await adapter.writeBinary(path, data);
+		}
 	}
 
-	/** @returns `false` on 404: renamed or deleted before this client got to it. */
+	/** Deals with download files that are not plain text
+	 * @returns `false` on 404: renamed or deleted before this client got to it. */
 	async #downloadFile(path: string): Promise<boolean> {
 		const params = new URLSearchParams({
 			path,
