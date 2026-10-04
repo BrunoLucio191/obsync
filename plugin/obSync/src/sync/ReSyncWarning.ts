@@ -1,5 +1,5 @@
 import { Modal, App } from 'obsidian';
-
+import { t } from '../i18n/i18n.ts';
 /** Warn the user about a websocket disconnection and start a initial resync automatically*/
 export class ResyncWarning extends Modal {
 	readonly #reSync;
@@ -9,17 +9,13 @@ export class ResyncWarning extends Modal {
 	}
 	async onOpen(): Promise<void> {
 		const { contentEl } = this;
-		let contentOfTheMessage =
-			'Your network connection was interrupted while you were connected to the server.' +
-			' Obsync will automatically start a resync to receive any changes' +
-			' missed while you were offline.';
-		this.setTitle('Network problems');
+		this.setTitle(t(`sync.networkProblems`));
 
 		const wrapper = contentEl.createDiv({
 			cls: 'obsync-network-warning',
 		});
 		const networkMessage = wrapper.createEl('p', {
-			text: `${contentOfTheMessage}`,
+			text: t(`sync.websocketDisconnetionFromInternet`),
 		});
 		await this.#reSync();
 		networkMessage.setCssStyles('../../styles.css');

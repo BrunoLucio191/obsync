@@ -169,6 +169,11 @@ export default {
 			'Could not send the local change in {{path}} to the server:',
 		applyRemoteChangeFailed:
 			'Could not apply the remote change in {{path}}:',
+		websocketDisconnetionFromInternet:
+			'Your network connection was interrupted while you were connected to the server.' +
+			' Obsync will automatically start a resync to receive any changes' +
+			' missed while you were offline.',
+		networkProblems: 'Network problems',
 	},
 	collab: {
 		userJoinedNote: '{{name}} joined this note.',

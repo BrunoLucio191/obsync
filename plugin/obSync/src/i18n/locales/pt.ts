@@ -170,6 +170,12 @@ export default {
 			'Não foi possível enviar a alteração local em {{path}} para o servidor:',
 		applyRemoteChangeFailed:
 			'Não foi possível aplicar a alteração remota em {{path}}:',
+		websocketDisconnetionFromInternet:
+			'Sua conexão foi interrompida enquanto você estava conectado ao server' +
+			' Obsync vai automaticamente iniciar um resync para receber qualquer mudança' +
+			' perdida enquanto você estava offline',
+
+		networkProblems: 'Problemas de conexão com a internet',
 	},
 	collab: {
 		userJoinedNote: '{{name}} entrou nesta nota.',
