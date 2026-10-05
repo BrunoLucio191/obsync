@@ -94,17 +94,23 @@ export default class ObSync extends Plugin {
 
 		return true;
 	}
+	public async ensureLogin(): Promise<boolean> {
+		const authenticated = await this.#auth.ensureAuthenticated();
+		if (!authenticated) {
+			return false;
+		}
+		return true;
+	}
 
 	/** Opens the login right away, so another account can sign in. */
 	public async logout(): Promise<void> {
 		await this.#auth.logout();
 		this.app.workspace.updateOptions();
-
-		if (!(await this.#auth.ensureAuthenticated())) {
+		const login = await this.#auth.ensureAuthenticated();
+		if (!login) {
 			new Notice(t('plugin.signedOut'));
 			return;
 		}
-
 		this.#systemChannel.connect();
 		this.#collaboration.scheduleActiveRoomSync();
 	}
@@ -316,9 +322,7 @@ export default class ObSync extends Plugin {
 	}
 
 	#refreshSettingsTab(): void {
-		if (this.#settingTab?.containerEl.isConnected) {
-			this.#settingTab.update();
-		}
+		this.#settingTab?.update();
 	}
 
 	async #loadSettings(): Promise<void> {

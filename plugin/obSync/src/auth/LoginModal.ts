@@ -15,10 +15,7 @@ export class LoginModal extends Modal {
 	/** `onFinished` runs once, on close, with whether the user ended up authenticated. */
 	constructor(
 		app: App,
-		submitLogin: (
-			email: string,
-			password: string,
-		) => Promise<boolean>,
+		submitLogin: (email: string, password: string) => Promise<boolean>,
 		onFinished: (authenticated: boolean) => void,
 	) {
 		super(app);
@@ -39,12 +36,14 @@ export class LoginModal extends Modal {
 				.onChange((value) => (this.#email = value)),
 		);
 
-		new Setting(this.contentEl).setName(t('auth.password')).addText((text) => {
-			text.inputEl.type = 'password';
-			text.setPlaceholder(t('auth.password')).onChange(
-				(value) => (this.#password = value),
-			);
-		});
+		new Setting(this.contentEl)
+			.setName(t('auth.password'))
+			.addText((text) => {
+				text.inputEl.type = 'password';
+				text.setPlaceholder(t('auth.password')).onChange(
+					(value) => (this.#password = value),
+				);
+			});
 
 		new Setting(this.contentEl).addButton((button) =>
 			button

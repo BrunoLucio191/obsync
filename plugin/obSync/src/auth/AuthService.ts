@@ -93,11 +93,11 @@ export class AuthService {
 	}
 
 	/** Restores the stored session or opens the login modal. */
-	public async ensureAuthenticated(): Promise<boolean> {
+	public async ensureAuthenticated(): Promise<boolean | void> {
 		if (await this.#restoreStoredSession()) return true;
-
 		await this.#clearLocalSession();
 
+		//console.log('number of times');
 		return new Promise((resolve) => {
 			new LoginModal(
 				this.#app,

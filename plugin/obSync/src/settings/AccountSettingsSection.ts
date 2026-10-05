@@ -169,8 +169,10 @@ export class AccountSettingsSection {
 					button
 						.setButtonText(t('common.signOut'))
 						.onClick(async () => {
+							button.setDisabled(true);
 							await this.#controller.logout();
 							this.#refresh();
+							button.setDisabled(false);
 						}),
 				);
 			},

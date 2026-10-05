@@ -29,14 +29,19 @@ export class ObSyncSettingTab extends PluginSettingTab {
 		const refresh = (): void => this.update();
 		this.#backend = new BackendConnectionSection(controller, refresh);
 		this.#users = new UserManagementSection(controller, refresh);
-		this.#account = new AccountSettingsSection(controller, this.#users, refresh);
+		this.#account = new AccountSettingsSection(
+			controller,
+			this.#users,
+			refresh,
+		);
 	}
 
 	public getSettingDefinitions(): SettingDefinitionItem[] {
 		const backendSection = this.#backend.definition();
 		const configured = isApiEndpointConfigured();
 		const currentUser = configured ? this.#controller.config.user : null;
-		const authenticated = configured && !!currentUser && this.#controller.isAuthenticated();
+		const authenticated =
+			configured && !!currentUser && this.#controller.isAuthenticated();
 
 		let accountSection: SettingDefinitionGroup;
 
@@ -76,13 +81,10 @@ export class ObSyncSettingTab extends PluginSettingTab {
 								.onClick(async () => {
 									button.setDisabled(true);
 									try {
-										if (await this.#controller.openLogin()) {
+										if (await this.#controller.openLogin())
 											this.update();
-										}
 									} finally {
-										if (button.buttonEl.isConnected) {
-											button.setDisabled(false);
-										}
+										button.setDisabled(false);
 									}
 								}),
 						);

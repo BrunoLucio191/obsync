@@ -10,6 +10,7 @@ export interface SettingsController {
 	setBackendUrl(url: string): Promise<UserActionResult<null>>;
 	isAuthenticated(): boolean;
 	openLogin(): Promise<boolean>;
+	ensureLogin(): Promise<boolean>;
 	logout(): Promise<void>;
 	listUsers(): Promise<UserActionResult<AuthenticatedUser[]>>;
 	createUser(input: {
