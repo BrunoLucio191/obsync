@@ -5,6 +5,7 @@
   "plugin": ["typedoc-plugin-merge-modules", "@clean-jsdoc-theme/typedoc"],
   "tsconfig": "./tsconfig.typedoc.json",
   "out": "../../../Dev/projects/obSyncDocs/docs",
+  "excludePrivate": false,
   "compilerOptions": {
     "skipLibCheck": true,
     "strictNullChecks": false,

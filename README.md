@@ -333,7 +333,7 @@ WebSocket close codes:
 ## API reference
 
 The classes, endpoints and protocols are documented in the
-[API reference](https://TODO-typedoc-url), generated with TypeDoc.
+[API reference](https://brunolucio191.github.io/obsyncDocs/), generated with TypeDoc.
 
 ---
 
