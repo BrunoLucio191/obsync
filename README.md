@@ -320,16 +320,6 @@ WebSocket close codes:
 | `1013` | The room was shutting down or its queue was full; the client reconnects |
 | `4003` | Access token expired, session revoked, or the user's role, status or name changed |
 
-## Known issues
-
-- `PUT /api/sync/modify` rewrites the `.md` but not its `.yjs-state`. If a
-  closed note that already has Yjs state is changed from outside the editor,
-  the next time its room opens the old state can overwrite the change.
-- `YjsPersistence` does not take the shared `KeyedLock`, so a note write can
-  overlap with an HTTP delete of the same path.
-- Different operations on the same path from different clients (for example a
-  `modify` and a `delete`) do not lock each other out.
-
 ## API reference
 
 The classes, endpoints and protocols are documented in the

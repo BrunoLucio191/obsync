@@ -11,8 +11,9 @@
     }
   ],
   "cleanJsdocTheme": {
-    "siteName": "My Library",
-    "docs": "docs"
+    "siteName": "obSync",
+    "docs": "docs",
+    "basePath": "/obsyncDocs"
   },
   "readme": "./README.md",
   "excludePrivateClassFields": false,

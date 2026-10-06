@@ -10,7 +10,8 @@
   "scripts": {
     "start:backend": "npm start --workspace=backend",
     "db:setup": "npm run db:setup --workspace=backend",
-    "dev:plugin": "npm run dev --workspace=plugin/obSync"
+    "dev:plugin": "npm run dev --workspace=plugin/obSync",
+    "docs": "typedoc && mkdir -p ../../../Dev/projects/obSyncDocs/docs/docs && cp -r docs/assets ../../../Dev/projects/obSyncDocs/docs/docs/ && touch ../../../Dev/projects/obSyncDocs/docs/.nojekyll"
   },
   "author": "Dev",
   "license": "ISC",
