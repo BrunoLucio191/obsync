@@ -29,7 +29,8 @@ guarantee does not depend on the plugin behaving correctly.
 
 ## Demonstration
 
-<video src="https://github.com/user-attachments/assets/7a3d7da4-080a-47f6-9f70-3c1c4459c838" controls muted playsinline width="100%"></video>
+
+![[/docs/assets/demonstration.gif]]
 ## Contents
 
 - [How it works](#how-it-works)
