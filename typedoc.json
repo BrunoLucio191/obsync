@@ -4,16 +4,19 @@
   "entryPointStrategy": "expand",
   "plugin": ["typedoc-plugin-merge-modules", "@clean-jsdoc-theme/typedoc"],
   "tsconfig": "./tsconfig.typedoc.json",
-  "out": "../../../Dev/projects/obSyncDocs/docs",
-  "excludePrivate": false,
-  "compilerOptions": {
-    "skipLibCheck": true,
-    "strictNullChecks": false,
-    "allowImportingTsExtensions": true,
-    "target": "ES2024",
-    "allowSyntheticDefaultImports": true,
-    "module": "NodeNext"
+  "outputs": [
+    {
+      "name": "clean-jsdoc-theme",
+      "path": "../../../Dev/projects/obSyncDocs/docs"
+    }
+  ],
+  "cleanJsdocTheme": {
+    "siteName": "My Library",
+    "docs": "docs"
   },
+  "readme": "./README.md",
+  "excludePrivateClassFields": false,
+  "excludePrivate": false,
   "externalSymbolLinkMappings": {
     "typescript": {
       "setInterval": "#"
