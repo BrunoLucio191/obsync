@@ -29,7 +29,7 @@ guarantee does not depend on the plugin behaving correctly.
 
 ## Demonstration
 
-<video src="/docs/assets/demonstration.mp4" controls muted playsinline width="100%">
+<video src="docs/assets/demonstration.mp4" controls muted playsinline width="100%">
   Two accounts editing the same note in real time, with per-user awareness labels
 </video>
 
