@@ -175,27 +175,13 @@ export class WebSocketServer {
     });
 
     this.wssSystem.on("connection", (webSocket) => {
+      console.log("iae fulano");
       this.#registerHeartbeat(webSocket);
       const authorization = this.#authenticatedConnections.get(webSocket);
       if (!authorization) {
         webSocket.close(1008, "Missing authenticated user");
         return;
       }
-      const { user } = authorization;
-
-      webSocket.on("message", () => {
-        console.warn(
-          "[Audit] Mutation message refused on the /system channel",
-          {
-            userId: user.id,
-            role: user.role,
-            operation: "system-message",
-            timestamp: new Date().toISOString(),
-            allowed: false,
-          },
-        );
-        webSocket.close(1008, "System channel is receive-only");
-      });
     });
 
     vaultEvents.on("change", (change: VaultChange) => {

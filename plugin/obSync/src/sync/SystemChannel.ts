@@ -18,7 +18,7 @@ type backOff = {
 export class SystemChannel {
 	#socket: WebSocket | null = null;
 	#reconnectTimer: number | null = null;
-	#generation: number = 0;
+	#operationGeneration: number = 0;
 	#reconnectDelayMs = this.#creatBackoff();
 	#disconnected = false;
 	readonly #app: App;
@@ -40,18 +40,18 @@ export class SystemChannel {
 
 	public connect(): void {
 		this.#closeCurrentConnection();
-		const generation = ++this.#generation;
+		const generation = ++this.#operationGeneration;
 		void this.#openWithTicket(generation);
 	}
 
 	public disconnect(): void {
-		this.#generation += 1;
+		this.#operationGeneration += 1;
 		this.#closeCurrentConnection();
 	}
 
 	async #openWithTicket(generation: number): Promise<void> {
 		const ticket = await this.#auth.createWebSocketTicket('system');
-		if (generation !== this.#generation) return;
+		if (generation !== this.#operationGeneration) return;
 		if (!ticket) {
 			this.#scheduleReconnect(generation);
 			return;
@@ -62,13 +62,16 @@ export class SystemChannel {
 		]);
 		this.#socket = socket;
 
-		socket.onmessage = (event) => {
+		socket.onopen = () => {
+			this.#reconnectDelayMs.reset();
 			if (this.#disconnected) {
 				new ResyncWarning(this.#app, () =>
 					this.#initialVaultSync.sync(),
 				).open();
 				this.#disconnected = false;
 			}
+		};
+		socket.onmessage = (event) => {
 			try {
 				const change = JSON.parse(event.data as string) as VaultChange;
 
@@ -81,10 +84,13 @@ export class SystemChannel {
 		};
 
 		socket.onclose = (event) => {
-			this.#disconnected = true;
-			if (this.#socket !== socket || generation !== this.#generation)
+			if (
+				this.#socket !== socket ||
+				generation !== this.#operationGeneration
+			) {
 				return;
-
+			}
+			this.#disconnected = true;
 			this.#socket = null;
 			if (event.code === 4003) {
 				void this.#auth.refreshSession().finally(() => {
@@ -94,14 +100,11 @@ export class SystemChannel {
 			}
 			this.#scheduleReconnect(generation);
 		};
-		socket.onerror = () => {
-			this.#disconnected = true;
-		};
 	}
 
 	#scheduleReconnect(generation: number): void {
 		if (
-			generation !== this.#generation ||
+			generation !== this.#operationGeneration ||
 			!this.#auth.isAuthenticated() ||
 			this.#reconnectTimer !== null
 		) {
@@ -110,7 +113,7 @@ export class SystemChannel {
 
 		this.#reconnectTimer = window.setTimeout(() => {
 			this.#reconnectTimer = null;
-			if (generation === this.#generation) {
+			if (generation === this.#operationGeneration) {
 				void this.#openWithTicket(generation);
 			}
 		}, this.#reconnectDelayMs.next());
@@ -129,7 +132,7 @@ export class SystemChannel {
 
 	/** Creates a backoff that increases after a reconnection */
 	#creatBackoff({ base = 500, max = 30000, jitter = true } = {}): backOff {
-		let localGeneration = this.#generation;
+		let localGeneration = this.#operationGeneration;
 		return {
 			next() {
 				const exponential = Math.min(

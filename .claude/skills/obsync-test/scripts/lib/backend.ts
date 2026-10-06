@@ -47,9 +47,11 @@ export async function startBackend({ websockets = false, gene = false } = {}) {
   await listening;
   const port = (server.getHttpServer.address() as { port: number }).port;
 
+  let webSockets: any = null;
   if (websockets) {
     const { WebSocketServer } = await backend("Server/WebSocketServer.ts");
-    new WebSocketServer(server.getHttpServer, tokenService, false, false, collaborationServer).initializeWebSockets();
+    webSockets = new WebSocketServer(server.getHttpServer, tokenService, false, false, collaborationServer);
+    webSockets.initializeWebSockets();
   }
   if (gene) vaultGene.mutateVaultGene();
 
@@ -60,6 +62,8 @@ export async function startBackend({ websockets = false, gene = false } = {}) {
     userDB,
     dbService,
     tokenService,
+    /** The WebSocketServer when `websockets` is set; `wssSystem.clients` are the /system sockets. */
+    webSockets,
     /** Creates a user and returns it with a real access token. */
     async createUser(index: number, role: "admin" | "user" = "admin") {
       const created = await dbService.createUser(`User ${index}`, `user${index}@test.dev`, "secret123", role);

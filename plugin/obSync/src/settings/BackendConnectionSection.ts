@@ -1,15 +1,15 @@
 import { Notice, type SettingDefinitionGroup } from 'obsidian';
 import { t } from '../i18n/i18n.ts';
-import type { SettingsController } from './SettingsController.ts';
+import ObSync from '../main.ts';
 
 /** Anyone can edit the URL before the first login; after that, only admins. */
 export class BackendConnectionSection {
 	#url: string;
 
-	readonly #controller: SettingsController;
+	readonly #controller: ObSync;
 	readonly #refresh: () => void;
 
-	public constructor(controller: SettingsController, refresh: () => void) {
+	public constructor(controller: ObSync, refresh: () => void) {
 		this.#controller = controller;
 		this.#refresh = refresh;
 		this.#url = controller.config.backendUrl;

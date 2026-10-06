@@ -10,27 +10,23 @@ import { isApiEndpointConfigured } from '../config/ApiConfig.ts';
 import { t } from '../i18n/i18n.ts';
 import { AccountSettingsSection } from './AccountSettingsSection.ts';
 import { BackendConnectionSection } from './BackendConnectionSection.ts';
-import type { SettingsController } from './SettingsController.ts';
 import { UserManagementSection } from './UserManagementSection.ts';
-
+import ObSync from '../main.ts';
+/** Receives the other fields for settings and combina everything together*/
 export class ObSyncSettingTab extends PluginSettingTab {
 	readonly #backend: BackendConnectionSection;
 	readonly #users: UserManagementSection;
 	readonly #account: AccountSettingsSection;
-	readonly #controller: SettingsController;
+	readonly #controller: ObSync;
 
-	public constructor(
-		app: App,
-		plugin: Plugin,
-		controller: SettingsController,
-	) {
+	public constructor(app: App, plugin: Plugin & ObSync) {
 		super(app, plugin);
-		this.#controller = controller;
+		this.#controller = plugin;
 		const refresh = (): void => this.update();
-		this.#backend = new BackendConnectionSection(controller, refresh);
-		this.#users = new UserManagementSection(controller, refresh);
+		this.#backend = new BackendConnectionSection(plugin, refresh);
+		this.#users = new UserManagementSection(plugin, refresh);
 		this.#account = new AccountSettingsSection(
-			controller,
+			plugin,
 			this.#users,
 			refresh,
 		);

@@ -3,7 +3,35 @@
 
 export class Plugin {}
 export class App {}
-export class Modal {}
+/** Minimal element with the Obsidian helpers ResyncWarning-style modals call. */
+function fakeElement(): any {
+  return {
+    createDiv: () => fakeElement(),
+    createEl: () => fakeElement(),
+    setCssStyles: () => {},
+    empty: () => {},
+  };
+}
+
+/** Records every opened modal by class name; `open()` runs `onOpen()` like Obsidian. */
+export const openedModals: string[] = [];
+export class Modal {
+  app: unknown;
+  contentEl = fakeElement();
+  constructor(app: unknown) {
+    this.app = app;
+  }
+  setTitle(): this {
+    return this;
+  }
+  open(): void {
+    openedModals.push(this.constructor.name);
+    void (this as any).onOpen?.();
+  }
+  close(): void {
+    (this as any).onClose?.();
+  }
+}
 export class Setting {}
 
 export const notices: string[] = [];

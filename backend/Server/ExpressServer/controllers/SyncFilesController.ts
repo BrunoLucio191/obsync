@@ -14,6 +14,13 @@ export type SyncFilesControllerConstructor = {
   vaultGene: Gene;
 };
 
+/** Orquestrate files/directories modifications done via http routes as a single object that is
+ * called by {@link RouteSyncFiles}
+ * @param queueManager
+ * @param fileManager
+ * @param collaborationServer
+ * @param vaultGene
+ */
 export class SyncFilesController {
   readonly #queueManager: QueueManager;
   readonly #fileManager: FileManager;
@@ -31,7 +38,8 @@ export class SyncFilesController {
     this.#vaultGene = vaultGene;
   }
 
-  /** custom implementation of promisify function */
+  /** custom implementation of promisify function for res.download
+   * importante for using it inside the queue*/
   #downloadVault = (zipPath: string, vaultZipName: string, res: Response) => {
     return new Promise((resolve, reject) => {
       res.download(zipPath, `${vaultZipName}.zip`, (error) => {
@@ -45,7 +53,9 @@ export class SyncFilesController {
   };
 
   //TODO:: add a dynamic time for the timeout based on the size of the vault
-  /** 204 when the client's `X-ObSync-Gene` matches the current gene, otherwise the zip with the current gene. */
+  /** Responsible for doing the inital sync on the whole vault, download all the missing changes
+   * while offline
+   * 204 when the client's `X-ObSync-Gene` matches the current gene, otherwise the zip with the current gene. */
   initSync = async (req: Request, res: Response): Promise<void> => {
     const clientId = res.locals.clientId as string;
     const clientGene = req.headers["x-obsync-gene"];
@@ -53,8 +63,6 @@ export class SyncFilesController {
 
     try {
       await queue.addTask(async () => {
-        // Read before zipping: a change landing in between leaves the client with a gene
-        // older than its files, which only costs one extra download next time
         const currentGene = await this.#vaultGene.readGene();
         if (currentGene && clientGene === currentGene) {
           res.sendStatus(204);
@@ -86,7 +94,7 @@ export class SyncFilesController {
         .json({ error: "[Zip] Internal error generating the file." });
     }
   };
-
+  /** Crestes files or directories in the canonical Vault, also modifies the YjsPersistence*/
   create = async (req: Request, res: Response): Promise<void> => {
     const clientId = res.locals.clientId as string;
     const { path, isFolder, content } = req.body;

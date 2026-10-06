@@ -105,7 +105,7 @@ export async function createClient(options: {
   );
   const obsidianPlugin = { app, registerEvent: () => {} };
   new plugin.SyncVaultChanges(obsidianPlugin, auth, mutedPaths, collaboration, queueManager).initialize();
-  client.channel = options.websocket ? new plugin.SystemChannel(auth, client.remote) : null;
+  client.channel = options.websocket ? new plugin.SystemChannel(auth, client.remote, app, initialSync) : null;
   return client;
 }
 

@@ -55,7 +55,7 @@ export default class ObSync extends Plugin {
 		}
 		this.#composeServices();
 
-		this.#settingTab = new ObSyncSettingTab(this.app, this, this);
+		this.#settingTab = new ObSyncSettingTab(this.app, this);
 		this.addSettingTab(this.#settingTab);
 		this.app.workspace.onLayoutReady(() => {
 			void this.#initializeSynchronization().catch((error) => {
