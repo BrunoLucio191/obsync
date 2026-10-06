@@ -29,8 +29,7 @@ guarantee does not depend on the plugin behaving correctly.
 
 ## Demonstration
 
-
-![[/docs/assets/demonstration.gif]]
+![Two accounts editing the same note in real time](docs/assets/demonstration.gif)
 ## Contents
 
 - [How it works](#how-it-works)
