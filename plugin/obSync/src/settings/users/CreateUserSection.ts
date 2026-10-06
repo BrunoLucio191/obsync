@@ -1,8 +1,8 @@
 import { Notice, type SettingDefinitionGroup } from 'obsidian';
 import type { UserRole } from '../../auth/auth.types.ts';
 import { t } from '../../i18n/i18n.ts';
-import type { SettingsController } from '../SettingsController.ts';
 import type { UserDirectory } from './UserDirectory.ts';
+import ObSync from '../../main.ts';
 
 export class CreateUserSection {
 	#name = '';
@@ -10,12 +10,12 @@ export class CreateUserSection {
 	#password = '';
 	#role: UserRole = 'user';
 
-	readonly #controller: SettingsController;
+	readonly #controller: ObSync;
 	readonly #directory: UserDirectory;
 	readonly #refresh: () => void;
 
 	public constructor(
-		controller: SettingsController,
+		controller: ObSync,
 		directory: UserDirectory,
 		refresh: () => void,
 	) {

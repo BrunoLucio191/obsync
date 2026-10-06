@@ -1,21 +1,18 @@
 import { Notice, type Setting } from 'obsidian';
 import type { AuthenticatedUser } from '../../auth/auth.types.ts';
 import { t } from '../../i18n/i18n.ts';
-import type { SettingsController } from '../SettingsController.ts';
 import type { UserDirectory } from './UserDirectory.ts';
+import ObSync from '../../main.ts';
 
 /** Display-name field that saves itself, used both in Account and in the user list. */
 export class UserNameEditor {
 	readonly #saveTimers = new Map<number, number>();
 	readonly #saveGenerations = new Map<number, number>();
 
-	readonly #controller: SettingsController;
+	readonly #controller: ObSync;
 	readonly #directory: UserDirectory;
 
-	public constructor(
-		controller: SettingsController,
-		directory: UserDirectory,
-	) {
+	public constructor(controller: ObSync, directory: UserDirectory) {
 		this.#controller = controller;
 		this.#directory = directory;
 	}

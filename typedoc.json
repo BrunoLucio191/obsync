@@ -4,7 +4,7 @@
   "entryPointStrategy": "expand",
   "plugin": ["typedoc-plugin-merge-modules", "@clean-jsdoc-theme/typedoc"],
   "tsconfig": "./tsconfig.typedoc.json",
-  "out": "../../../Dev/projects/obSyncDocs/",
+  "out": "../../../Dev/projects/obSyncDocs/docs",
   "compilerOptions": {
     "skipLibCheck": true,
     "strictNullChecks": false,

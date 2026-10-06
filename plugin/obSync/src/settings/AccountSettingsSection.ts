@@ -5,8 +5,8 @@ import {
 } from 'obsidian';
 import type { AuthenticatedUser } from '../auth/auth.types.ts';
 import { t } from '../i18n/i18n.ts';
-import type { SettingsController } from './SettingsController.ts';
 import type { UserManagementSection } from './UserManagementSection.ts';
+import ObSync from '../main.ts';
 
 /** Password fields get one row each, so Obsidian's layout keeps them readable at any width. */
 export class AccountSettingsSection {
@@ -15,12 +15,12 @@ export class AccountSettingsSection {
 	/** Color picked but not saved yet; `null` shows the saved one. */
 	#color: string | null = null;
 
-	readonly #controller: SettingsController;
+	readonly #controller: ObSync;
 	readonly #users: UserManagementSection;
 	readonly #refresh: () => void;
 
 	public constructor(
-		controller: SettingsController,
+		controller: ObSync,
 		users: UserManagementSection,
 		refresh: () => void,
 	) {

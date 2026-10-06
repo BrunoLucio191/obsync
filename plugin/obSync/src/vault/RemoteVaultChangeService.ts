@@ -42,7 +42,7 @@ export class RemoteVaultChangeService {
 		this.#requestFullSync = requestFullSync;
 	}
 	/** Add changes inside the client queue
-	 *	@param - change
+	 *	@param change
 	 * */
 	public async apply(change: VaultChange): Promise<void> {
 		/** the oldpath is used as key because is the one that exists on the cliente */

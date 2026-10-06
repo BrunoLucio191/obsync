@@ -7,9 +7,9 @@ import {
 } from 'obsidian';
 import type { AuthenticatedUser, UserRole } from '../../auth/auth.types.ts';
 import { t } from '../../i18n/i18n.ts';
-import type { SettingsController } from '../SettingsController.ts';
 import type { UserDirectory } from './UserDirectory.ts';
 import type { UserNameEditor } from './UserNameEditor.ts';
+import ObSync from '../../main.ts';
 
 /** Admin-only account list. Controls that would lock out the last active admin are disabled. */
 export class UserListSection {
@@ -19,13 +19,13 @@ export class UserListSection {
 	#loadError: string | null = null;
 	#searchQuery = '';
 
-	readonly #controller: SettingsController;
+	readonly #controller: ObSync;
 	readonly #directory: UserDirectory;
 	readonly #nameEditor: UserNameEditor;
 	readonly #refresh: () => void;
 
 	public constructor(
-		controller: SettingsController,
+		controller: ObSync,
 		directory: UserDirectory,
 		nameEditor: UserNameEditor,
 		refresh: () => void,
