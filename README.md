@@ -35,7 +35,7 @@ guarantee does not depend on the plugin behaving correctly.
 
 - [How it works](#how-it-works)
 - [Getting started](#getting-started)
-- [Reaching the backend from other devices](#reaching-the-backend-from-other-devices)
+- [Hosting the backend](#hosting-the-backend)
 - [Security](#security)
 - [Storage](#storage)
 - [Troubleshooting](#troubleshooting)
@@ -127,13 +127,15 @@ OBSYNC_TRUST_PROXY=false
 This configuration is for local development only. Changing the secret signs
 everyone out.
 
-### 3. Create the user database
+### 3. Create the user database and data folders
 
 ```bash
 npm run db:setup
+
+npm run dataFolders
 ```
 
-`db:setup` refuses to touch an existing database, and the backend refuses to
+- `db:setup` refuses to touch an existing database, and the backend refuses to
 start without one. It prints one line per seeded account with a random
 temporary password:
 
@@ -146,6 +148,22 @@ temporary password:
 **Copy the admin password now.** It is shown only once. The seed accounts are
 defined in `backend/users/UserDB.ts`. To start over, stop the backend, delete
 `backend/data/users.sqlite*` and run the command again.
+
+- `dataFolders` Ensures the  `vault`,`yjs-state`,`zips` directories exist, and create any that are missing.
+
+if you don't have the directories:
+```text
+[Data] vault directory was created
+[Data] yjs-state directory was created
+[Data] zips directory was created
+```
+if you do have the directories:
+```text
+[Data] vault directory already exists!
+[Data] yjs-state directory already exists!
+[Data] zips directory already exists!
+```
+
 
 ### 4. Start the backend
 
@@ -196,7 +214,44 @@ Only the person running the backend needs steps 1 to 4. Everyone else installs
 ObSync from **Settings → Community plugins → Browse** and starts at step 6 with
 the backend URL and an account provided by that person.
 
-## Reaching the backend from other devices
+## Hosting the backend
+
+The plugin works with any host. It only needs an `https://` URL, which it also
+uses for WebSockets as `wss://`. The backend never handles TLS itself: something
+in front of it terminates TLS and forwards plain HTTP with
+`X-Forwarded-Proto: https`. That can be Caddy on your own machine or the load
+balancer of a hosting platform.
+
+### What any host must provide
+
+- **HTTPS that passes WebSocket upgrades through.**
+- **A persistent disk at `backend/data/`.** It holds the accounts, the vault and
+  the Yjs state. Without it, a redeploy wipes everything.
+- **Exactly one instance that stays running.** Rooms, queues and sessions live
+  in memory. Two instances would split the clients between them, and an
+  instance that sleeps when idle signs everyone out.
+- **Node.js 22.18 or newer.**
+
+Serverless platforms such as Vercel, Netlify or Cloudflare Workers don't meet
+these requirements.
+
+### Backend configuration behind a proxy
+
+```dotenv
+OBSYNC_TOKEN_SECRET=<output of openssl rand -base64 48>
+PORT=3000
+OBSYNC_HOST=<see below>
+OBSYNC_REQUIRE_TLS=true
+OBSYNC_TRUST_PROXY=true
+```
+
+| Where the proxy runs | `OBSYNC_HOST` |
+| --- | --- |
+| Same machine as the backend (Caddy, nginx) | `127.0.0.1` |
+| A hosting platform (Render, Railway, Fly.io) | `0.0.0.0` |
+
+On a platform, set these as environment variables instead of a `.env` file.
+Platforms usually set `PORT` themselves, and the backend reads it.
 
 ### Loopback and allowed addresses
 
@@ -208,17 +263,18 @@ addresses, counts as non-loopback.
 
 **Backend (`OBSYNC_HOST`).** Any address is accepted, but a non-loopback one
 such as `192.168.1.50` or `0.0.0.0` only starts with `OBSYNC_REQUIRE_TLS=true`
-and `OBSYNC_TRUST_PROXY=true`. The backend never handles TLS itself: it trusts
-`X-Forwarded-Proto: https` from a reverse proxy and rejects anything else with
-`426`.
+and `OBSYNC_TRUST_PROXY=true`. The backend trusts `X-Forwarded-Proto: https`
+and rejects anything else with `426`.
 
 It accepts that header from any sender. If the backend listens on a network
-address, any machine that can reach port 3000 can send the header over plain
-HTTP and pass the check. Keep `OBSYNC_HOST=127.0.0.1` with the proxy on the
-same machine, or firewall port 3000 so only the proxy can reach it.
+address, any machine that can reach its port can send the header over plain
+HTTP and pass the check. On your own machine, keep `OBSYNC_HOST=127.0.0.1` with
+the proxy next to it, or firewall the port so only the proxy can reach it. On
+a hosting platform the port is private and only the platform's proxy reaches
+it.
 
 **Plugin (backend URL).** `http://` is accepted only for the three loopback
-hosts. Anything else must be `https://`; the WebSocket URL becomes `wss://`.
+hosts. Anything else must be `https://`.
 
 | Backend URL in the plugin | Accepted |
 | --- | --- |
@@ -229,7 +285,8 @@ hosts. Anything else must be `https://`; the WebSocket URL becomes `wss://`.
 
 ### Example: Caddy on your LAN
 
-Run [Caddy](https://caddyserver.com) on the backend machine:
+Use this to test with other devices on your network. Run
+[Caddy](https://caddyserver.com) on the backend machine:
 
 ```text
 # Caddyfile, with the LAN IP of the machine running Caddy
@@ -254,8 +311,45 @@ certificate is valid for that IP only.
    Certificate Trust Settings. Android ignores user-installed certificates in
    most apps, so Obsidian there will likely reject it.
 
-For a public server, use a real domain and let Caddy get a public certificate
-instead of `tls internal`.
+### Example: a VPS with a domain
+
+1. Point a DNS `A` record such as `obsync.example.com` at the server and open
+   ports 80 and 443.
+2. Follow [Getting started](#getting-started) steps 1 to 3 on the server, with
+   `OBSYNC_HOST=127.0.0.1`, `OBSYNC_REQUIRE_TLS=true` and
+   `OBSYNC_TRUST_PROXY=true`.
+3. Run Caddy with this Caddyfile. It gets a public certificate on its own, so
+   no device needs to install anything:
+
+   ```text
+   obsync.example.com {
+   	reverse_proxy 127.0.0.1:3000
+   }
+   ```
+
+4. Keep the backend running with `npm run start:backend` under a process
+   manager such as systemd.
+5. In the plugin, use `https://obsync.example.com`.
+
+### Example: a hosting platform
+
+The steps are the same on Render, Railway, Fly.io and similar platforms; only
+the names of the settings change.
+
+1. Create a web service from this repository, at the repository root.
+2. Build command: `npm ci`. Start command: `npm run start:backend`.
+3. Set the environment variables from
+   [Backend configuration behind a proxy](#backend-configuration-behind-a-proxy),
+   with `OBSYNC_HOST=0.0.0.0`. Store `OBSYNC_TOKEN_SECRET` as a secret.
+4. Attach a persistent disk or volume mounted at `backend/data` inside the
+   deployed repository.
+5. Run a single instance and turn off sleeping or scale-to-zero. Free tiers
+   that sleep when idle or have no persistent disk won't work.
+6. Open the platform's shell once, run `npm run db:setup` and copy the admin
+   password.
+7. In the plugin, use the `https://` URL the platform gives the service.
+
+A redeploy restarts the backend, which signs everyone out.
 
 ## Security
 
@@ -300,7 +394,7 @@ Everything under `backend/data/` is runtime data. There are no migrations.
 | --- | --- |
 | `User database not found` | Run `npm run db:setup` |
 | `OBSYNC_TOKEN_SECRET must contain at least 32 random bytes` | Create `backend/.env` with a secret from `openssl rand -base64 48` |
-| `OBSYNC_REQUIRE_TLS must be true when OBSYNC_HOST is not loopback` | See [Reaching the backend from other devices](#reaching-the-backend-from-other-devices) |
+| `OBSYNC_REQUIRE_TLS must be true when OBSYNC_HOST is not loopback` | See [Hosting the backend](#hosting-the-backend) |
 | "HTTPS is required" when saving the URL | Use HTTPS through a proxy for any non-loopback host |
 | Plugin does nothing at startup | No backend URL is saved yet; set it in **Settings → ObSync** |
 | Signed out after restarting the backend | Expected: sessions live in memory |

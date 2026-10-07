@@ -47,6 +47,7 @@ temp/
 
 # Obsidian development data
 .obsidian/
+gene.json
 
 to-do.md
 /quiz.md

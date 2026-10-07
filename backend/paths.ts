@@ -3,7 +3,9 @@ import path from "node:path";
 const backendRoot = import.meta.dirname;
 const dataDirectory = path.join(backendRoot, "data");
 
-/** Resolved from the backend's own folder, so the working directory doesn't matter. */
+/** An object with all the paths from the data folder
+ * Resolved from the backend's own folder, so the working directory doesn't matter.
+ */
 export const systemPaths = {
   backendRoot,
   dataDirectory,

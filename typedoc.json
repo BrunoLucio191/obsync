@@ -2,7 +2,7 @@
   "$schema": "https://typedoc.org/schema.json",
   "entryPoints": ["./backend/", "./plugin/obSync/src/"],
   "entryPointStrategy": "expand",
-  "plugin": ["typedoc-plugin-merge-modules", "@clean-jsdoc-theme/typedoc"],
+  "plugin": ["@clean-jsdoc-theme/typedoc"],
   "tsconfig": "./tsconfig.typedoc.json",
   "outputs": [
     {

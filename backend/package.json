@@ -8,6 +8,7 @@
     "dev": "node --watch main.ts",
     "db:setup": "node scripts/setupDatabase.ts",
     "check": "tsc --noEmit -p tsconfig.json",
-    "dev2": "tsx watch main.ts"
+    "dev2": "tsx watch main.ts",
+    "dataFolders": "node scripts/makeDataPaths.ts"
   }
 }

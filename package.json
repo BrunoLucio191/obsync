@@ -11,6 +11,7 @@
     "start:backend": "npm start --workspace=backend",
     "db:setup": "npm run db:setup --workspace=backend",
     "dev:plugin": "npm run dev --workspace=plugin/obSync",
+    "dataFolders": "npm run dataFolders --workspace=backend",
     "docs": "typedoc && touch ../../../Dev/projects/obSyncDocs/docs/.nojekyll"
   },
   "author": "Dev",
