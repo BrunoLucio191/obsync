@@ -18,12 +18,15 @@ import type {
   YjsPersistenceAdapter,
 } from "./yjs.types.ts";
 import { syncMessageHandler } from "./SyncMessageHandler.ts";
+import { getMessageCounter } from "./yjsUtils/MessageCounter.utils.ts";
+
 /** Entry point of the Yjs backend for the rest of the server. */
 export class YjsCollaborationServer {
   readonly #deletedPaths = new DeletedPathRegistry();
   readonly #persistence = new YjsPersistenceGateway();
   readonly #rooms = new YjsRoomRegistry(this.#deletedPaths, this.#persistence);
   readonly #syncHandler: SyncMessageHandlerFn = syncMessageHandler;
+  readonly #messageCounter = getMessageCounter();
 
   public setPersistence(adapter: YjsPersistenceAdapter): void {
     this.#persistence.setAdapter(adapter);
@@ -117,6 +120,7 @@ export class YjsCollaborationServer {
       connectionState,
       this.#deletedPaths,
       this.#syncHandler,
+      this.#messageCounter,
     );
 
     connection.on("message", (rawData: RawData, isBinary: boolean) => {

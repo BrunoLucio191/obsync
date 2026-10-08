@@ -17,9 +17,9 @@ import {
 } from "./yjsUtils/wsTransport.utils.ts";
 import type { DeletedPathRegistry } from "./DeletedPathRegistry.ts";
 import type { SyncMessageHandlerFn } from "./SyncMessageHandler.ts";
-import { ApplyAwerenessUpdate } from "./YjsApplyAwerenessUpdate.ts";
+import { applyAwerenessUpdate } from "./YjsApplyAwerenessUpdate.ts";
 import type { YjsRoom } from "./yjsRooms/YjsRoom.ts";
-import { getMessageCounter } from "./yjsUtils/MessageCounter.utils.ts";
+import type { WebSocketMessageCounter } from "./yjsUtils/MessageCounter.utils.ts";
 
 export class YjsConnectionSession {
   readonly #room: YjsRoom;
@@ -27,7 +27,7 @@ export class YjsConnectionSession {
   readonly #connectionState: YjsConnectionState;
   readonly #deletedPaths: DeletedPathRegistry;
   readonly #syncHandler: SyncMessageHandlerFn;
-  readonly #connectionMessageCounter = getMessageCounter();
+  readonly #messageCounter: WebSocketMessageCounter<WebSocket, number>;
 
   public constructor(
     room: YjsRoom,
@@ -35,15 +35,17 @@ export class YjsConnectionSession {
     connectionState: YjsConnectionState,
     deletedPaths: DeletedPathRegistry,
     syncHandler: SyncMessageHandlerFn,
+    messageCounter: WebSocketMessageCounter<WebSocket, number>,
   ) {
     this.#room = room;
     this.#connection = connection;
     this.#connectionState = connectionState;
     this.#deletedPaths = deletedPaths;
     this.#syncHandler = syncHandler;
+    this.#messageCounter = messageCounter;
   }
 
-  /** Receives the raw message and add that to the queue from the session
+  /** Receives the raw message and adds that to the queue
    * @param rawData
    * @param isBinary - if the data received is not binary, the connection is closed
    */
@@ -61,12 +63,16 @@ export class YjsConnectionSession {
     const room = this.#room;
     room.pendingMessages += 1;
 
-    this.#connectionMessageCounter.increment(this.#connection);
+    this.#messageCounter.increment(this.#connection);
+
     if (room.pendingMessages >= MAX_PENDING_MESSAGES_PER_DOCUMENT) {
-      const connectionToClose = this.#connectionMessageCounter.bigger();
+      const connectionToClose = this.#messageCounter.biggest();
       room.pendingMessages -= 1;
-      closeConnection(connectionToClose, 1013, "Document queue overloaded");
-      this.#connectionMessageCounter.delete(connectionToClose);
+
+      if (connectionToClose) {
+        closeConnection(connectionToClose, 1013, "Document queue overloaded");
+        this.#messageCounter.delete(connectionToClose);
+      }
       return;
     }
 
@@ -83,7 +89,7 @@ export class YjsConnectionSession {
         closeConnection(this.#connection, 1007, "Invalid Yjs payload");
       })
       .finally(() => {
-        this.#connectionMessageCounter.decrement(this.#connection);
+        this.#messageCounter.decrement(this.#connection);
         room.pendingMessages -= 1;
       });
   }
@@ -122,7 +128,7 @@ export class YjsConnectionSession {
       case MESSAGE_AWARENESS: {
         const update = readBoundedByteArray(decoder, "Awareness update");
         ensureDecoderConsumed(decoder);
-        ApplyAwerenessUpdate(this.#room, this.#connection, update);
+        applyAwerenessUpdate(this.#room, this.#connection, update);
         return;
       }
 
