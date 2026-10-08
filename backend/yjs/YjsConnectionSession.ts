@@ -19,6 +19,7 @@ import type { DeletedPathRegistry } from "./DeletedPathRegistry.ts";
 import type { SyncMessageHandlerFn } from "./SyncMessageHandler.ts";
 import { ApplyAwerenessUpdate } from "./YjsApplyAwerenessUpdate.ts";
 import type { YjsRoom } from "./yjsRooms/YjsRoom.ts";
+import { getMessageCounter } from "./yjsUtils/MessageCounter.utils.ts";
 
 export class YjsConnectionSession {
   readonly #room: YjsRoom;
@@ -26,6 +27,7 @@ export class YjsConnectionSession {
   readonly #connectionState: YjsConnectionState;
   readonly #deletedPaths: DeletedPathRegistry;
   readonly #syncHandler: SyncMessageHandlerFn;
+  readonly #connectionMessageCounter = getMessageCounter();
 
   public constructor(
     room: YjsRoom,
@@ -41,6 +43,10 @@ export class YjsConnectionSession {
     this.#syncHandler = syncHandler;
   }
 
+  /** Receives the raw message and add that to the queue from the session
+   * @param rawData
+   * @param isBinary - if the data received is not binary, the connection is closed
+   */
   public handleRawMessage(rawData: RawData, isBinary: boolean): void {
     if (!isBinary) {
       closeConnection(this.#connection, 1003, "Binary messages required");
@@ -55,9 +61,12 @@ export class YjsConnectionSession {
     const room = this.#room;
     room.pendingMessages += 1;
 
-    if (room.pendingMessages > MAX_PENDING_MESSAGES_PER_DOCUMENT) {
+    this.#connectionMessageCounter.increment(this.#connection);
+    if (room.pendingMessages >= MAX_PENDING_MESSAGES_PER_DOCUMENT) {
+      const connectionToClose = this.#connectionMessageCounter.bigger();
       room.pendingMessages -= 1;
-      closeConnection(this.#connection, 1013, "Document queue overloaded");
+      closeConnection(connectionToClose, 1013, "Document queue overloaded");
+      this.#connectionMessageCounter.delete(connectionToClose);
       return;
     }
 
@@ -74,6 +83,7 @@ export class YjsConnectionSession {
         closeConnection(this.#connection, 1007, "Invalid Yjs payload");
       })
       .finally(() => {
+        this.#connectionMessageCounter.decrement(this.#connection);
         room.pendingMessages -= 1;
       });
   }

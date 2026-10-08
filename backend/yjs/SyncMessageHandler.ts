@@ -48,18 +48,6 @@ export function syncMessageHandler({
       ensureDecoderConsumed(decoder);
 
       if (!connectionState.canWriteGlobal) {
-        console.warn("[Audit] Global Yjs update blocked", {
-          userId: connectionState.userId,
-          role: connectionState.userRole,
-          operation:
-            syncMessageType === syncProtocol.messageYjsSyncStep2
-              ? "yjs-sync-step2"
-              : "yjs-update",
-          path: room.filePath,
-          timestamp: new Date().toISOString(),
-          allowed: false,
-        });
-
         return;
       }
 

@@ -2,6 +2,9 @@ import * as decoding from "lib0/decoding";
 import { WebSocket, type RawData } from "ws";
 import { MAX_WS_MESSAGE_BYTES } from "../yjs.const.ts";
 
+/** helper function for returning Uint8Array
+ * @param data - binary data
+ */
 export function toUint8Array(data: RawData): Uint8Array {
   if (Array.isArray(data)) {
     const merged = Buffer.concat(data);
