@@ -115,7 +115,7 @@ export default {
 			registeredAccounts: 'Contas cadastradas',
 			loading: 'Carregando usuários...',
 			registeredAccountsDesc:
-				'{{count}} usuários cadastrados. Use a busca acima para filtrar por nome ou e-mail.',
+				'{{count}} usuários cadastrados. Use a busca abaixo para filtrar por nome ou e-mail.',
 			searchAccounts: 'Buscar contas',
 			searchPlaceholder: 'Nome ou e-mail',
 			you: ' (você)',

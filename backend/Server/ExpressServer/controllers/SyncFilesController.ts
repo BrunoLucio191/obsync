@@ -15,7 +15,7 @@ export type SyncFilesControllerConstructor = {
 };
 
 /** Orquestrate files/directories modifications done via http routes as a single object that is
- * called by {@link RouteSyncFiles}
+ * called by RouteSyncFiles
  * @param queueManager
  * @param fileManager
  * @param collaborationServer
@@ -38,8 +38,14 @@ export class SyncFilesController {
     this.#vaultGene = vaultGene;
   }
 
-  /** custom implementation of promisify function for res.download
-   * importante for using it inside the queue*/
+  /** custom implementation of promisify function for res.downloa,since res-download follows
+   * the old callback style from node, you cannot put it inside the Queue without having side effects
+   * you just cant predict when that callback will be fired after being added to the queue
+   *
+   * @param zipPath The relative zip path from the file, needs to include the file name on it
+   * @param vaultZipName The zip file name, usually done with the clientId value
+   * @param res Response object
+   */
   #downloadVault = (zipPath: string, vaultZipName: string, res: Response) => {
     return new Promise((resolve, reject) => {
       res.download(zipPath, `${vaultZipName}.zip`, (error) => {
@@ -52,10 +58,10 @@ export class SyncFilesController {
     });
   };
 
-  //TODO:: add a dynamic time for the timeout based on the size of the vault
   /** Responsible for doing the inital sync on the whole vault, download all the missing changes
-   * while offline
-   * 204 when the client's `X-ObSync-Gene` matches the current gene, otherwise the zip with the current gene. */
+   * while offline. 204 when the client's `X-ObSync-Gene` matches the current gene, otherwise the
+   * zip with the current gene.
+   */
   initSync = async (req: Request, res: Response): Promise<void> => {
     const clientId = res.locals.clientId as string;
     const clientGene = req.headers["x-obsync-gene"];
@@ -73,14 +79,19 @@ export class SyncFilesController {
         }
 
         await this.#fileManager.directoryZiped(systemPaths.zips, clientId);
+
         await this.#downloadVault(
           `${systemPaths.zips}/${clientId.trim()}.zip`,
           clientId,
           res,
         );
+        const timeForDelete = await this.#getFileDeleteTimer(
+          `${systemPaths.zips}/${clientId.trim()}.zip`,
+        );
+        console.log(timeForDelete);
         setTimeout(async () => {
           await fs.unlink(`${systemPaths.zips}/${clientId.trim()}.zip`);
-        }, 15_000);
+        }, timeForDelete);
       }, "vault:InitSync");
     } catch (error) {
       if (res.headersSent) {
@@ -347,6 +358,17 @@ export class SyncFilesController {
       }
       console.error("[Sync] Error while sending the File", error);
       res.status(500).json({ error: "Error while sending the File" });
+    }
+  };
+  /**Gives you a value in ms based one worst cenario of a 2mb/s connection */
+  #getFileDeleteTimer = async (filePath: string): Promise<number> => {
+    try {
+      //transform to megabytes
+      const fileGiBytes = (await fs.stat(filePath)).size / (1024 * 1024);
+      return Math.floor(120 * 39 * fileGiBytes);
+    } catch (error) {
+      console.log(`[Sync] Could not read the file`, error);
+      return 15_000;
     }
   };
 }

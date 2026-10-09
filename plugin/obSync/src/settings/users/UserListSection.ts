@@ -11,7 +11,11 @@ import type { UserDirectory } from './UserDirectory.ts';
 import type { UserNameEditor } from './UserNameEditor.ts';
 import ObSync from '../../main.ts';
 
-/** Admin-only account list. Controls that would lock out the last active admin are disabled. */
+/** Admin-only account list.  Controls that would lock out the last active admin are disabled.
+ * @param ObSync - {@link ObSync} plugin class
+ * @param UserDirectory - {@link UserDirectory} local copy of local users
+ * @param UserNameEditor - {@link UserNameEditor}
+ */
 export class UserListSection {
 	#loadGeneration = 0;
 	#loading = false;
@@ -19,34 +23,68 @@ export class UserListSection {
 	#loadError: string | null = null;
 	#searchQuery = '';
 
-	readonly #controller: ObSync;
-	readonly #directory: UserDirectory;
+	readonly #plugin: ObSync;
+	readonly #userDirectory: UserDirectory;
 	readonly #nameEditor: UserNameEditor;
 	readonly #refresh: () => void;
 
 	public constructor(
-		controller: ObSync,
-		directory: UserDirectory,
+		plugin: ObSync,
+		userDirectory: UserDirectory,
 		nameEditor: UserNameEditor,
 		refresh: () => void,
 	) {
-		this.#controller = controller;
-		this.#directory = directory;
+		this.#plugin = plugin;
+		this.#userDirectory = userDirectory;
 		this.#nameEditor = nameEditor;
 		this.#refresh = refresh;
 	}
 
 	/** Also starts the lazy load; `listGroup` stays empty until it finishes. */
 	public definitions(): SettingDefinitionItem[] {
+		const userItems: SettingDefinition[] = [];
+		if (this.#loaded) {
+			const currentUser = this.#plugin.config.user;
+			const activeAdminCount = this.#userDirectory.activeAdminCount();
+			for (const user of this.#userDirectory.all()) {
+				if (!this.#matchesQuery(user, this.#searchQuery)) continue;
+				userItems.push(
+					...this.#userDefinitions(
+						user,
+						currentUser,
+						activeAdminCount,
+					),
+				);
+			}
+		}
+		userItems.unshift({
+			name: t('settings.users.searchAccounts'),
+			desc: '',
+			searchable: false,
+			render: (setting) => {
+				setting.setClass('obsync-user-search-setting');
+				setting.addSearch((search) => {
+					search
+						.setPlaceholder(t('settings.users.searchPlaceholder'))
+						.setValue(this.#searchQuery)
+						.onChange((value) => {
+							this.#searchQuery = value;
+							this.#refresh();
+						});
+				});
+			},
+		});
+
+		const listGroup: SettingDefinitionGroup = {
+			type: 'list',
+			cls: 'obsync-user-list-scroll',
+			visible: () => this.#loaded,
+			items: userItems,
+		};
 		const infoGroup: SettingDefinitionGroup = {
 			type: 'group',
-			heading: t('settings.users.heading'),
+			heading: '',
 			items: [
-				{
-					name: t('settings.users.heading'),
-					desc: t('settings.users.adminOnlyDesc'),
-					searchable: false,
-				},
 				{
 					name: t('settings.users.registeredAccounts'),
 					desc: this.#listStatusDescription(),
@@ -70,51 +108,7 @@ export class UserListSection {
 						}
 					},
 				},
-				{
-					name: t('settings.users.searchAccounts'),
-					desc: '',
-					searchable: false,
-					// Its own input instead of the group `search` option, so it doesn't scroll away with the list
-					render: (setting) => {
-						setting.setClass('obsync-user-search-setting');
-						setting.addSearch((search) => {
-							search
-								.setPlaceholder(
-									t('settings.users.searchPlaceholder'),
-								)
-								.setValue(this.#searchQuery)
-								.onChange((value) => {
-									this.#searchQuery = value;
-									this.#refresh();
-								});
-						});
-					},
-				},
 			],
-		};
-
-		const userItems: SettingDefinition[] = [];
-		if (this.#loaded) {
-			const currentUser = this.#controller.config.user;
-			const activeAdminCount = this.#directory.activeAdminCount();
-			for (const user of this.#directory.all()) {
-				if (!this.#matchesQuery(user, this.#searchQuery)) continue;
-				userItems.push(
-					...this.#userDefinitions(
-						user,
-						currentUser,
-						activeAdminCount,
-					),
-				);
-			}
-		}
-
-		// Separate group so the rows scroll without dragging the search box along
-		const listGroup: SettingDefinitionGroup = {
-			type: 'group',
-			cls: 'obsync-user-list-scroll',
-			visible: () => this.#loaded,
-			items: userItems,
 		};
 
 		return [infoGroup, listGroup];
@@ -138,7 +132,7 @@ export class UserListSection {
 		this.#loading = true;
 		this.#loadError = null;
 
-		const result = await this.#controller.listUsers();
+		const result = await this.#plugin.listUsers();
 		if (generation !== this.#loadGeneration) return;
 
 		this.#loading = false;
@@ -148,17 +142,18 @@ export class UserListSection {
 			return;
 		}
 
-		this.#directory.replaceAll(result.value);
+		this.#userDirectory.replaceAll(result.value);
 		this.#loaded = true;
 		this.#refresh();
 	}
 
+	/** render the number of users in the plugin*/
 	#listStatusDescription(): string {
 		if (this.#loadError) return this.#loadError;
 		if (!this.#loaded) return t('settings.users.loading');
 
 		return t('settings.users.registeredAccountsDesc', {
-			count: this.#directory.size,
+			count: this.#userDirectory.size,
 		});
 	}
 
@@ -177,6 +172,7 @@ export class UserListSection {
 			aliases: [user.email, user.name],
 			render: (setting) => {
 				setting.setName(label).setClass('obsync-settings-user-row');
+
 				const statusEl = setting.descEl.createDiv({
 					cls: 'obsync-settings-user-status',
 				});
@@ -246,7 +242,7 @@ export class UserListSection {
 					}
 
 					button.setDisabled(true);
-					const result = await this.#controller.resetUserPassword(
+					const result = await this.#plugin.resetUserPassword(
 						user.id,
 						newPassword,
 					);
@@ -279,7 +275,7 @@ export class UserListSection {
 				.setDisabled(protectsLastAdmin)
 				.onChange(async (active) => {
 					toggle.setDisabled(true);
-					const mutation = await this.#controller.updateUserStatus(
+					const mutation = await this.#plugin.updateUserStatus(
 						user.id,
 						active,
 					);
@@ -290,7 +286,7 @@ export class UserListSection {
 						return;
 					}
 
-					this.#directory.replace(mutation.value);
+					this.#userDirectory.replace(mutation.value);
 					new Notice(
 						active
 							? t('userAdmin.userActivated')
@@ -315,7 +311,7 @@ export class UserListSection {
 				.setDisabled(protectsLastAdmin)
 				.onChange(async (value) => {
 					dropdown.setDisabled(true);
-					const mutation = await this.#controller.updateUserRole(
+					const mutation = await this.#plugin.updateUserRole(
 						user.id,
 						value as UserRole,
 					);
@@ -326,7 +322,7 @@ export class UserListSection {
 						return;
 					}
 
-					this.#directory.replace(mutation.value);
+					this.#userDirectory.replace(mutation.value);
 					new Notice(t('userAdmin.roleUpdated'));
 					this.#refresh();
 				});
@@ -345,14 +341,14 @@ export class UserListSection {
 				.setDisabled(protectsLastAdmin)
 				.onClick(async () => {
 					button.setDisabled(true);
-					const mutation = await this.#controller.deleteUser(user.id);
+					const mutation = await this.#plugin.deleteUser(user.id);
 					if (mutation.ok == false) {
 						button.setDisabled(false);
 						new Notice(mutation.error);
 						return;
 					}
 
-					this.#directory.remove(user.id);
+					this.#userDirectory.remove(user.id);
 					new Notice(
 						t('userAdmin.userDeleted', { email: user.email }),
 					);
@@ -380,11 +376,14 @@ export class UserListSection {
 				: description,
 		);
 	}
-
+	/** Verifies if an query matches the user being passed
+	 * @param user - an {@link AuthenticatedUser}
+	 * @param query - name or email from user
+	 */
 	#matchesQuery(user: AuthenticatedUser, query: string): boolean {
 		const normalizedQuery = query.normalize('NFKC').trim().toLowerCase();
+		//responsible for showing all users whe nothing is typed
 		if (!normalizedQuery) return true;
-
 		return [user.email, user.name]
 			.join(' ')
 			.normalize('NFKC')

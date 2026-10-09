@@ -65,13 +65,13 @@ export class UserDirectory {
 				user.email.normalize('NFKC').trim().toLocaleLowerCase() === key,
 		);
 	}
-
+	/** Count the number of admins in the plugin */
 	public activeAdminCount(): number {
 		return this.#users.filter(
 			(user) => user.active && user.role === 'admin',
 		).length;
 	}
-
+	/** Return an array with all users*/
 	public all(): AuthenticatedUser[] {
 		return [...this.#users];
 	}

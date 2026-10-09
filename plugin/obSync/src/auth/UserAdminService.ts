@@ -14,7 +14,9 @@ type ApiResponse = {
 	text: string;
 };
 
-/** Client for the admin-only user endpoints. */
+/** Client for the admin-only user endpoints.
+ * @param auth - {@link AuthService} - Receives an instance of AuthService
+ */
 export class UserAdminService {
 	readonly #auth: AuthService;
 
@@ -22,8 +24,12 @@ export class UserAdminService {
 		this.#auth = auth;
 	}
 
+	/** list all users */
 	public async listUsers(): Promise<UserActionResult<AuthenticatedUser[]>> {
-		if (!this.#hasSession() || !(await this.#auth.prepareAuthenticatedRequest())) {
+		if (
+			!this.#hasSession() ||
+			!(await this.#auth.prepareAuthenticatedRequest())
+		) {
 			return { ok: false, error: t('userAdmin.signInToViewUsers') };
 		}
 
@@ -36,7 +42,10 @@ export class UserAdminService {
 			if (response.status !== 200) {
 				return {
 					ok: false,
-					error: this.#apiError(response, t('userAdmin.couldNotLoadUsers')),
+					error: this.#apiError(
+						response,
+						t('userAdmin.couldNotLoadUsers'),
+					),
 				};
 			}
 
@@ -58,14 +67,17 @@ export class UserAdminService {
 			};
 		}
 	}
-
+	/** creates a user */
 	public async createUser(input: {
 		name: string;
 		email: string;
 		password: string;
 		role: UserRole;
 	}): Promise<UserActionResult<AuthenticatedUser>> {
-		if (!this.#hasSession() || !(await this.#auth.prepareAuthenticatedRequest())) {
+		if (
+			!this.#hasSession() ||
+			!(await this.#auth.prepareAuthenticatedRequest())
+		) {
 			return { ok: false, error: t('userAdmin.signInToCreateUsers') };
 		}
 
@@ -80,7 +92,10 @@ export class UserAdminService {
 			if (response.status !== 201) {
 				return {
 					ok: false,
-					error: this.#apiError(response, t('userAdmin.couldNotCreateUser')),
+					error: this.#apiError(
+						response,
+						t('userAdmin.couldNotCreateUser'),
+					),
 				};
 			}
 
@@ -98,7 +113,7 @@ export class UserAdminService {
 			};
 		}
 	}
-
+	/** Updates the user role */
 	public updateUserRole(
 		userId: number,
 		role: UserRole,
@@ -110,7 +125,7 @@ export class UserAdminService {
 			t('userAdmin.couldNotChangeRole'),
 		);
 	}
-
+	/** updates an user role */
 	public updateUserStatus(
 		userId: number,
 		active: boolean,
@@ -122,7 +137,7 @@ export class UserAdminService {
 			t('userAdmin.couldNotChangeStatus'),
 		);
 	}
-
+	/** deletes an user*/
 	public deleteUser(
 		userId: number,
 	): Promise<UserActionResult<AuthenticatedUser>> {
@@ -133,7 +148,7 @@ export class UserAdminService {
 			t('userAdmin.couldNotDeleteUser'),
 		);
 	}
-
+	/** updates the name of an user */
 	public updateUserName(
 		userId: number,
 		name: string,
@@ -146,7 +161,8 @@ export class UserAdminService {
 		);
 	}
 
-	public resetUserPassword(
+	/** changes user password */
+	public changeUserPassword(
 		userId: number,
 		newPassword: string,
 	): Promise<UserActionResult<AuthenticatedUser>> {
@@ -208,10 +224,14 @@ export class UserAdminService {
 		}
 	}
 
+	/** make sure the user has a real session*/
 	#hasSession(): boolean {
 		return this.#auth.isAuthenticated();
 	}
-
+	/** receices an api response with a fallback value for returning an error
+	 * @param response
+	 * @param fallback - used if there is no text inside the response object
+	 */
 	#apiError(response: ApiResponse, fallback: string): string {
 		const payload = response.json as { error?: unknown; reason?: unknown };
 		const raw =
@@ -220,7 +240,10 @@ export class UserAdminService {
 				: response.text.trim() || fallback;
 		return localizeBackendError(payload?.reason, raw);
 	}
-
+	/** Tries to classify an error that is not know,deals with the linter annoying message
+	 * @param error
+	 * @param fallback - used if there is no text inside the response object
+	 */
 	#unknownRequestError(error: unknown, fallback: string): string {
 		return error instanceof Error && error.message
 			? error.message

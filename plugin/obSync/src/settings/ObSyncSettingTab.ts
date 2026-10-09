@@ -22,7 +22,7 @@ export class ObSyncSettingTab extends PluginSettingTab {
 	public constructor(app: App, plugin: Plugin & ObSync) {
 		super(app, plugin);
 		this.#controller = plugin;
-		const refresh = (): void => this.update();
+		const refresh = () => this.update();
 		this.#backend = new BackendConnectionSection(plugin, refresh);
 		this.#users = new UserManagementSection(plugin, refresh);
 		this.#account = new AccountSettingsSection(
@@ -31,8 +31,7 @@ export class ObSyncSettingTab extends PluginSettingTab {
 			refresh,
 		);
 	}
-
-	public getSettingDefinitions(): SettingDefinitionItem[] {
+	public getAllConfiguration(): SettingDefinitionItem[] {
 		const backendSection = this.#backend.definition();
 		const configured = isApiEndpointConfigured();
 		const currentUser = configured ? this.#controller.config.user : null;
@@ -55,6 +54,10 @@ export class ObSyncSettingTab extends PluginSettingTab {
 			items: this.#users.definitions(),
 		};
 		return [backendSection, accountSection, usersPage];
+	}
+
+	public getSettingDefinitions() {
+		return this.getAllConfiguration();
 	}
 
 	public hide(): void {

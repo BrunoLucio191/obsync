@@ -15,7 +15,7 @@ export function localizeBackendError(
 	fallback: string,
 ): string {
 	if (typeof reason === 'string' && reason in REASON_KEYS) {
-		return t(REASON_KEYS[reason] as string);
+		return t(REASON_KEYS[reason]);
 	}
 	return fallback;
 }

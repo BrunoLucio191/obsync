@@ -26,7 +26,7 @@ import { SyncBaseStore } from './vault/SyncBaseStore.ts';
 import { ServerVersionMerger } from './vault/ServerVersionMerger.ts';
 
 type StorageConfig = (Partial<ObSyncConfig> & { token?: unknown }) | null;
-
+/** ObSync plugin class*/
 export default class ObSync extends Plugin {
 	public config!: ObSyncConfig;
 	static obsyncApp: ObSync;
@@ -163,7 +163,7 @@ export default class ObSync extends Plugin {
 		userId: number,
 		newPassword: string,
 	): Promise<UserActionResult<AuthenticatedUser>> {
-		return this.#userAdmin.resetUserPassword(userId, newPassword);
+		return this.#userAdmin.changeUserPassword(userId, newPassword);
 	}
 
 	public changePassword(
@@ -332,8 +332,5 @@ export default class ObSync extends Plugin {
 
 	async #saveSettings(): Promise<void> {
 		await this.saveData(this.config);
-	}
-	static sameAppIntance() {
-		return ObSync.obsyncApp;
 	}
 }

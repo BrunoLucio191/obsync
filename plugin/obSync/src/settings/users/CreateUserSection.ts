@@ -26,13 +26,13 @@ export class CreateUserSection {
 
 	public definition(): SettingDefinitionGroup {
 		return {
-			type: 'group',
+			type: 'list',
 			heading: t('settings.users.addUser'),
 			items: [
 				{
 					name: t('settings.users.name'),
 					desc: t('settings.users.displayName'),
-					render: (setting) =>
+					render: (setting) => {
 						setting.addText((text) =>
 							text
 								.setPlaceholder(
@@ -40,12 +40,13 @@ export class CreateUserSection {
 								)
 								.setValue(this.#name)
 								.onChange((value) => (this.#name = value)),
-						),
+						);
+					},
 				},
 				{
 					name: t('auth.email'),
 					desc: t('auth.email'),
-					render: (setting) =>
+					render: (setting) => {
 						setting.addText((text) =>
 							text
 								.setPlaceholder(
@@ -53,7 +54,8 @@ export class CreateUserSection {
 								)
 								.setValue(this.#email)
 								.onChange((value) => (this.#email = value)),
-						),
+						);
+					},
 				},
 				{
 					name: t('settings.users.initialPassword'),
@@ -72,7 +74,7 @@ export class CreateUserSection {
 				{
 					name: t('settings.users.initialRole'),
 					desc: t('settings.users.initialRoleDesc'),
-					render: (setting) =>
+					render: (setting) => {
 						setting.addDropdown((dropdown) =>
 							dropdown
 								.addOption('user', t('settings.users.user'))
@@ -81,7 +83,8 @@ export class CreateUserSection {
 								.onChange(
 									(value) => (this.#role = value as UserRole),
 								),
-						),
+						);
+					},
 				},
 				{
 					name: t('settings.users.createUser'),

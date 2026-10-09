@@ -114,7 +114,7 @@ export default {
 			registeredAccounts: 'Registered accounts',
 			loading: 'Loading users...',
 			registeredAccountsDesc:
-				'{{count}} registered users. Use the search above to filter by name or e-mail.',
+				'{{count}} registered users. Use the search bellow to filter by name or e-mail.',
 			searchAccounts: 'Search accounts',
 			searchPlaceholder: 'Name or e-mail',
 			you: ' (you)',

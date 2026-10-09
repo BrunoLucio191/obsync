@@ -119,7 +119,7 @@ export class ZipWorkerSon {
 		try {
 			await queue.addTask(
 				() => this.#writeEntries(message.entries),
-				'vault:initialSync',
+				'vault:InitialSync',
 			);
 		} catch (error) {
 			console.error(t('sync.initialSyncError'), error);

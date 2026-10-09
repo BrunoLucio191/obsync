@@ -14,11 +14,10 @@ export class ResyncWarning extends Modal {
 		const wrapper = contentEl.createDiv({
 			cls: 'obsync-network-warning',
 		});
-		const networkMessage = wrapper.createEl('p', {
+		wrapper.createEl('p', {
 			text: t(`sync.websocketDisconnetionFromInternet`),
 		});
 		await this.#reSync();
-		networkMessage.setCssStyles('../../styles.css');
 	}
 	onClose(): void {
 		this.contentEl.empty();

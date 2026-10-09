@@ -127,7 +127,7 @@ export class Gene {
    *
    *  @param vaultDirectory
    */
-  async getBytesAndNumOfFiles(vaultDirectory: string = this.#directory) {
+  async getBytesAndNumOfFiles(vaultDirectory: string) {
     const files = await readdir(vaultDirectory, { recursive: true });
 
     const stats = files.map(async (file) => {
