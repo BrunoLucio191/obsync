@@ -39,7 +39,6 @@ guarantee does not depend on the plugin behaving correctly.
 - [Security](#security)
 - [Storage](#storage)
 - [Troubleshooting](#troubleshooting)
-- [Known issues](#known-issues)
 - [API reference](#api-reference)
 
 ## How it works
