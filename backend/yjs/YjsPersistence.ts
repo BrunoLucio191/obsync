@@ -9,7 +9,7 @@ const BINARY_HYDRATION_ORIGIN = Symbol("binary-state-hydration");
 const MARKDOWN_HYDRATION_ORIGIN = Symbol("markdown-bootstrap");
 
 type DocumentWriteState = {
-  readonly fileName: string;
+  readonly filePath: string;
   readonly ydoc: Y.Doc;
   onUpdate: (update: Uint8Array, origin: unknown) => void;
   dirty: boolean;
@@ -31,7 +31,7 @@ export class YjsPersistence {
   readonly #stateRoot: string;
   readonly #collaborationServer: YjsCollaborationServer;
   readonly #documentStates = new WeakMap<Y.Doc, DocumentWriteState>();
-
+  readonly #pendingWriting = new Set();
   public constructor(
     vaultPath: string,
     statePath: string,
@@ -42,21 +42,26 @@ export class YjsPersistence {
     this.#collaborationServer = collaborationServer;
   }
 
-  public async bindState(docName: string, ydoc: Y.Doc): Promise<void> {
-    const fileName = this.#decodeDocumentName(docName);
-    const binaryState = await this.#readBinaryState(fileName);
+  /** Decode the file name, reads the binary state , apply the binary update and
+   * bind the Y.doc to the state inside a map
+   * @param ydoc - the ydoc document that is shared between users
+   * @param docPath - docName is the path
+   */
+  public async bindState(docPath: string, ydoc: Y.Doc): Promise<void> {
+    const filePath = this.#decodeDocumentPath(docPath);
+    const binaryState = await this.#readBinaryState(filePath);
 
     if (binaryState) {
       Y.applyUpdate(ydoc, binaryState, BINARY_HYDRATION_ORIGIN);
     } else {
-      await this.#bootstrapFromMarkdown(fileName, ydoc);
+      await this.#bootstrapFromMarkdown(filePath, ydoc);
     }
 
     const previous = this.#documentStates.get(ydoc);
     if (previous) ydoc.off("update", previous.onUpdate);
 
     const state: DocumentWriteState = {
-      fileName,
+      filePath,
       ydoc,
       dirty: false,
       writing: null,
@@ -69,7 +74,7 @@ export class YjsPersistence {
       state.dirty = true;
 
       void this.#flush(state).catch((error: unknown) => {
-        console.error(`[Yjs] Failed to persist ${state.fileName}:`, error);
+        console.error(`[Yjs] Failed to persist ${state.filePath}:`, error);
       });
     };
 
@@ -82,8 +87,8 @@ export class YjsPersistence {
     }
   }
 
-  public async writeState(docName: string, ydoc: Y.Doc): Promise<void> {
-    const state = this.#getOrCreateState(docName, ydoc);
+  public async writeState(docPath: string, ydoc: Y.Doc): Promise<void> {
+    const state = this.#getOrCreateState(docPath, ydoc);
     state.dirty = true;
 
     await this.#flush(state);
@@ -98,16 +103,24 @@ export class YjsPersistence {
     this.#documentStates.delete(ydoc);
   }
 
-  /** File or whole folder, so old state can't resurface if the path is reused. */
+  /** Delete a files or whole folder and the directories inside of it
+   * @param targetPath
+   */
   public async deleteStateUnderPath(targetPath: string): Promise<void> {
     const normalized = this.#normalizeRelativePath(targetPath);
     const fileStatePath = this.#resolveStateFilePath(normalized);
     const folderStatePath = this.#resolveStateDirectoryPath(normalized);
 
-    await Promise.all([
-      fsPromises.rm(fileStatePath, { force: true }),
-      fsPromises.rm(folderStatePath, { recursive: true, force: true }),
-    ]);
+    await Promise.all([...this.#pendingWriting])
+      .catch((error: unknown) =>
+        console.error("[Yjs] a file writing Failed", error),
+      )
+      .then(async () => {
+        await Promise.all([
+          fsPromises.rm(fileStatePath, { force: true }),
+          fsPromises.rm(folderStatePath, { recursive: true, force: true }),
+        ]);
+      });
   }
 
   /** Keeps the collaboration history across a vault rename. */
@@ -123,19 +136,29 @@ export class YjsPersistence {
     const oldDirectory = this.#resolveStateDirectoryPath(normalizedOld);
     const newDirectory = this.#resolveStateDirectoryPath(normalizedNew);
 
-    if (await this.#pathExists(oldDirectory)) {
-      await fsPromises.mkdir(path.dirname(newDirectory), { recursive: true });
-      await fsPromises.rename(oldDirectory, newDirectory);
-    }
-
-    if (await this.#pathExists(oldFile)) {
-      await fsPromises.mkdir(path.dirname(newFile), { recursive: true });
-      await fsPromises.rename(oldFile, newFile);
-    }
+    await Promise.all([...this.#pendingWriting])
+      .catch((error: unknown) =>
+        console.error("[Yjs] a file writing Failed", error),
+      )
+      .then(async () => {
+        if (await this.#pathExists(oldDirectory)) {
+          await fsPromises.mkdir(path.dirname(newDirectory), {
+            recursive: true,
+          });
+          await fsPromises.rename(oldDirectory, newDirectory);
+        }
+        if (await this.#pathExists(oldFile)) {
+          await fsPromises.mkdir(path.dirname(newFile), { recursive: true });
+          await fsPromises.rename(oldFile, newFile);
+        }
+      });
   }
-
-  async #bootstrapFromMarkdown(fileName: string, ydoc: Y.Doc): Promise<void> {
-    const fullPath = this.#resolveVaultPath(fileName);
+  /** If the binary state doesn't exist, the ydoc loads the content from the note
+   * @param filePath
+   * @param ydoc
+   */
+  async #bootstrapFromMarkdown(filePath: string, ydoc: Y.Doc): Promise<void> {
+    const fullPath = this.#resolveVaultPath(filePath);
 
     try {
       const content = await fsPromises.readFile(fullPath, "utf8");
@@ -150,9 +173,11 @@ export class YjsPersistence {
       if (!this.#isMissingFileError(error)) throw error;
     }
   }
-
-  async #readBinaryState(fileName: string): Promise<Uint8Array | null> {
-    const statePath = this.#resolveStateFilePath(fileName);
+  /** Reads the file state from a given path, transform that buffer into a Uint8Array
+   * @param filePath
+   */
+  async #readBinaryState(filePath: string): Promise<Uint8Array | null> {
+    const statePath = this.#resolveStateFilePath(filePath);
 
     try {
       const buffer = await fsPromises.readFile(statePath);
@@ -160,6 +185,7 @@ export class YjsPersistence {
         throw new Error(`Empty or corrupted Yjs state: ${statePath}`);
       }
 
+      //turns the buffer into the Uint8Array with the exact same view
       const state = new Uint8Array(
         buffer.buffer,
         buffer.byteOffset,
@@ -173,12 +199,12 @@ export class YjsPersistence {
     }
   }
 
-  #getOrCreateState(docName: string, ydoc: Y.Doc): DocumentWriteState {
+  #getOrCreateState(docPath: string, ydoc: Y.Doc): DocumentWriteState {
     const existing = this.#documentStates.get(ydoc);
     if (existing) return existing;
 
     const state: DocumentWriteState = {
-      fileName: this.#decodeDocumentName(docName),
+      filePath: this.#decodeDocumentPath(docPath),
       ydoc,
       dirty: false,
       writing: null,
@@ -194,9 +220,12 @@ export class YjsPersistence {
   #flush(state: DocumentWriteState): Promise<void> {
     if (state.writing) return state.writing;
 
-    state.writing = this.#flushLoop(state).finally(() => {
+    const writing = this.#flushLoop(state).finally(() => {
       state.writing = null;
+      this.#pendingWriting.delete(writing);
     });
+    this.#pendingWriting.add(writing);
+    state.writing = writing;
 
     return state.writing;
   }
@@ -208,7 +237,7 @@ export class YjsPersistence {
 
       if (
         this.#collaborationServer.isDocumentInvalidated(state.ydoc) ||
-        this.#collaborationServer.isPathDeleted(state.fileName)
+        this.#collaborationServer.isPathDeleted(state.filePath)
       ) {
         return;
       }
@@ -219,8 +248,8 @@ export class YjsPersistence {
       };
 
       try {
-        await this.#writeBinaryState(state.fileName, snapshot.binaryState);
-        await this.#writeMarkdown(state.fileName, snapshot.markdown);
+        await this.#writeBinaryState(state.filePath, snapshot.binaryState);
+        await this.#writeMarkdown(state.filePath, snapshot.markdown);
       } catch (error) {
         state.dirty = true;
         throw error;
@@ -238,7 +267,12 @@ export class YjsPersistence {
   async #writeMarkdown(fileName: string, content: string): Promise<void> {
     await this.#atomicWrite(this.#resolveVaultPath(fileName), content);
   }
-
+  /** Receive data and make a tmp directory, write the file inside
+   * of it and then moves the file to the destination
+   * @param destination - The path that is the destination of data being written
+   * inside the tmp file.
+   * @param data - The data that will be written
+   */
   async #atomicWrite(
     destination: string,
     data: string | Uint8Array,
@@ -271,18 +305,25 @@ export class YjsPersistence {
   #resolveStateDirectoryPath(relativePath: string): string {
     return this.#resolveInsideRoot(this.#stateRoot, relativePath);
   }
-
+  /** Resolves the relative for a state, receives a root path an than join the root with
+   * the relative path since this class deals with the vaultRoot and stateRoot
+   * @param root - can be either the vaultRoot or stateRoot
+   * @param relativePath - the file path
+   */
   #resolveInsideRoot(root: string, relativePath: string): string {
     const normalized = this.#normalizeRelativePath(relativePath);
     const fullPath = path.resolve(root, normalized);
 
-    if (!fullPath.startsWith(`${root}${path.sep}`)) {
+    if (!fullPath.startsWith(`${root}/`)) {
       throw new Error("The Yjs document must be inside the allowed directory.");
     }
 
     return fullPath;
   }
-  //..
+  /** Normalize the relative path replacing // with /
+   * and settings paths with ./ or ../ invalids
+   * @param relativePath - relative path
+   */
   #normalizeRelativePath(relativePath: string): string {
     const normalized = relativePath.replace(/\\/g, "/").trim();
 
@@ -298,14 +339,18 @@ export class YjsPersistence {
     return normalized;
   }
 
-  #decodeDocumentName(docName: string): string {
+  /**Decodes the document Path that is a URI and calls the normalization for that path*/
+  #decodeDocumentPath(docPath: string): string {
     try {
-      return this.#normalizeRelativePath(decodeURIComponent(docName));
+      return this.#normalizeRelativePath(decodeURIComponent(docPath));
     } catch {
-      throw new Error(`Invalid Yjs document name: ${docName}`);
+      throw new Error(`Invalid Yjs document name: ${docPath}`);
     }
   }
 
+  /** Verify if the path exists or not
+   * @param filePath
+   */
   async #pathExists(filePath: string): Promise<boolean> {
     try {
       await fsPromises.access(filePath);
@@ -315,7 +360,9 @@ export class YjsPersistence {
       throw error;
     }
   }
-
+  /** checks if the error is the ENOENT from node, missing file
+   * @param error
+   */
   #isMissingFileError(error: unknown): boolean {
     return (
       error instanceof Error &&

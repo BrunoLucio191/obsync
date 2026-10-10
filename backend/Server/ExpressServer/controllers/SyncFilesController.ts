@@ -170,13 +170,13 @@ export class SyncFilesController {
       await queue.addTask(async () => {
         this.#collaborationServer.markPathDeleted(path);
         try {
+          await this.#collaborationServer.deletePersistedStateUnderPath(path);
           await this.#fileManager.deletePath(path);
         } catch (error) {
           this.#collaborationServer.clearPathDeleted(path);
           throw error;
         }
 
-        await this.#collaborationServer.deletePersistedStateUnderPath(path);
         publishVaultChange({
           type: "delete",
           path,
