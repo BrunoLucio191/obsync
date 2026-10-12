@@ -1,14 +1,3 @@
-import type * as Y from "yjs";
-
-export type YjsPersistenceAdapter = {
-  bindState: (filePath: string, ydoc: Y.Doc) => Promise<void>;
-  writeState: (filePath: string, ydoc: Y.Doc) => Promise<void>;
-  destroyState?: (filePath: string, ydoc: Y.Doc) => Promise<void> | void;
-  deleteStateUnderPath?: (filePath: string) => Promise<void>;
-  renameStatePath?: (oldPath: string, newPath: string) => Promise<void>;
-  updateState: (filePath: string, update: string | Uint8Array) => Promise<void>;
-};
-
 export type YjsAuthenticatedConnection = {
   readonly userId: number;
   readonly userName: string;
