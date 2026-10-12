@@ -141,17 +141,6 @@ export class WebSocketServer {
       this.#collaborationServer,
     );
 
-    this.#collaborationServer.setPersistence({
-      bindState: (docName, ydoc) => yjsPersistence.bindState(docName, ydoc),
-      writeState: (docName, ydoc) => yjsPersistence.writeState(docName, ydoc),
-      destroyState: (docName, ydoc) =>
-        yjsPersistence.destroyState(docName, ydoc),
-      deleteStateUnderPath: (targetPath) =>
-        yjsPersistence.deleteStateUnderPath(targetPath),
-      renameStatePath: (oldPath, newPath) =>
-        yjsPersistence.renameStatePath(oldPath, newPath),
-    });
-
     this.wssYjs.on("connection", (webSocket, request) => {
       this.#registerHeartbeat(webSocket);
       const authorization = this.#authenticatedConnections.get(webSocket);

@@ -153,6 +153,7 @@ export class YjsPersistence {
         }
       });
   }
+
   /** If the binary state doesn't exist, the ydoc loads the content from the note
    * @param filePath
    * @param ydoc

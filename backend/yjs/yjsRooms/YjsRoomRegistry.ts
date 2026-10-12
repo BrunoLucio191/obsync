@@ -2,18 +2,18 @@ import { WebSocket } from "ws";
 import { closeConnection } from "../yjsUtils/wsTransport.utils.ts";
 import { isSamePathOrChild } from "../yjsUtils/vaultPath.utils.ts";
 import { DeletedPathRegistry } from "../DeletedPathRegistry.ts";
-import { YjsPersistenceGateway } from "../YjsPersistenceGateway.ts";
 import { YjsRoom } from "./YjsRoom.ts";
+import type { YjsPersistence } from "../YjsPersistence.ts";
 
 /** A room lives while it has connections or reservations, then is flushed and destroyed. */
 export class YjsRoomRegistry {
   readonly #rooms = new Map<string, YjsRoom>();
   readonly #deletedPaths: DeletedPathRegistry;
-  readonly #persistence: YjsPersistenceGateway;
+  readonly #persistence: YjsPersistence;
 
   public constructor(
     deletedPaths: DeletedPathRegistry,
-    persistence: YjsPersistenceGateway,
+    persistence: YjsPersistence,
   ) {
     this.#deletedPaths = deletedPaths;
     this.#persistence = persistence;
@@ -47,6 +47,12 @@ export class YjsRoomRegistry {
       for (const connection of room.connections.keys()) {
         closeConnection(connection, 1008, "Path deleted");
       }
+    }
+  }
+  /** returns the room that matches a given path */
+  public findRoomByPath(filePath: string) {
+    for (const room of this.#rooms.values()) {
+      if (room.filePath === filePath) return room;
     }
   }
 

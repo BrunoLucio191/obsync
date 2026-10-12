@@ -140,7 +140,6 @@ export class SyncFilesController {
             typeof content === "string" ? content : "",
           );
         }
-        //spread vault changes to the WebSocket
         publishVaultChange({
           type: "create",
           path: pathDecoded,
@@ -256,11 +255,14 @@ export class SyncFilesController {
             return;
           }
           if (result === "not-found") {
+            await this.#collaborationServer.renamePersistedStatePath(
+              newPath,
+              oldPath,
+            );
             res.status(404).json({ error: "Path not found" });
             return;
           }
         } catch (error) {
-          //revert changes if an error occurs
           this.#collaborationServer.clearPathDeleted(oldPath);
           await this.#collaborationServer.renamePersistedStatePath(
             newPath,

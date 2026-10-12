@@ -4,7 +4,7 @@ import path from "node:path";
 import { ZipArchive } from "archiver";
 import { systemPaths } from "../paths.ts";
 import fs from "fs";
-import { zip } from "zip-a-folder";
+
 /** Every path is validated first, so absolute paths or `..` can't escape the vault. */
 export class FileManager {
   #vaultPath!: string;

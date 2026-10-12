@@ -10,27 +10,27 @@ import { closeConnection } from "./yjsUtils/wsTransport.utils.ts";
 import { DeletedPathRegistry } from "./DeletedPathRegistry.ts";
 import type { SyncMessageHandlerFn } from "./SyncMessageHandler.ts";
 import { YjsConnectionSession } from "./YjsConnectionSession.ts";
-import { YjsPersistenceGateway } from "./YjsPersistenceGateway.ts";
 import { YjsRoomRegistry } from "./yjsRooms/YjsRoomRegistry.ts";
 import type {
   YjsAuthenticatedConnection,
   YjsConnectionState,
-  YjsPersistenceAdapter,
 } from "./yjs.types.ts";
 import { syncMessageHandler } from "./SyncMessageHandler.ts";
 import { getMessageCounter } from "./yjsUtils/MessageCounter.utils.ts";
+import { YjsPersistence } from "./YjsPersistence.ts";
+import { systemPaths } from "../paths.ts";
 
 /** Entry point of the Yjs backend for the rest of the server. */
 export class YjsCollaborationServer {
   readonly #deletedPaths = new DeletedPathRegistry();
-  readonly #persistence = new YjsPersistenceGateway();
+  readonly #persistence = new YjsPersistence(
+    systemPaths.vault,
+    systemPaths.yjsState,
+    this,
+  );
   readonly #rooms = new YjsRoomRegistry(this.#deletedPaths, this.#persistence);
   readonly #syncHandler: SyncMessageHandlerFn = syncMessageHandler;
   readonly #messageCounter = getMessageCounter();
-
-  public setPersistence(adapter: YjsPersistenceAdapter): void {
-    this.#persistence.setAdapter(adapter);
-  }
 
   public isPathDeleted(filePath: string): boolean {
     return this.#deletedPaths.isPathDeleted(filePath);
@@ -55,6 +55,9 @@ export class YjsCollaborationServer {
     await this.#persistence.deleteStateUnderPath(
       normalizeVaultPath(targetPath),
     );
+  }
+  public async findRoomByPath(filePath: string) {
+    this.#rooms.findRoomByPath(normalizeVaultPath(filePath));
   }
 
   public async renamePersistedStatePath(

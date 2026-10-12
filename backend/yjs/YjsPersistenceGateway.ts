@@ -31,4 +31,10 @@ export class YjsPersistenceGateway {
   ): Promise<void> {
     await this.#adapter?.renameStatePath?.(oldPath, newPath);
   }
+  public async updateState(
+    filePath: string,
+    update: string | Uint8Array,
+  ): Promise<void> {
+    await this.#adapter?.updateState(filePath, update);
+  }
 }

@@ -1,11 +1,12 @@
 import type * as Y from "yjs";
 
 export type YjsPersistenceAdapter = {
-  bindState: (docName: string, ydoc: Y.Doc) => Promise<void>;
-  writeState: (docName: string, ydoc: Y.Doc) => Promise<void>;
-  destroyState?: (docName: string, ydoc: Y.Doc) => Promise<void> | void;
-  deleteStateUnderPath?: (targetPath: string) => Promise<void>;
+  bindState: (filePath: string, ydoc: Y.Doc) => Promise<void>;
+  writeState: (filePath: string, ydoc: Y.Doc) => Promise<void>;
+  destroyState?: (filePath: string, ydoc: Y.Doc) => Promise<void> | void;
+  deleteStateUnderPath?: (filePath: string) => Promise<void>;
   renameStatePath?: (oldPath: string, newPath: string) => Promise<void>;
+  updateState: (filePath: string, update: string | Uint8Array) => Promise<void>;
 };
 
 export type YjsAuthenticatedConnection = {
