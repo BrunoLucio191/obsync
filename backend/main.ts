@@ -25,6 +25,7 @@ const main = () => {
 
   const authService = new AuthService(userDB, dbService, tokenService);
   const collaborationServer = new YjsCollaborationServer();
+
   const keyedLock = new KeyedLock();
   const vaultGene = new Gene(
     systemPaths.vault,
